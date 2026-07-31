@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 100003}
   - component: {fileID: 100004}
   m_Layer: 0
-  m_Name: TileGrass
+  m_Name: snow_dark_step_001
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -103,8 +103,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a1b2c3d4e5f60718293a4b5c6d7e8f90, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlanetTile
-  tileId: grass
+  tileId: snow_dark_step_001
   walkable: 1
-  zoneId: grassland
-  albedo: {fileID: 2800000, guid: deb64ef6450ec574db0af67225551acf, type: 3}
+  zoneId: tundra
+  albedo: {fileID: 2800000, guid: 480fe2806ca582249bb9e199a21335b6, type: 3}
   tint: {r: 1, g: 1, b: 1, a: 1}

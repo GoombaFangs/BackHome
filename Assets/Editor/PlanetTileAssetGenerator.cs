@@ -1,16 +1,50 @@
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// Regenerates / refreshes planet tile assets. Prefer using existing prefabs;
-/// this menu helps recreate them if missing.
+/// Regenerates planet tile prefabs from Handpainted textures under
+/// Assets/Galaxy/Planets/Textures and rebuilds Palette_PlanetA.
 /// </summary>
 public static class PlanetTileAssetGenerator
 {
     const string TilesFolder = "Assets/Galaxy/Planets/Prefabs/Tiles";
     const string PlanetFolder = "Assets/Galaxy/Planets/Prefabs";
     const string SoFolder = "Assets/Galaxy/Planets/ScriptableObjects";
+    const string TexRoot = "Assets/Galaxy/Planets/Textures";
+
+    struct TileDef
+    {
+        public string TexturePath;
+        public string ZoneId;
+        public string Category;
+    }
+
+    // Prefab name = texture file name (without extension).
+    static readonly TileDef[] TileDefs =
+    {
+        // Dirt (5) — default fill is dirt_clay_down (index 0)
+        new TileDef { TexturePath = TexRoot + "/Dirt/dirt_clay/dirt_clay_down.png", ZoneId = "barren", Category = "dirt" },
+        new TileDef { TexturePath = TexRoot + "/Dirt/dirt_claydarked/dirt_claydarked_down.png", ZoneId = "barren", Category = "dirt" },
+        new TileDef { TexturePath = TexRoot + "/Dirt/dirt_lighted/dirt_lighted_down.png", ZoneId = "barren", Category = "dirt" },
+        new TileDef { TexturePath = TexRoot + "/Dirt/dirt_normal/dirt_normal_down.png", ZoneId = "barren", Category = "dirt" },
+        new TileDef { TexturePath = TexRoot + "/Dirt/dirt_desatured_rocks/dirt_desatured_rocks_down.png", ZoneId = "barren", Category = "dirt" },
+
+        // Grass (5)
+        new TileDef { TexturePath = TexRoot + "/Grass/Grass_normal/Grass_normal_up.png", ZoneId = "grassland", Category = "grass" },
+        new TileDef { TexturePath = TexRoot + "/Grass/Grass_lighted/Grass_lighted_up.png", ZoneId = "grassland", Category = "grass" },
+        new TileDef { TexturePath = TexRoot + "/Grass/Grass_darked/Grass_darked_up.png", ZoneId = "grassland", Category = "grass" },
+        new TileDef { TexturePath = TexRoot + "/Grass/Grass_bluetint/Grass_bluetint_up.png", ZoneId = "grassland", Category = "grass" },
+        new TileDef { TexturePath = TexRoot + "/Grass/Grass_swamp_normal/Grass_swamp_normal_up.png", ZoneId = "grassland", Category = "grass" },
+
+        // Snow (5)
+        new TileDef { TexturePath = TexRoot + "/Snow/snow_normal.png", ZoneId = "tundra", Category = "snow" },
+        new TileDef { TexturePath = TexRoot + "/Snow/snow_dark.png", ZoneId = "tundra", Category = "snow" },
+        new TileDef { TexturePath = TexRoot + "/Snow/snow_super_dark.png", ZoneId = "tundra", Category = "snow" },
+        new TileDef { TexturePath = TexRoot + "/Snow/snow_step_001.png", ZoneId = "tundra", Category = "snow" },
+        new TileDef { TexturePath = TexRoot + "/Snow/snow_dark_step_001.png", ZoneId = "tundra", Category = "snow" },
+    };
 
     [MenuItem("BackHome/Generate Planet Tile Assets")]
     public static void GenerateAll()
@@ -21,32 +55,48 @@ public static class PlanetTileAssetGenerator
         EnsureFolder(TilesFolder);
         EnsureFolder(SoFolder);
 
-        const string Pack = "Assets/AssetStore/Handpainted_Grass_and_Ground_Textures/Textures";
-        Texture2D dirt = LoadTex($"{Pack}/Dirt/dirt_clay/dirt_clay_down.png");
-        Texture2D grass = LoadTex($"{Pack}/Grass/Grass_normal/Grass_normal_up.png");
-        Texture2D snow = LoadTex($"{Pack}/Snow/snow_normal.png");
+        var created = new List<GameObject>(TileDefs.Length);
+        Texture2D defaultDirt = null;
 
-        if (grass == null || dirt == null || snow == null)
+        for (int i = 0; i < TileDefs.Length; i++)
         {
-            Debug.LogError(
-                "[BackHome] Missing Handpainted_Grass_and_Ground_Textures. " +
-                "Expected under Assets/AssetStore/Handpainted_Grass_and_Ground_Textures.");
-            return;
+            TileDef def = TileDefs[i];
+            Texture2D tex = LoadTex(def.TexturePath);
+            if (tex == null)
+            {
+                Debug.LogError($"[BackHome] Missing texture: {def.TexturePath}");
+                return;
+            }
+
+            string tileName = Path.GetFileNameWithoutExtension(def.TexturePath);
+            GameObject prefab = CreateOrUpdateTilePrefab(
+                $"{TilesFolder}/{tileName}.prefab",
+                tileName,
+                tileName,
+                tex,
+                true,
+                def.ZoneId);
+            created.Add(prefab);
+
+            if (i == 0)
+                defaultDirt = tex;
         }
 
-        // Default planet surface = clay dirt; grass/snow are paint options.
-        CreateOrUpdateTilePrefab($"{TilesFolder}/TileBase.prefab", "TileBase", "base", dirt, true, "default");
-        GameObject tileDirt = CreateOrUpdateTilePrefab($"{TilesFolder}/TileDirt.prefab", "TileDirt", "dirt", dirt, true, "barren");
-        GameObject tileGrass = CreateOrUpdateTilePrefab($"{TilesFolder}/TileGrass.prefab", "TileGrass", "grass", grass, true, "grassland");
-        GameObject tileSnow = CreateOrUpdateTilePrefab($"{TilesFolder}/TileSnow.prefab", "TileSnow", "snow", snow, true, "tundra");
+        CreateOrUpdateTilePrefab(
+            $"{TilesFolder}/TileBase.prefab",
+            "TileBase",
+            "base",
+            defaultDirt,
+            true,
+            "default");
 
-        PlanetTilePalette palette = CreateOrUpdatePalette(
-            $"{SoFolder}/Palette_PlanetA.asset",
-            tileDirt,
-            tileGrass,
-            tileSnow);
+        // Remove legacy generic names if still present.
+        DeleteIfExists($"{TilesFolder}/TileDirt.prefab");
+        DeleteIfExists($"{TilesFolder}/TileGrass.prefab");
+        DeleteIfExists($"{TilesFolder}/TileSnow.prefab");
 
-        CreateOrUpdatePlanetPrefab($"{PlanetFolder}/PlanetBase.prefab", "PlanetBase", 40f, dirt, palette);
+        PlanetTilePalette palette = CreateOrUpdatePalette($"{SoFolder}/Palette_PlanetA.asset", created);
+        CreateOrUpdatePlanetPrefab($"{PlanetFolder}/PlanetBase.prefab", "PlanetBase", 40f, defaultDirt, palette);
 
         string planetAPath = $"{PlanetFolder}/PlanetA.prefab";
         if (AssetDatabase.LoadAssetAtPath<GameObject>(planetAPath) == null)
@@ -60,10 +110,16 @@ public static class PlanetTileAssetGenerator
 
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
-        Debug.Log("[BackHome] Planet tile assets ready. Select PlanetA in the scene, use PlanetTileMap inspector to Fill/Paint.");
+        Debug.Log($"[BackHome] Generated {created.Count} planet tiles (5 dirt / 5 grass / 5 snow). Default fill: dirt_clay_down.");
     }
 
     static Texture2D LoadTex(string path) => AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+
+    static void DeleteIfExists(string path)
+    {
+        if (AssetDatabase.LoadAssetAtPath<Object>(path) != null)
+            AssetDatabase.DeleteAsset(path);
+    }
 
     static GameObject CreateOrUpdateTilePrefab(
         string path,
@@ -88,7 +144,7 @@ public static class PlanetTileAssetGenerator
         return prefab;
     }
 
-    static PlanetTilePalette CreateOrUpdatePalette(string path, GameObject dirt, GameObject grass, GameObject snow)
+    static PlanetTilePalette CreateOrUpdatePalette(string path, List<GameObject> tiles)
     {
         PlanetTilePalette palette = AssetDatabase.LoadAssetAtPath<PlanetTilePalette>(path);
         if (palette == null)
@@ -99,10 +155,19 @@ public static class PlanetTileAssetGenerator
 
         var so = new SerializedObject(palette);
         SerializedProperty entries = so.FindProperty("entries");
-        entries.arraySize = 3;
-        SetEntry(entries.GetArrayElementAtIndex(0), "dirt", "Dirt", dirt, true, "barren");
-        SetEntry(entries.GetArrayElementAtIndex(1), "grass", "Grass", grass, true, "grassland");
-        SetEntry(entries.GetArrayElementAtIndex(2), "snow", "Snow", snow, true, "tundra");
+        entries.arraySize = tiles.Count;
+        for (int i = 0; i < tiles.Count; i++)
+        {
+            GameObject prefab = tiles[i];
+            string id = prefab != null ? prefab.name : $"tile_{i}";
+            string zone = "default";
+            PlanetTile tile = prefab != null ? prefab.GetComponent<PlanetTile>() : null;
+            if (tile != null)
+                zone = tile.ZoneId;
+
+            SetEntry(entries.GetArrayElementAtIndex(i), id, id, prefab, true, zone);
+        }
+
         so.ApplyModifiedPropertiesWithoutUndo();
         EditorUtility.SetDirty(palette);
         return palette;
@@ -139,7 +204,6 @@ public static class PlanetTileAssetGenerator
         planetSo.FindProperty("albedoTexture").objectReferenceValue = albedo;
         planetSo.FindProperty("tint").colorValue = Color.white;
         planetSo.FindProperty("textureTiling").floatValue = 4f;
-        // Casual low-poly shell: handpainted color, soft hills, no photoreal normals.
         planetSo.FindProperty("useVisualShell").boolValue = true;
         planetSo.FindProperty("shellColorMap").objectReferenceValue = albedo;
         planetSo.FindProperty("shellNormalMap").objectReferenceValue = null;

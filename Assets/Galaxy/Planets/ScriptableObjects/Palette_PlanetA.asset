@@ -13,18 +13,78 @@ MonoBehaviour:
   m_Name: Palette_PlanetA
   m_EditorClassIdentifier: Assembly-CSharp::PlanetTilePalette
   entries:
-  - id: dirt
-    displayName: Dirt
-    prefab: {fileID: 100000, guid: aa03111e000000000000000000000003, type: 3}
+  - id: dirt_clay_down
+    displayName: dirt_clay_down
+    prefab: {fileID: 100000, guid: bb01111e000000000000000000000001, type: 3}
     walkable: 1
     zoneId: barren
-  - id: grass
-    displayName: Grass
-    prefab: {fileID: 100000, guid: aa02111e000000000000000000000002, type: 3}
+  - id: dirt_claydarked_down
+    displayName: dirt_claydarked_down
+    prefab: {fileID: 100000, guid: bb01111e000000000000000000000002, type: 3}
+    walkable: 1
+    zoneId: barren
+  - id: dirt_lighted_down
+    displayName: dirt_lighted_down
+    prefab: {fileID: 100000, guid: bb01111e000000000000000000000003, type: 3}
+    walkable: 1
+    zoneId: barren
+  - id: dirt_normal_down
+    displayName: dirt_normal_down
+    prefab: {fileID: 100000, guid: bb01111e000000000000000000000004, type: 3}
+    walkable: 1
+    zoneId: barren
+  - id: dirt_desatured_rocks_down
+    displayName: dirt_desatured_rocks_down
+    prefab: {fileID: 100000, guid: bb01111e000000000000000000000005, type: 3}
+    walkable: 1
+    zoneId: barren
+  - id: Grass_normal_up
+    displayName: Grass_normal_up
+    prefab: {fileID: 100000, guid: bb02111e000000000000000000000001, type: 3}
     walkable: 1
     zoneId: grassland
-  - id: snow
-    displayName: Snow
-    prefab: {fileID: 100000, guid: aa04111e000000000000000000000004, type: 3}
+  - id: Grass_lighted_up
+    displayName: Grass_lighted_up
+    prefab: {fileID: 100000, guid: bb02111e000000000000000000000002, type: 3}
+    walkable: 1
+    zoneId: grassland
+  - id: Grass_darked_up
+    displayName: Grass_darked_up
+    prefab: {fileID: 100000, guid: bb02111e000000000000000000000003, type: 3}
+    walkable: 1
+    zoneId: grassland
+  - id: Grass_bluetint_up
+    displayName: Grass_bluetint_up
+    prefab: {fileID: 100000, guid: bb02111e000000000000000000000004, type: 3}
+    walkable: 1
+    zoneId: grassland
+  - id: Grass_swamp_normal_up
+    displayName: Grass_swamp_normal_up
+    prefab: {fileID: 100000, guid: bb02111e000000000000000000000005, type: 3}
+    walkable: 1
+    zoneId: grassland
+  - id: snow_normal
+    displayName: snow_normal
+    prefab: {fileID: 100000, guid: bb03111e000000000000000000000001, type: 3}
+    walkable: 1
+    zoneId: tundra
+  - id: snow_dark
+    displayName: snow_dark
+    prefab: {fileID: 100000, guid: bb03111e000000000000000000000002, type: 3}
+    walkable: 1
+    zoneId: tundra
+  - id: snow_super_dark
+    displayName: snow_super_dark
+    prefab: {fileID: 100000, guid: bb03111e000000000000000000000003, type: 3}
+    walkable: 1
+    zoneId: tundra
+  - id: snow_step_001
+    displayName: snow_step_001
+    prefab: {fileID: 100000, guid: bb03111e000000000000000000000004, type: 3}
+    walkable: 1
+    zoneId: tundra
+  - id: snow_dark_step_001
+    displayName: snow_dark_step_001
+    prefab: {fileID: 100000, guid: bb03111e000000000000000000000005, type: 3}
     walkable: 1
     zoneId: tundra
