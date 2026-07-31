@@ -27,11 +27,11 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _Opacity: 1
-    - _Radius: 0.45
-    - _Softness: 0.005
-    - _Thickness: 0.018
+    - _Opacity: 0.068
+    - _Radius: 0.388
+    - _Softness: 0.0431
+    - _Thickness: 0.0071
     m_Colors:
-    - _Color: {r: 1, g: 1, b: 0.95, a: 0.65}
+    - _Color: {r: 0.7830188, g: 1.7878419, b: 2, a: 0.65}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

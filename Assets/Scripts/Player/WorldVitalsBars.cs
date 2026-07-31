@@ -11,9 +11,24 @@ public class WorldVitalsBars : MonoBehaviour
     [SerializeField] VitalsBarsView vitalsBarsPrefab;
     [SerializeField] VitalsBarsView bars;
     [SerializeField] Vector3 localOffset = new Vector3(0f, 2.15f, 0f);
+    [Tooltip("Extra world size multiplier. Usually set per-scene via GalaxySceneBootstrap.")]
+    [SerializeField, Min(0.1f)] float worldScale = 1f;
 
     PlayerVitals _vitals;
     Camera _camera;
+
+    public float WorldScale => worldScale;
+    public Vector3 LocalOffset => localOffset;
+
+    public void SetWorldScale(float scale)
+    {
+        worldScale = Mathf.Max(0.1f, scale);
+    }
+
+    public void SetLocalOffset(Vector3 offset)
+    {
+        localOffset = offset;
+    }
 
     void Awake()
     {
@@ -34,7 +49,6 @@ public class WorldVitalsBars : MonoBehaviour
 
     void Start()
     {
-        // Vitals finish initializing in Awake; refresh again so fills are never stuck empty.
         RefreshBars();
     }
 
@@ -51,10 +65,11 @@ public class WorldVitalsBars : MonoBehaviour
 
         Transform root = bars.transform;
         Vector3 lossy = transform.lossyScale;
+        float s = worldScale;
         root.localScale = new Vector3(
-            ApproxInverse(lossy.x),
-            ApproxInverse(lossy.y),
-            ApproxInverse(lossy.z));
+            ApproxInverse(lossy.x) * s,
+            ApproxInverse(lossy.y) * s,
+            ApproxInverse(lossy.z) * s);
         root.localPosition = localOffset;
 
         Camera cam = ResolveCamera();

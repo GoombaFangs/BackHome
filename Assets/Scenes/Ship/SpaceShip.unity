@@ -28024,6 +28024,8 @@ MonoBehaviour:
   playerPrefab: {fileID: 7594552319720850513, guid: 8b1c2bbbdbe900b4fbae5395f8ed144e, type: 3}
   uiPrefab: {fileID: 8133869685062393850, guid: 6f5cc733040770e4185166a9281c264a, type: 3}
   spawnPosition: {x: -22.6, y: -0.8, z: -5.74}
+  vitalsBarsScale: 1
+  vitalsBarsOffset: {x: 0, y: 2.15, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
