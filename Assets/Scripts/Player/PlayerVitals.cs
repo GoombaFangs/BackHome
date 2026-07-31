@@ -113,5 +113,6 @@ public class PlayerVitals : MonoBehaviour
         string name = SceneManager.GetActiveScene().name;
         return !string.IsNullOrEmpty(name)
                && name.StartsWith("SpaceShip", StringComparison.OrdinalIgnoreCase);
+
     }
 }

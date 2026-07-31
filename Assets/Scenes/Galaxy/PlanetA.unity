@@ -574,7 +574,7 @@ PrefabInstance:
       objectReference: {fileID: 2100000, guid: a10971cf2e84b4a3a8dea404e9390507, type: 2}
     - target: {fileID: 1982023585189397953, guid: 29b3efacf561ab44995fa3a6a975d719, type: 3}
       propertyPath: targetSceneName
-      value: SpaceShipScene
+      value: SpaceShip
       objectReference: {fileID: 0}
     - target: {fileID: 6026344805119218322, guid: 29b3efacf561ab44995fa3a6a975d719, type: 3}
       propertyPath: m_Name

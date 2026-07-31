@@ -42,6 +42,7 @@ public class FloorVisibilityController : MonoBehaviour
 
     void Start()
     {
+        EnsurePlayer();
         if (player == null || floor1Root == null)
             return;
 
@@ -61,6 +62,7 @@ public class FloorVisibilityController : MonoBehaviour
 
     void LateUpdate()
     {
+        EnsurePlayer();
         if (player == null || floor1Root == null)
             return;
 
@@ -71,6 +73,23 @@ public class FloorVisibilityController : MonoBehaviour
             _initialized = true;
             ApplyVisibility();
         }
+    }
+
+    void EnsurePlayer()
+    {
+        if (player != null)
+            return;
+
+        GameObject tagged = GameObject.FindGameObjectWithTag("Player");
+        if (tagged != null)
+        {
+            player = tagged.transform;
+            return;
+        }
+
+        TochController motor = FindFirstObjectByType<TochController>();
+        if (motor != null)
+            player = motor.transform;
     }
 
     void CacheFloor1()
