@@ -4,6 +4,7 @@ using UnityEngine;
 /// Casual follow camera: fixed viewing angle, optional soft tilt to surface up.
 /// Does not orbit with the player's facing (avoids dizzy spinning on planets).
 /// On curved surfaces, the "behind" axis is parallel-transported so it never flips mid-orbit.
+/// Terrain bumps are filtered via radial up + separately damped focus height.
 /// </summary>
 public class CameraFollow : MonoBehaviour
 {
@@ -17,24 +18,33 @@ public class CameraFollow : MonoBehaviour
     [Header("Follow")]
     [SerializeField] float smoothSpeed = 10f;
     [SerializeField] bool lookAtTarget = true;
-    [Tooltip("Tilt camera using the target's up (planet surface). Softly smoothed.")]
+    [Tooltip("Tilt camera using surface up. Softly smoothed.")]
     [SerializeField] bool alignToTargetUp = true;
+    [Tooltip("On planets, use radial up (center→player) instead of terrain slope normals.")]
+    [SerializeField] bool preferPlanetRadialUp = true;
     [Tooltip("If off (casual), camera keeps a stable viewing angle and ignores player facing.")]
     [SerializeField] bool followTargetFacing = false;
     [Tooltip("Initial world direction used as \"behind the player\" when not following facing.")]
     [SerializeField] Vector3 fixedBackHint = new Vector3(0.25f, 0f, 1f);
-    [SerializeField] float upSmoothSpeed = 8f;
+    [SerializeField] float upSmoothSpeed = 5f;
+    [Tooltip("How quickly the camera pivot tracks the player along the ground plane.")]
+    [SerializeField] float focusSmoothSpeed = 8f;
+    [Tooltip("How quickly the camera pivot tracks height/radial bob. Lower = less shake on uneven terrain.")]
+    [SerializeField] float heightSmoothSpeed = 2.5f;
 
     Vector3 _smoothedUp = Vector3.up;
     Vector3 _smoothedBack = Vector3.forward;
+    Vector3 _smoothedFocus;
     bool _hasBasis;
+    bool _hasFocus;
 
     public void SetTarget(Transform newTarget)
     {
         target = newTarget;
         _hasBasis = false;
+        _hasFocus = false;
         if (target != null && alignToTargetUp)
-            _smoothedUp = target.up;
+            _smoothedUp = ResolveDesiredUp(target.position, target.up);
     }
 
     void LateUpdate()
@@ -42,7 +52,7 @@ public class CameraFollow : MonoBehaviour
         if (target == null)
             return;
 
-        Vector3 desiredUp = alignToTargetUp ? target.up : Vector3.up;
+        Vector3 desiredUp = ResolveDesiredUp(target.position, target.up);
         if (desiredUp.sqrMagnitude < 0.0001f)
             desiredUp = Vector3.up;
         desiredUp.Normalize();
@@ -53,10 +63,12 @@ public class CameraFollow : MonoBehaviour
         else
             _smoothedUp = Vector3.Slerp(_smoothedUp, desiredUp, 1f - Mathf.Exp(-upSmoothSpeed * Time.deltaTime)).normalized;
 
+        UpdateSmoothedFocus(_smoothedUp);
+
         Vector3 back = ResolveBackDirection(_smoothedUp, previousUp);
         Vector3 right = Vector3.Cross(_smoothedUp, back).normalized;
 
-        Vector3 desired = target.position
+        Vector3 desired = _smoothedFocus
                           + _smoothedUp * offsetHeight
                           - back * offsetBack
                           + right * offsetSide;
@@ -68,10 +80,41 @@ public class CameraFollow : MonoBehaviour
 
         if (lookAtTarget)
         {
-            Vector3 toTarget = target.position - transform.position;
+            Vector3 toTarget = _smoothedFocus - transform.position;
             if (toTarget.sqrMagnitude > 0.001f)
                 transform.rotation = Quaternion.LookRotation(toTarget.normalized, _smoothedUp);
         }
+    }
+
+    Vector3 ResolveDesiredUp(Vector3 worldPosition, Vector3 fallbackUp)
+    {
+        if (!alignToTargetUp)
+            return Vector3.up;
+
+        if (preferPlanetRadialUp && SphericalPlanet.Instance != null)
+            return SphericalPlanet.Instance.GetUpAt(worldPosition);
+
+        return fallbackUp.sqrMagnitude > 0.0001f ? fallbackUp.normalized : Vector3.up;
+    }
+
+    void UpdateSmoothedFocus(Vector3 up)
+    {
+        Vector3 targetPos = target.position;
+        if (!_hasFocus)
+        {
+            _smoothedFocus = targetPos;
+            _hasFocus = true;
+            return;
+        }
+
+        Vector3 delta = targetPos - _smoothedFocus;
+        Vector3 alongUp = Vector3.Project(delta, up);
+        Vector3 alongPlane = delta - alongUp;
+
+        float planarT = focusSmoothSpeed <= 0f ? 1f : 1f - Mathf.Exp(-focusSmoothSpeed * Time.deltaTime);
+        float heightT = heightSmoothSpeed <= 0f ? 1f : 1f - Mathf.Exp(-heightSmoothSpeed * Time.deltaTime);
+
+        _smoothedFocus += alongPlane * planarT + alongUp * heightT;
     }
 
     Vector3 ResolveBackDirection(Vector3 up, Vector3 previousUp)
