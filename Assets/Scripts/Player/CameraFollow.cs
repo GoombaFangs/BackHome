@@ -11,7 +11,8 @@ public class CameraFollow : MonoBehaviour
     [SerializeField] Transform target;
 
     [Header("Offset")]
-    [SerializeField] float offsetHeight = 12f;
+    // XP Hero-style high angle: steep look-down (~70°), not over-the-shoulder.
+    [SerializeField] float offsetHeight = 24f;
     [SerializeField] float offsetBack = 8f;
     [SerializeField] float offsetSide = 0f;
 

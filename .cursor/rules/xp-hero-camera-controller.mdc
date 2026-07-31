@@ -1,0 +1,37 @@
+---
+description: XP Hero is the camera + controller feel reference (spherical ground adaptation)
+globs: Assets/Scripts/Player/**/*.cs
+alwaysApply: false
+---
+
+# Camera & Controller Reference: XP Hero
+
+Primary feel reference for planet locomotion and follow camera.
+
+- Gameplay video: https://www.youtube.com/watch?v=9mEIWC1gjDo
+- Still: `docs/refs/xp-hero-camera-controller.png`
+- Art is placeholder; match **feel**, not visuals. Ground is **spherical** — adapt XP Hero’s flat-world camera to radial up.
+
+## Target feel (XP Hero)
+
+- High-angle follow (top-down-ish tilt), not over-the-shoulder.
+- **Fixed viewing compass**: camera yaw does **not** spin with character facing.
+- Character rotates to face move direction; camera stays put.
+- Virtual joystick / WASD: move relative to **camera view** on the ground plane.
+- Soft, stable follow — no terrain bob, no jitter, no sudden angle pops.
+- Framing: hero near center (slightly lower), wide readable play space around them.
+- Casual mobile survivor/ARPG readability over cinematic drama.
+
+## Spherical adaptations (BackHome)
+
+- Prefer **planet radial up** for camera tilt, never noisy terrain normals.
+- Parallel-transport the camera’s view-forward on the sphere (no antipode flip / W↔S invert).
+- Damp focus height separately from planar follow so hills don’t shake the camera.
+- Do **not** auto-orbit the camera when the player walks “backward” unless explicitly requested — XP Hero keeps a fixed compass.
+- Keep `followTargetFacing` off for the default casual XP Hero feel.
+
+## When changing camera/controls
+
+1. Ask: would this still feel like XP Hero on a curved planet?
+2. Prefer stability and readability over “smart” camera turns.
+3. Tune offsets toward high angle (more height, moderate back) rather than third-person chase.
