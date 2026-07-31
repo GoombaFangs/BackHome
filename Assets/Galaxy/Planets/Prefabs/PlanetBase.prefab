@@ -49,7 +49,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1a2b3c4d5e6f7081920a3b4c5d6e7f80, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SphericalPlanet
-  radius: 40
+  radius: 42.6
   latitudeSegments: 20
   longitudeSegments: 28
   groundLayerName: Ground
@@ -169,7 +169,7 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 0
   serializedVersion: 3
-  m_Radius: 40
+  m_Radius: 42.6
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &5019861040397769467
 GameObject:
