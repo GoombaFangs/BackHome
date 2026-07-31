@@ -1446,7 +1446,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2774a53d294d2e648b4188ebea7247fe, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TochController
+  m_EditorClassIdentifier: Assembly-CSharp::TouchController
   walkSpeed: 4
   runSpeed: 9
   rotationSmoothTime: 0.12

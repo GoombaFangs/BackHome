@@ -84,7 +84,7 @@ public class GalaxyGate : MonoBehaviour
             return true;
 
         return other.GetComponentInParent<PlanetWalker>() != null
-               || other.GetComponentInParent<TochController>() != null
+               || other.GetComponentInParent<TouchController>() != null
                || other.GetComponentInParent<CharacterController>() != null;
     }
 }

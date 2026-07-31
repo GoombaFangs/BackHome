@@ -27988,7 +27988,7 @@ GameObject:
   - component: {fileID: 910000002}
   - component: {fileID: 910000003}
   m_Layer: 0
-  m_Name: GalaxySceneBootstrap
+  m_Name: SceneBootstrap
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -28020,7 +28020,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d4e8f2a01c3b4e7a9f5d6c8b2a1e3f40, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GalaxySceneBootstrap
+  m_EditorClassIdentifier: Assembly-CSharp::SceneBootstrap
   playerPrefab: {fileID: 7594552319720850513, guid: 8b1c2bbbdbe900b4fbae5395f8ed144e, type: 3}
   uiPrefab: {fileID: 8133869685062393850, guid: 6f5cc733040770e4185166a9281c264a, type: 3}
   spawnPosition: {x: -22.6, y: -0.8, z: -5.74}

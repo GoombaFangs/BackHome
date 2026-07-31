@@ -11,11 +11,5 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Galaxy/PlanetA.unity
     guid: ed54deddf1f9ce743a125d151017d936
-  - enabled: 1
-    path: Assets/Scenes/Galaxy/Galaxy 2.unity
-    guid: fd1133c965ba52541849fd80c7b82e25
-  - enabled: 1
-    path: Assets/Scenes/Galaxy/Galaxy 3.unity
-    guid: 4cee1bdaedad3ad479f8a72790e39e56
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

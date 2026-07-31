@@ -27,9 +27,9 @@ public static class PlanetTileAssetGenerator
         Texture2D snow = null;
 
         CreateOrUpdateTilePrefab($"{TilesFolder}/TileBase.prefab", "TileBase", "base", grass, true, "default");
-        GameObject tileGrass = CreateOrUpdateTilePrefab($"{TilesFolder}/Tile_Grass.prefab", "Tile_Grass", "grass", grass, true, "grassland");
-        GameObject tileDirt = CreateOrUpdateTilePrefab($"{TilesFolder}/Tile_Dirt.prefab", "Tile_Dirt", "dirt", dirt, true, "barren");
-        GameObject tileSnow = CreateOrUpdateTilePrefab($"{TilesFolder}/Tile_Snow.prefab", "Tile_Snow", "snow", snow, true, "tundra");
+        GameObject tileGrass = CreateOrUpdateTilePrefab($"{TilesFolder}/TileGrass.prefab", "TileGrass", "grass", grass, true, "grassland");
+        GameObject tileDirt = CreateOrUpdateTilePrefab($"{TilesFolder}/TileDirt.prefab", "TileDirt", "dirt", dirt, true, "barren");
+        GameObject tileSnow = CreateOrUpdateTilePrefab($"{TilesFolder}/TileSnow.prefab", "TileSnow", "snow", snow, true, "tundra");
 
         PlanetTilePalette palette = CreateOrUpdatePalette(
             $"{SoFolder}/Palette_PlanetA.asset",

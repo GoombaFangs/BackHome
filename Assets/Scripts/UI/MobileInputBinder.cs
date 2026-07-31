@@ -84,14 +84,14 @@ public class MobileInputBinder : MonoBehaviour
         floating.Setup(moveJoystick, canvasInput);
 
         // Click-to-move fights the floating stick — keep WASD, disable click move.
-        TochController movement = playerInputs != null
-            ? playerInputs.GetComponent<TochController>()
+        TouchController movement = playerInputs != null
+            ? playerInputs.GetComponent<TouchController>()
             : null;
         if (movement == null)
         {
             GameObject player = GameObject.FindGameObjectWithTag("Player");
             if (player != null)
-                movement = player.GetComponent<TochController>();
+                movement = player.GetComponent<TouchController>();
         }
     }
 

@@ -11,7 +11,7 @@ public class WorldVitalsBars : MonoBehaviour
     [SerializeField] VitalsBarsView vitalsBarsPrefab;
     [SerializeField] VitalsBarsView bars;
     [SerializeField] Vector3 localOffset = new Vector3(0f, 2.15f, 0f);
-    [Tooltip("Extra world size multiplier. Usually set per-scene via GalaxySceneBootstrap.")]
+    [Tooltip("Extra world size multiplier. Usually set per-scene via SceneBootstrap.")]
     [SerializeField, Min(0.1f)] float worldScale = 1f;
 
     PlayerVitals _vitals;

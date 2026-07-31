@@ -1,16 +1,15 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using StarterAssets;
 
 /// <summary>
 /// Walks on a spherical planet (Outer Wilds style).
-/// On the ship / flat scenes this stays idle and <see cref="TochController"/> handles movement.
+/// On the ship / flat scenes this stays idle and <see cref="TouchController"/> handles movement.
 /// On Planet/Galaxy scenes with a <see cref="SphericalPlanet"/>, this takes over.
 /// When the planet has a heightmap, feet follow mountains/valleys from that map.
 /// </summary>
 [DefaultExecutionOrder(20)]
 [RequireComponent(typeof(StarterAssetsInputs))]
-[RequireComponent(typeof(TochController))]
+[RequireComponent(typeof(TouchController))]
 public class PlanetWalker : MonoBehaviour
 {
     [Tooltip("If on, only activates when the scene name starts with Planet or Galaxy.")]
@@ -32,7 +31,7 @@ public class PlanetWalker : MonoBehaviour
     SphericalPlanet _planet;
     StarterAssetsInputs _input;
     CharacterController _controller;
-    TochController _flatMotor;
+    TouchController _flatMotor;
     Animator _animator;
     Camera _camera;
     Rigidbody _body;
@@ -60,7 +59,7 @@ public class PlanetWalker : MonoBehaviour
 
         _input = GetComponent<StarterAssetsInputs>();
         _controller = GetComponent<CharacterController>();
-        _flatMotor = GetComponent<TochController>();
+        _flatMotor = GetComponent<TouchController>();
         _animator = GetComponent<Animator>();
         _camera = Camera.main;
 
@@ -76,7 +75,7 @@ public class PlanetWalker : MonoBehaviour
 
     void Start()
     {
-        _sceneAllowsPlanetWalk = !onlyInPlanetScenes || IsPlanetScene();
+        _sceneAllowsPlanetWalk = !onlyInPlanetScenes || SceneRoles.IsPlanetScene();
         if (_sceneAllowsPlanetWalk)
             TryStartPlanetWalk();
     }
@@ -420,13 +419,4 @@ public class PlanetWalker : MonoBehaviour
         _animator.SetFloat(_animIDMotionSpeed, Mathf.Max(inputMagnitude, 0.01f) * animationSpeedScale);
     }
 
-    static bool IsPlanetScene()
-    {
-        string name = SceneManager.GetActiveScene().name;
-        if (string.IsNullOrEmpty(name))
-            return false;
-
-        return name.StartsWith("Galaxy", System.StringComparison.OrdinalIgnoreCase)
-               || name.StartsWith("Planet", System.StringComparison.OrdinalIgnoreCase);
-    }
 }

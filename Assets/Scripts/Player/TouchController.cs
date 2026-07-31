@@ -9,7 +9,7 @@ using StarterAssets;
 /// </summary>
 [RequireComponent(typeof(CharacterController))]
 [RequireComponent(typeof(StarterAssetsInputs))]
-public class TochController : MonoBehaviour
+public class TouchController : MonoBehaviour
 {
     [Header("Movement")]
     [SerializeField] float walkSpeed = 2f;

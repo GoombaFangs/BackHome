@@ -1,11 +1,11 @@
 using UnityEngine;
 
 /// <summary>
-/// Spawns Player + UI from prefabs when a Galaxy/Planet scene starts.
+/// Spawns Player + UI from prefabs when a playable scene starts.
 /// CameraFollow stays on Main Camera — only the target is wired at runtime.
 /// Per-scene defaults (spawn point, vitals bar size) live here because cameras differ per world.
 /// </summary>
-public class GalaxySceneBootstrap : MonoBehaviour
+public class SceneBootstrap : MonoBehaviour
 {
     [SerializeField] GameObject playerPrefab;
     [SerializeField] GameObject uiPrefab;
@@ -42,7 +42,7 @@ public class GalaxySceneBootstrap : MonoBehaviour
 
     static Transform FindExistingPlayer()
     {
-        TochController motor = FindFirstObjectByType<TochController>();
+        TouchController motor = FindFirstObjectByType<TouchController>();
         if (motor != null)
             return motor.transform;
 
@@ -69,6 +69,6 @@ public class GalaxySceneBootstrap : MonoBehaviour
         if (follow != null)
             follow.SetTarget(player);
         else
-            Debug.LogWarning("GalaxySceneBootstrap: add CameraFollow on Main Camera to tune offsets per scene.");
+            Debug.LogWarning("SceneBootstrap: add CameraFollow on Main Camera to tune offsets per scene.");
     }
 }

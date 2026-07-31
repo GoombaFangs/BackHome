@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 100003}
   - component: {fileID: 100004}
   m_Layer: 0
-  m_Name: Tile_Dirt
+  m_Name: TileDirt
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

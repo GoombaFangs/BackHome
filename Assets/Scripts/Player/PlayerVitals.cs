@@ -1,6 +1,5 @@
 using System;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Health + oxygen. Oxygen drains outside the spaceship; HP drains when oxygen is empty.
@@ -27,7 +26,7 @@ public class PlayerVitals : MonoBehaviour
     public float CurrentOxygen => _currentOxygen;
     public float HealthNormalized => maxHealth > 0f ? _currentHealth / maxHealth : 0f;
     public float OxygenNormalized => maxOxygen > 0f ? _currentOxygen / maxOxygen : 0f;
-    public bool IsOnSpaceship => IsSpaceshipScene();
+    public bool IsOnSpaceship => SceneRoles.IsSpaceshipScene();
 
     public event Action VitalsChanged;
 
@@ -39,7 +38,7 @@ public class PlayerVitals : MonoBehaviour
 
     void Start()
     {
-        if (IsSpaceshipScene())
+        if (SceneRoles.IsSpaceshipScene())
             RefillOxygen();
         else
             RaiseChanged();
@@ -47,7 +46,7 @@ public class PlayerVitals : MonoBehaviour
 
     void Update()
     {
-        if (IsSpaceshipScene())
+        if (SceneRoles.IsSpaceshipScene())
             return;
 
         if (_currentOxygen > 0f)
@@ -106,13 +105,5 @@ public class PlayerVitals : MonoBehaviour
     void RaiseChanged()
     {
         VitalsChanged?.Invoke();
-    }
-
-    static bool IsSpaceshipScene()
-    {
-        string name = SceneManager.GetActiveScene().name;
-        return !string.IsNullOrEmpty(name)
-               && name.StartsWith("SpaceShip", StringComparison.OrdinalIgnoreCase);
-
     }
 }
