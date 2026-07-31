@@ -4,8 +4,7 @@ using StarterAssets;
 /// <summary>
 /// Walks on a spherical planet (Outer Wilds style).
 /// On the ship / flat scenes this stays idle and <see cref="TouchController"/> handles movement.
-/// On Planet/Galaxy scenes with a <see cref="SphericalPlanet"/>, this takes over.
-/// When the planet has a heightmap, feet follow mountains/valleys from that map.
+/// On Planet/Galaxy scenes, sticks to the tile MeshCollider (or planet collider) via raycasts.
 /// </summary>
 [DefaultExecutionOrder(20)]
 [RequireComponent(typeof(StarterAssetsInputs))]
@@ -20,15 +19,17 @@ public class PlanetWalker : MonoBehaviour
     [SerializeField] float runSpeed = 14f;
     [SerializeField] float runInputThreshold = 0.7f;
     [SerializeField] float alignSpeed = 12f;
-    [SerializeField] float hoverHeight = 0.03f;
-    [SerializeField] float gravityStrength = 14f;
-    [SerializeField] float groundProbeDistance = 6f;
+    [Tooltip("How far above the collider surface to place the character pivot (usually at the feet).")]
+    [SerializeField] float footOffset = 0.02f;
+    [SerializeField] float gravityStrength = 18f;
+    [SerializeField] float groundProbeDistance = 12f;
     [SerializeField] LayerMask groundLayer;
 
     [Header("Feel")]
     [SerializeField] float animationSpeedScale = 1.15f;
 
     SphericalPlanet _planet;
+    PlanetTileMap _tiles;
     StarterAssetsInputs _input;
     CharacterController _controller;
     TouchController _flatMotor;
@@ -53,7 +54,7 @@ public class PlanetWalker : MonoBehaviour
 
     void Awake()
     {
-        hoverHeight = Mathf.Clamp(hoverHeight, 0.005f, 0.08f);
+        footOffset = Mathf.Clamp(footOffset, 0.001f, 0.2f);
         gravityStrength = Mathf.Max(10f, gravityStrength);
         groundProbeDistance = Mathf.Max(4f, groundProbeDistance);
 
@@ -119,6 +120,10 @@ public class PlanetWalker : MonoBehaviour
             return;
 
         _planet = planet;
+        _tiles = planet.GetComponent<PlanetTileMap>();
+        if (_tiles != null)
+            _tiles.EnsureWalkColliders();
+
         TakeControl();
 
         Vector3 preferredUp = transform.position - _planet.Center;
@@ -148,6 +153,7 @@ public class PlanetWalker : MonoBehaviour
 
         _ownsControl = false;
         _planet = null;
+        _tiles = null;
 
         if (_triggerBody != null)
             _triggerBody.enabled = false;
@@ -170,6 +176,7 @@ public class PlanetWalker : MonoBehaviour
         _body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
         _body.detectCollisions = true;
 
+        // Trigger only — used for gates / sensors, not for standing on the planet.
         _triggerBody = GetComponent<CapsuleCollider>();
         if (_triggerBody == null)
             _triggerBody = gameObject.AddComponent<CapsuleCollider>();
@@ -185,22 +192,10 @@ public class PlanetWalker : MonoBehaviour
         if (_camera == null)
             _camera = Camera.main;
 
-        float rideHeight = GetRideHeight();
         _input.jump = false;
         _input.sprint = false;
         _input.look = Vector2.zero;
 
-        if (_planet.HasHeightTerrain)
-        {
-            TickHeightmapWalk(rideHeight);
-            return;
-        }
-
-        TickColliderWalk(rideHeight);
-    }
-
-    void TickHeightmapWalk(float rideHeight)
-    {
         Vector3 up = _planet.GetUpAt(transform.position);
         Vector2 moveInput = _input.move;
         float inputMagnitude = Mathf.Clamp01(moveInput.magnitude);
@@ -213,85 +208,26 @@ public class PlanetWalker : MonoBehaviour
         }
 
         Vector3 moveDir = GetTangentMoveDirection(moveInput, up);
-        Vector3 radial = up;
+        Vector3 probeOrigin = transform.position;
         if (moveDir.sqrMagnitude > 0.001f)
+            probeOrigin += moveDir * (targetSpeed * Time.deltaTime);
+
+        Vector3 radial = (probeOrigin - _planet.Center).normalized;
+        if (TryStickToCollider(radial, out Vector3 next, out Vector3 surfaceNormal))
         {
-            Vector3 slid = transform.position + moveDir * (targetSpeed * Time.deltaTime);
-            radial = (slid - _planet.Center).normalized;
-        }
-
-        Vector3 surfaceNormal = _planet.GetTerrainNormal(radial);
-        Vector3 next = _planet.GetSurfacePoint(radial, rideHeight);
-        _grounded = true;
-        _fallVelocity = Vector3.zero;
-
-        Vector3 faceDir = moveDir.sqrMagnitude > 0.001f
-            ? Vector3.ProjectOnPlane(moveDir, surfaceNormal)
-            : Vector3.ProjectOnPlane(transform.forward, surfaceNormal);
-        if (faceDir.sqrMagnitude < 0.001f)
-            faceDir = Vector3.ProjectOnPlane(Vector3.forward, surfaceNormal);
-
-        ApplyPose(next, faceDir.normalized, surfaceNormal);
-        UpdateAnimator(targetSpeed, inputMagnitude);
-    }
-
-    void TickColliderWalk(float rideHeight)
-    {
-        Vector3 up = _planet.GetUpAt(transform.position);
-        bool hitGround = Physics.Raycast(
-            transform.position + up * 1.25f,
-            -up,
-            out RaycastHit hit,
-            groundProbeDistance,
-            groundLayer,
-            QueryTriggerInteraction.Ignore);
-
-        if (hitGround)
-        {
-            up = hit.normal;
             _grounded = true;
-        }
-        else
-        {
-            _grounded = false;
-        }
-
-        Vector2 moveInput = _input.move;
-        float inputMagnitude = Mathf.Clamp01(moveInput.magnitude);
-        float targetSpeed = 0f;
-        if (inputMagnitude > 0.01f)
-        {
-            targetSpeed = inputMagnitude >= runInputThreshold
-                ? runSpeed
-                : walkSpeed * Mathf.Clamp01(inputMagnitude / runInputThreshold);
-        }
-
-        Vector3 moveDir = GetTangentMoveDirection(moveInput, up);
-        Vector3 next = transform.position + moveDir * (targetSpeed * Time.deltaTime);
-
-        if (_grounded && hitGround)
-        {
             _fallVelocity = Vector3.zero;
-            next = hit.point + up * rideHeight;
-            if (moveDir.sqrMagnitude > 0.001f)
-            {
-                Vector3 slid = hit.point + moveDir * (targetSpeed * Time.deltaTime);
-                Vector3 radial = (slid - _planet.Center).normalized;
-                next = _planet.Center + radial * (_planet.Radius + rideHeight);
-                if (Physics.Raycast(next + radial * 1.2f, -radial, out RaycastHit stickHit, groundProbeDistance, groundLayer, QueryTriggerInteraction.Ignore))
-                {
-                    next = stickHit.point + stickHit.normal * rideHeight;
-                    up = stickHit.normal;
-                }
-            }
+            up = surfaceNormal;
         }
         else
         {
+            // No collider hit — fall toward planet and clamp to analytic surface.
+            _grounded = false;
             Vector3 toCenter = (_planet.Center - transform.position).normalized;
             _fallVelocity += toCenter * (gravityStrength * Time.deltaTime);
-            next += _fallVelocity * Time.deltaTime;
+            next = transform.position + moveDir * (targetSpeed * Time.deltaTime) + _fallVelocity * Time.deltaTime;
 
-            float minDist = _planet.Radius + rideHeight;
+            float minDist = GetFallbackSurfaceRadius(radial) + footOffset;
             Vector3 fromCenter = next - _planet.Center;
             if (fromCenter.magnitude < minDist)
             {
@@ -300,16 +236,86 @@ public class PlanetWalker : MonoBehaviour
                 _grounded = true;
                 up = fromCenter.normalized;
             }
+            else
+            {
+                up = _planet.GetUpAt(next);
+            }
         }
 
         Vector3 faceDir = moveDir.sqrMagnitude > 0.001f
-            ? moveDir
+            ? Vector3.ProjectOnPlane(moveDir, up)
             : Vector3.ProjectOnPlane(transform.forward, up);
         if (faceDir.sqrMagnitude < 0.001f)
             faceDir = Vector3.ProjectOnPlane(Vector3.forward, up);
 
         ApplyPose(next, faceDir.normalized, up);
         UpdateAnimator(targetSpeed, inputMagnitude);
+    }
+
+    bool TryStickToCollider(Vector3 radial, out Vector3 feetPosition, out Vector3 normal)
+    {
+        feetPosition = default;
+        normal = radial;
+
+        // Cast from outside the surface inward so we hit the outer tile mesh.
+        float castStart = GetFallbackSurfaceRadius(radial) + Mathf.Max(4f, groundProbeDistance * 0.5f);
+        Vector3 origin = _planet.Center + radial * castStart;
+        float maxDist = castStart + 2f;
+
+        if (!TryRaycastPlanetGround(origin, -radial, maxDist, out RaycastHit hit))
+            return false;
+
+        normal = hit.normal.sqrMagnitude > 0.001f ? hit.normal.normalized : radial;
+        // Keep normal roughly outward so the character doesn't flip under the mesh.
+        if (Vector3.Dot(normal, radial) < 0f)
+            normal = -normal;
+
+        feetPosition = hit.point + normal * footOffset;
+        return true;
+    }
+
+    bool TryRaycastPlanetGround(Vector3 origin, Vector3 direction, float maxDistance, out RaycastHit best)
+    {
+        best = default;
+        RaycastHit[] hits = Physics.RaycastAll(
+            origin,
+            direction,
+            maxDistance,
+            groundLayer,
+            QueryTriggerInteraction.Ignore);
+
+        if (hits == null || hits.Length == 0)
+            return false;
+
+        float bestDist = float.MaxValue;
+        bool found = false;
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider col = hits[i].collider;
+            if (col == null)
+                continue;
+
+            // Prefer tile mesh / planet colliders; ignore the player capsule etc.
+            if (_planet != null
+                && (col.transform == _planet.transform || col.transform.IsChildOf(_planet.transform)))
+            {
+                if (hits[i].distance < bestDist)
+                {
+                    bestDist = hits[i].distance;
+                    best = hits[i];
+                    found = true;
+                }
+            }
+        }
+
+        return found;
+    }
+
+    float GetFallbackSurfaceRadius(Vector3 radial)
+    {
+        if (_tiles != null && _tiles.ProvidesWalkSurface)
+            return _tiles.GetWalkSurfaceRadius(radial);
+        return _planet.GetTerrainRadius(radial);
     }
 
     void ApplyPose(Vector3 next, Vector3 faceDir, Vector3 up)
@@ -356,28 +362,18 @@ public class PlanetWalker : MonoBehaviour
         if (_planet == null)
             return;
 
-        float rideHeight = GetRideHeight();
         Vector3 up = preferredUp.sqrMagnitude > 0.001f ? preferredUp.normalized : Vector3.up;
+        if (_tiles != null)
+            _tiles.EnsureWalkColliders();
 
-        if (_planet.HasHeightTerrain)
+        if (!TryStickToCollider(up, out Vector3 point, out Vector3 normal))
         {
-            transform.position = _planet.GetSurfacePoint(up, rideHeight);
-            up = _planet.GetTerrainNormal(up);
+            point = _planet.Center + up * (GetFallbackSurfaceRadius(up) + footOffset);
+            normal = up;
         }
-        else
-        {
-            Vector3 point = _planet.GetSurfacePoint(up, rideHeight);
-            transform.position = point;
-            if (Physics.Raycast(point + up * 5f, -up, out RaycastHit hit, 10f, groundLayer, QueryTriggerInteraction.Ignore))
-            {
-                transform.position = hit.point + hit.normal * rideHeight;
-                up = hit.normal;
-            }
-            else
-            {
-                up = _planet.GetUpAt(transform.position);
-            }
-        }
+
+        transform.position = point;
+        up = normal;
 
         Vector3 forward = Vector3.ProjectOnPlane(Vector3.forward, up);
         if (forward.sqrMagnitude < 0.001f)
@@ -385,25 +381,12 @@ public class PlanetWalker : MonoBehaviour
         transform.rotation = Quaternion.LookRotation(forward.normalized, up);
         _fallVelocity = Vector3.zero;
         _grounded = true;
-    }
 
-    float GetRideHeight()
-    {
-        float pivotToFeet = 0f;
-
-        if (_controller != null)
+        if (_body != null)
         {
-            float half = Mathf.Max(_controller.radius, _controller.height * 0.5f);
-            pivotToFeet = Mathf.Max(pivotToFeet, _controller.center.y - half);
+            _body.position = transform.position;
+            _body.rotation = transform.rotation;
         }
-
-        if (_triggerBody != null)
-        {
-            float half = Mathf.Max(_triggerBody.radius, _triggerBody.height * 0.5f);
-            pivotToFeet = Mathf.Max(pivotToFeet, _triggerBody.center.y - half);
-        }
-
-        return Mathf.Clamp(pivotToFeet + hoverHeight, 0.02f, 0.25f);
     }
 
     void UpdateAnimator(float targetSpeed, float inputMagnitude)
@@ -418,5 +401,4 @@ public class PlanetWalker : MonoBehaviour
         _animator.SetFloat(_animIDSpeed, _animBlend);
         _animator.SetFloat(_animIDMotionSpeed, Mathf.Max(inputMagnitude, 0.01f) * animationSpeedScale);
     }
-
 }

@@ -27,9 +27,38 @@ public class PlanetTileMapEditor : Editor
     public override void OnInspectorGUI()
     {
         serializedObject.Update();
-        DrawDefaultInspector();
 
         var map = (PlanetTileMap)target;
+
+        EditorGUILayout.Space(6);
+        EditorGUILayout.LabelField("Tile Size", EditorStyles.boldLabel);
+        SerializedProperty tilesAroundProp = serializedObject.FindProperty("tilesAroundEquator");
+        EditorGUI.BeginChangeCheck();
+        EditorGUILayout.PropertyField(
+            tilesAroundProp,
+            new GUIContent(
+                "Tiles Around Equator",
+                "Higher = smaller tiles. 24 = big blocks, 72 = medium, 128+ = fine."));
+        if (EditorGUI.EndChangeCheck())
+            serializedObject.ApplyModifiedProperties();
+
+        EditorGUILayout.HelpBox(
+            $"Approx tile width: ~{map.ApproximateTileWorldSize:0.0} world units\n" +
+            $"Grid: {map.LongitudeBands} × {map.LatitudeBands} = {map.CellCount} cells\n" +
+            "After changing size, press Apply Tile Size (rebuilds the map).",
+            MessageType.Info);
+
+        if (GUILayout.Button("Apply Tile Size (Rebuild Grid)", GUILayout.Height(28)))
+        {
+            Undo.RecordObject(map, "Apply Planet Tile Size");
+            map.SetTilesAroundEquator(tilesAroundProp.intValue, refillWithFillTile: true);
+            MarkDirty(map);
+        }
+
+        EditorGUILayout.Space(8);
+        DrawPropertiesExcluding(serializedObject, "m_Script", "tilesAroundEquator");
+        serializedObject.ApplyModifiedProperties();
+
         EditorGUILayout.Space(10);
         EditorGUILayout.LabelField("Tilemap Painting", EditorStyles.boldLabel);
 
@@ -88,8 +117,7 @@ public class PlanetTileMapEditor : Editor
         if (GUILayout.Button("Rebuild Grid From Equator"))
         {
             Undo.RecordObject(map, "Rebuild Grid Size");
-            map.EnsureGridDimensionsFromEquator();
-            map.FillAll(map.FillTileIndex);
+            map.SetTilesAroundEquator(map.TilesAroundEquator, refillWithFillTile: true);
             MarkDirty(map);
         }
 

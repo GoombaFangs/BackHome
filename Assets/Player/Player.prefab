@@ -2336,9 +2336,9 @@ MonoBehaviour:
   runSpeed: 14
   runInputThreshold: 0.7
   alignSpeed: 12
-  hoverHeight: 0.03
-  gravityStrength: 14
-  groundProbeDistance: 6
+  footOffset: 0.02
+  gravityStrength: 18
+  groundProbeDistance: 12
   groundLayer:
     serializedVersion: 2
     m_Bits: 8

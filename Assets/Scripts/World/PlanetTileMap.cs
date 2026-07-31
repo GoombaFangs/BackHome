@@ -20,12 +20,15 @@ public class PlanetTileMap : MonoBehaviour
         public string zoneId;
     }
 
-    [Header("Grid")]
+    [Header("Tile Size")]
+    [Tooltip("Tiles around the planet equator. Higher = smaller tiles (less blocky).")]
+    [SerializeField, Range(16, 256)] int tilesAroundEquator = 72;
     [SerializeField] PlanetTilePalette palette;
-    [SerializeField] int tilesAroundEquator = 24;
     [SerializeField] int fillTileIndex = 0;
+
+    [Header("Mesh")]
     [SerializeField] float overlap = 1.03f;
-    [SerializeField] float surfaceLift = 0.15f;
+    [SerializeField] float surfaceLift = 0.08f;
     [SerializeField] bool hidePlanetBaseMesh = true;
     [SerializeField] bool showTileVisuals = true;
     [Tooltip("When tiles are shown, hide the VisualShell so they don't z-fight.")]
@@ -35,8 +38,8 @@ public class PlanetTileMap : MonoBehaviour
     [SerializeField] bool castTileShadows = false;
 
     [Header("Serialized Map")]
-    [SerializeField] int latitudeBands = 24;
-    [SerializeField] int longitudeBands = 48;
+    [SerializeField] int latitudeBands = 36;
+    [SerializeField] int longitudeBands = 72;
     [SerializeField] int[] tileIndices = Array.Empty<int>();
 
     SphericalPlanet _planet;
@@ -48,11 +51,75 @@ public class PlanetTileMap : MonoBehaviour
     Material[] _runtimeMaterials;
 
     public PlanetTilePalette Palette => palette;
+    public int TilesAroundEquator => tilesAroundEquator;
     public int LatitudeBands => latitudeBands;
     public int LongitudeBands => longitudeBands;
     public int FillTileIndex => fillTileIndex;
     public int CellCount => latitudeBands * longitudeBands;
     public bool ShowTileVisuals => showTileVisuals;
+
+    /// <summary>
+    /// True when painted tiles are the visible / walkable planet surface.
+    /// </summary>
+    public bool ProvidesWalkSurface => showTileVisuals;
+
+    /// <summary>
+    /// Radial distance from planet center to the outer tile surface (matches rendered tiles).
+    /// </summary>
+    public float GetWalkSurfaceRadius(Vector3 directionFromCenter)
+    {
+        if (_planet == null)
+            _planet = GetComponent<SphericalPlanet>();
+        if (_planet == null)
+            return 0f;
+
+        Vector3 up = directionFromCenter.sqrMagnitude > 0.0001f
+            ? directionFromCenter.normalized
+            : Vector3.up;
+
+        float lift = Mathf.Max(surfaceLift, _planet.Radius * 0.003f);
+        float radius = _planet.GetTerrainRadius(up) + lift;
+        if (overlap > 1.0001f)
+            radius *= overlap;
+        return radius;
+    }
+
+    public Vector3 GetWalkSurfacePoint(Vector3 directionFromCenter, float hover = 0f)
+    {
+        if (_planet == null)
+            _planet = GetComponent<SphericalPlanet>();
+        if (_planet == null)
+            return directionFromCenter;
+
+        Vector3 up = directionFromCenter.sqrMagnitude > 0.0001f
+            ? directionFromCenter.normalized
+            : Vector3.up;
+        return _planet.Center + up * (GetWalkSurfaceRadius(up) + hover);
+    }
+
+    public Vector3 GetWalkSurfaceNormal(Vector3 directionFromCenter)
+    {
+        if (_planet == null)
+            _planet = GetComponent<SphericalPlanet>();
+        if (_planet == null)
+            return Vector3.up;
+
+        // Faceted tiles still follow the heightmap slope for feet alignment.
+        return _planet.GetTerrainNormal(directionFromCenter);
+    }
+
+    /// <summary>Approximate world-space width of one equator tile.</summary>
+    public float ApproximateTileWorldSize
+    {
+        get
+        {
+            if (_planet == null)
+                _planet = GetComponent<SphericalPlanet>();
+            float radius = _planet != null ? _planet.Radius : 40f;
+            int count = Mathf.Max(1, tilesAroundEquator);
+            return (2f * Mathf.PI * radius) / count;
+        }
+    }
 
     void OnEnable()
     {
@@ -63,6 +130,8 @@ public class PlanetTileMap : MonoBehaviour
             FillAll(fillTileIndex);
         else
             RebuildVisuals();
+
+        EnsureWalkColliders();
     }
 
     void OnDisable()
@@ -77,7 +146,7 @@ public class PlanetTileMap : MonoBehaviour
 
     void OnValidate()
     {
-        tilesAroundEquator = Mathf.Max(8, tilesAroundEquator);
+        tilesAroundEquator = Mathf.Clamp(tilesAroundEquator, 16, 256);
         overlap = Mathf.Max(1f, overlap);
         if (palette != null)
             fillTileIndex = Mathf.Clamp(fillTileIndex, 0, Mathf.Max(0, palette.Count - 1));
@@ -90,10 +159,23 @@ public class PlanetTileMap : MonoBehaviour
         ApplyBaseMeshVisibility();
     }
 
+    /// <summary>
+    /// Sets how many tiles wrap the equator (higher = smaller tiles) and rebuilds the map.
+    /// </summary>
+    public void SetTilesAroundEquator(int count, bool refillWithFillTile = true)
+    {
+        tilesAroundEquator = Mathf.Clamp(count, 16, 256);
+        EnsureGridDimensionsFromEquator();
+        if (refillWithFillTile || !HasValidMap())
+            FillAll(fillTileIndex);
+        else
+            RebuildVisuals();
+    }
+
     public void EnsureGridDimensionsFromEquator()
     {
-        longitudeBands = Mathf.Max(8, tilesAroundEquator);
-        latitudeBands = Mathf.Max(4, tilesAroundEquator / 2);
+        longitudeBands = Mathf.Max(16, tilesAroundEquator);
+        latitudeBands = Mathf.Max(8, tilesAroundEquator / 2);
     }
 
     public bool HasValidMap()
@@ -230,6 +312,37 @@ public class PlanetTileMap : MonoBehaviour
         EnsureRenderObjects();
         ApplyBaseMeshVisibility();
         BuildCombinedMesh();
+        EnsureWalkColliders();
+    }
+
+    /// <summary>
+    /// Makes sure the tile MeshCollider is the walkable surface and the base sphere is off.
+    /// </summary>
+    public void EnsureWalkColliders()
+    {
+        if (_planet == null)
+            _planet = GetComponent<SphericalPlanet>();
+
+        EnsureRenderObjects();
+
+        if (_tilesCollider != null)
+        {
+            if (_runtimeMesh != null && _tilesCollider.sharedMesh != _runtimeMesh)
+            {
+                _tilesCollider.sharedMesh = null;
+                _tilesCollider.sharedMesh = _runtimeMesh;
+            }
+
+            _tilesCollider.convex = false;
+            _tilesCollider.enabled = useTileMeshCollider && _tilesCollider.sharedMesh != null;
+        }
+
+        // Never let the inner sphere steal ground raycasts from the outer tile mesh.
+        var sphere = GetComponent<SphereCollider>();
+        if (sphere != null)
+            sphere.enabled = !(useTileMeshCollider && _tilesCollider != null && _tilesCollider.enabled);
+
+        ApplyBaseMeshVisibility();
     }
 
     void BuildCombinedMesh()
@@ -340,8 +453,11 @@ public class PlanetTileMap : MonoBehaviour
         {
             _tilesCollider.sharedMesh = null;
             _tilesCollider.sharedMesh = _runtimeMesh;
+            _tilesCollider.convex = false;
             _tilesCollider.enabled = useTileMeshCollider;
         }
+
+        EnsureWalkColliders();
     }
 
     Material[] BuildMaterials()

@@ -217,7 +217,7 @@ public static class PlanetTileAssetGenerator
         var map = go.AddComponent<PlanetTileMap>();
         var mapSo = new SerializedObject(map);
         mapSo.FindProperty("palette").objectReferenceValue = palette;
-        mapSo.FindProperty("tilesAroundEquator").intValue = 24;
+        mapSo.FindProperty("tilesAroundEquator").intValue = 72;
         mapSo.FindProperty("fillTileIndex").intValue = 0;
         mapSo.FindProperty("hidePlanetBaseMesh").boolValue = true;
         mapSo.FindProperty("showTileVisuals").boolValue = true;

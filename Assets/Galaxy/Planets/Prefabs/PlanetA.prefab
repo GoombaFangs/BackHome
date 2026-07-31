@@ -9,6 +9,10 @@ PrefabInstance:
     m_TransformParent: {fileID: 0}
     m_Modifications:
     - target: {fileID: -4894461237539558959, guid: aa06111e000000000000000000000006, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -4894461237539558959, guid: aa06111e000000000000000000000006, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 0}
@@ -56,9 +60,21 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 500003, guid: aa06111e000000000000000000000006, type: 3}
+      propertyPath: longitudeBands
+      value: 72
+      objectReference: {fileID: 0}
     - target: {fileID: 875194189165676733, guid: aa06111e000000000000000000000006, type: 3}
       propertyPath: m_Mesh
       value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 4280770568758452141, guid: aa06111e000000000000000000000006, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4280770568758452141, guid: aa06111e000000000000000000000006, type: 3}
+      propertyPath: m_Materials.Array.size
+      value: 15
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
