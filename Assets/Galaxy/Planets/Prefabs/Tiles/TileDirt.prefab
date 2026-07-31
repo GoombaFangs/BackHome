@@ -106,5 +106,5 @@ MonoBehaviour:
   tileId: dirt
   walkable: 1
   zoneId: barren
-  albedo: {fileID: 0}
+  albedo: {fileID: 2800000, guid: a7b05dec520c8cf4c8e08dfef1f84db4, type: 3}
   tint: {r: 1, g: 1, b: 1, a: 1}

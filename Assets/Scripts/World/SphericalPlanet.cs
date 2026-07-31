@@ -17,14 +17,14 @@ public class SphericalPlanet : MonoBehaviour
 
     [Header("Shape")]
     [SerializeField] float radius = 40f;
-    [SerializeField] int latitudeSegments = 48;
-    [SerializeField] int longitudeSegments = 64;
+    [SerializeField] int latitudeSegments = 20;
+    [SerializeField] int longitudeSegments = 28;
     [SerializeField] string groundLayerName = "Ground";
 
     [Header("Look")]
     [SerializeField] Texture2D albedoTexture;
     [SerializeField] Color tint = Color.white;
-    [SerializeField] float textureTiling = 8f;
+    [SerializeField] float textureTiling = 4f;
 
     [Header("Hybrid Visual Shell")]
     [SerializeField] bool useVisualShell = false;
@@ -32,11 +32,11 @@ public class SphericalPlanet : MonoBehaviour
     [SerializeField] Texture2D shellNormalMap;
     [SerializeField] Texture2D shellHeightMap;
     [SerializeField] float shellRadiusOffset = 0f;
-    [SerializeField] float shellHeightAmplitude = 3f;
-    [SerializeField] float shellSmoothness = 0.18f;
-    [SerializeField] float shellNormalStrength = 1f;
-    [SerializeField] int shellLatitudeSegments = 128;
-    [SerializeField] int shellLongitudeSegments = 192;
+    [SerializeField] float shellHeightAmplitude = 1.6f;
+    [SerializeField] float shellSmoothness = 0.05f;
+    [SerializeField] float shellNormalStrength = 0f;
+    [SerializeField] int shellLatitudeSegments = 24;
+    [SerializeField] int shellLongitudeSegments = 32;
     [SerializeField] bool castShellShadows = true;
 
     MeshFilter _filter;
@@ -50,6 +50,7 @@ public class SphericalPlanet : MonoBehaviour
     Material _runtimeShellMaterial;
     Mesh _runtimeShellMesh;
     bool _buildQueued;
+    bool _shellVisible = true;
 
     public Vector3 Center => transform.position;
     public float Radius => radius;
@@ -58,6 +59,13 @@ public class SphericalPlanet : MonoBehaviour
         useVisualShell
         && shellHeightMap != null
         && shellHeightAmplitude > 0.0001f;
+
+    public void SetVisualShellVisible(bool visible)
+    {
+        _shellVisible = visible;
+        if (_shellRenderer != null)
+            _shellRenderer.enabled = visible && useVisualShell && _runtimeShellMaterial != null;
+    }
 
     void OnEnable()
     {
@@ -322,7 +330,7 @@ public class SphericalPlanet : MonoBehaviour
             radius + shellRadiusOffset,
             latSegments,
             lonSegments,
-            1f,
+            textureTiling,
             shellHeightMap,
             shellHeightAmplitude);
         _runtimeShellMesh.name = "PlanetVisualShellMesh";
@@ -334,7 +342,7 @@ public class SphericalPlanet : MonoBehaviour
             _runtimeShellMaterial.hideFlags = HideFlags.DontSave;
 
         _shellRenderer.sharedMaterial = _runtimeShellMaterial;
-        _shellRenderer.enabled = _runtimeShellMaterial != null;
+        _shellRenderer.enabled = _shellVisible && _runtimeShellMaterial != null;
         _shellRenderer.shadowCastingMode = castShellShadows
             ? UnityEngine.Rendering.ShadowCastingMode.On
             : UnityEngine.Rendering.ShadowCastingMode.Off;
@@ -419,7 +427,12 @@ public class SphericalPlanet : MonoBehaviour
 
     Material CreateShellMaterial()
     {
-        Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+        // Handpainted casual look: unlit when no normal map, soft lit otherwise.
+        Shader shader = shellNormalMap != null
+            ? Shader.Find("Universal Render Pipeline/Lit")
+            : Shader.Find("Universal Render Pipeline/Unlit");
+        if (shader == null)
+            shader = Shader.Find("Universal Render Pipeline/Lit");
         if (shader == null)
             shader = Shader.Find("Standard");
         if (shader == null)
@@ -427,7 +440,7 @@ public class SphericalPlanet : MonoBehaviour
         if (shader == null)
             return null;
 
-        var mat = new Material(shader) { name = "PlanetVisualShell_Lit" };
+        var mat = new Material(shader) { name = "PlanetVisualShell" };
         if (mat.HasProperty("_BaseColor"))
             mat.SetColor("_BaseColor", Color.white);
         else if (mat.HasProperty("_Color"))

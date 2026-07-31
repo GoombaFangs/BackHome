@@ -22,12 +22,14 @@ public class PlanetTileMap : MonoBehaviour
 
     [Header("Grid")]
     [SerializeField] PlanetTilePalette palette;
-    [SerializeField] int tilesAroundEquator = 48;
+    [SerializeField] int tilesAroundEquator = 24;
     [SerializeField] int fillTileIndex = 0;
-    [SerializeField] float overlap = 1f;
-    [SerializeField] float surfaceLift = 0.002f;
+    [SerializeField] float overlap = 1.03f;
+    [SerializeField] float surfaceLift = 0.15f;
     [SerializeField] bool hidePlanetBaseMesh = true;
-    [SerializeField] bool showTileVisuals = false;
+    [SerializeField] bool showTileVisuals = true;
+    [Tooltip("When tiles are shown, hide the VisualShell so they don't z-fight.")]
+    [SerializeField] bool hideShellWhileShowingTiles = true;
     [SerializeField] bool useTileMeshCollider = true;
     [SerializeField] bool disableBaseSphereCollider = true;
     [SerializeField] bool castTileShadows = false;
@@ -50,6 +52,7 @@ public class PlanetTileMap : MonoBehaviour
     public int LongitudeBands => longitudeBands;
     public int FillTileIndex => fillTileIndex;
     public int CellCount => latitudeBands * longitudeBands;
+    public bool ShowTileVisuals => showTileVisuals;
 
     void OnEnable()
     {
@@ -78,6 +81,13 @@ public class PlanetTileMap : MonoBehaviour
         overlap = Mathf.Max(1f, overlap);
         if (palette != null)
             fillTileIndex = Mathf.Clamp(fillTileIndex, 0, Mathf.Max(0, palette.Count - 1));
+
+        if (_planet == null)
+            _planet = GetComponent<SphericalPlanet>();
+
+        if (_tilesRenderer != null)
+            _tilesRenderer.enabled = showTileVisuals;
+        ApplyBaseMeshVisibility();
     }
 
     public void EnsureGridDimensionsFromEquator()
@@ -118,6 +128,44 @@ public class PlanetTileMap : MonoBehaviour
 
         tileIndices[cell] = tileIndex;
         RebuildVisuals();
+    }
+
+    /// <summary>
+    /// Paints a circular brush around a cell. Rebuilds visuals once.
+    /// </summary>
+    public bool PaintBrush(int centerLat, int centerLon, int tileIndex, int radiusCells)
+    {
+        if (!HasValidMap())
+            FillAll(fillTileIndex);
+
+        radiusCells = Mathf.Max(0, radiusCells);
+        tileIndex = Mathf.Clamp(tileIndex, 0, palette != null ? Mathf.Max(0, palette.Count - 1) : 0);
+
+        bool changed = false;
+        for (int dLat = -radiusCells; dLat <= radiusCells; dLat++)
+        {
+            int lat = centerLat + dLat;
+            if (lat < 0 || lat >= latitudeBands)
+                continue;
+
+            for (int dLon = -radiusCells; dLon <= radiusCells; dLon++)
+            {
+                if (dLat * dLat + dLon * dLon > radiusCells * radiusCells)
+                    continue;
+
+                int lon = Mod(centerLon + dLon, longitudeBands);
+                int cell = CellIndex(lat, lon);
+                if (tileIndices[cell] == tileIndex)
+                    continue;
+
+                tileIndices[cell] = tileIndex;
+                changed = true;
+            }
+        }
+
+        if (changed)
+            RebuildVisuals();
+        return changed;
     }
 
     public int GetTileIndex(int lat, int lon)
@@ -204,6 +252,8 @@ public class PlanetTileMap : MonoBehaviour
 
         float latStep = 180f / latitudeBands;
         float lonStep = 360f / longitudeBands;
+        // Keep tiles clearly above heightmapped shell / base sphere.
+        float lift = Mathf.Max(surfaceLift, _planet.Radius * 0.003f);
 
         for (int lat = 0; lat < latitudeBands; lat++)
         {
@@ -216,22 +266,51 @@ public class PlanetTileMap : MonoBehaviour
                 float lon0 = lon * lonStep;
                 float lon1 = (lon + 1) * lonStep;
 
-                Vector3 p00 = SurfacePoint(lat0, lon0);
-                Vector3 p01 = SurfacePoint(lat0, lon1);
-                Vector3 p10 = SurfacePoint(lat1, lon0);
-                Vector3 p11 = SurfacePoint(lat1, lon1);
-                p00 = ExpandFromCenter(p00);
-                p01 = ExpandFromCenter(p01);
-                p10 = ExpandFromCenter(p10);
-                p11 = ExpandFromCenter(p11);
+                // Corners in LOCAL space (mesh lives under the planet transform).
+                Vector3 p00 = LocalSurfacePoint(lat0, lon0, lift);
+                Vector3 p01 = LocalSurfacePoint(lat0, lon1, lift);
+                Vector3 p10 = LocalSurfacePoint(lat1, lon0, lift);
+                Vector3 p11 = LocalSurfacePoint(lat1, lon1, lift);
+
+                if (overlap > 1.0001f)
+                {
+                    p00 *= overlap;
+                    p01 *= overlap;
+                    p10 *= overlap;
+                    p11 *= overlap;
+                }
 
                 int start = vertices.Count;
-                AddVertex(p00, new Vector2(0f, 0f), ref vertices, ref normals, ref uvs);
-                AddVertex(p10, new Vector2(0f, 1f), ref vertices, ref normals, ref uvs);
-                AddVertex(p11, new Vector2(1f, 1f), ref vertices, ref normals, ref uvs);
-                AddVertex(p01, new Vector2(1f, 0f), ref vertices, ref normals, ref uvs);
+                // SW, SE, NE, NW — then pick winding that faces outward.
+                Vector3 sw = p00;
+                Vector3 se = p01;
+                Vector3 ne = p11;
+                Vector3 nw = p10;
 
-                // Clockwise outward.
+                Vector3 centerLocal = (sw + se + ne + nw) * 0.25f;
+                Vector3 outward = centerLocal.sqrMagnitude > 0.0001f
+                    ? centerLocal.normalized
+                    : Vector3.up;
+
+                // Candidate: SW -> SE -> NE -> NW (often CCW from outside in Unity).
+                Vector3 n = Vector3.Cross(se - sw, ne - sw);
+                bool flip = Vector3.Dot(n, outward) < 0f;
+
+                if (!flip)
+                {
+                    AddVertexLocal(sw, new Vector2(0f, 0f), ref vertices, ref normals, ref uvs);
+                    AddVertexLocal(se, new Vector2(1f, 0f), ref vertices, ref normals, ref uvs);
+                    AddVertexLocal(ne, new Vector2(1f, 1f), ref vertices, ref normals, ref uvs);
+                    AddVertexLocal(nw, new Vector2(0f, 1f), ref vertices, ref normals, ref uvs);
+                }
+                else
+                {
+                    AddVertexLocal(sw, new Vector2(0f, 0f), ref vertices, ref normals, ref uvs);
+                    AddVertexLocal(nw, new Vector2(0f, 1f), ref vertices, ref normals, ref uvs);
+                    AddVertexLocal(ne, new Vector2(1f, 1f), ref vertices, ref normals, ref uvs);
+                    AddVertexLocal(se, new Vector2(1f, 0f), ref vertices, ref normals, ref uvs);
+                }
+
                 var tris = trianglesByMat[tileIndex];
                 tris.Add(start + 0);
                 tris.Add(start + 1);
@@ -278,7 +357,8 @@ public class PlanetTileMap : MonoBehaviour
         {
             Material mat = new Material(shader);
             mat.name = $"PlanetTile_{i}_Unlit";
-            // If there's no texture assigned (albedo == null), keep a visible fallback color.
+            if (mat.HasProperty("_Cull"))
+                mat.SetFloat("_Cull", 0f); // Off — avoid missing tiles from winding issues
             if (mat.HasProperty("_BaseColor"))
                 mat.SetColor("_BaseColor", Color.white);
             else
@@ -298,7 +378,8 @@ public class PlanetTileMap : MonoBehaviour
         return mats;
     }
 
-    Vector3 SurfacePoint(float latDeg, float lonDeg)
+    /// <summary>Local-space point on the (optionally heightmapped) planet surface.</summary>
+    Vector3 LocalSurfacePoint(float latDeg, float lonDeg, float lift)
     {
         float lat = latDeg * Mathf.Deg2Rad;
         float lon = lonDeg * Mathf.Deg2Rad;
@@ -306,23 +387,16 @@ public class PlanetTileMap : MonoBehaviour
             Mathf.Cos(lat) * Mathf.Cos(lon),
             Mathf.Sin(lat),
             Mathf.Cos(lat) * Mathf.Sin(lon));
-        return _planet.Center + up * (_planet.Radius + surfaceLift);
+        float terrainRadius = _planet.GetTerrainRadius(up);
+        // GetTerrainRadius is in world units along direction; with uniform scale this matches local.
+        float scale = Mathf.Max(transform.lossyScale.x, 0.0001f);
+        return up * ((terrainRadius + lift) / scale);
     }
 
-    Vector3 ExpandFromCenter(Vector3 point)
+    void AddVertexLocal(Vector3 localPoint, Vector2 uv, ref List<Vector3> vertices, ref List<Vector3> normals, ref List<Vector2> uvs)
     {
-        if (Mathf.Abs(overlap - 1f) < 0.0001f)
-            return point;
-
-        Vector3 dir = (point - _planet.Center).normalized;
-        float dist = (point - _planet.Center).magnitude;
-        return _planet.Center + dir * (dist * overlap);
-    }
-
-    void AddVertex(Vector3 point, Vector2 uv, ref List<Vector3> vertices, ref List<Vector3> normals, ref List<Vector2> uvs)
-    {
-        Vector3 normal = (point - _planet.Center).normalized;
-        vertices.Add(point);
+        Vector3 normal = localPoint.sqrMagnitude > 0.0001f ? localPoint.normalized : Vector3.up;
+        vertices.Add(localPoint);
         normals.Add(normal);
         uvs.Add(uv);
     }
@@ -379,6 +453,11 @@ public class PlanetTileMap : MonoBehaviour
             if (sphere != null)
                 sphere.enabled = !useTileMeshCollider;
         }
+
+        // Tiles replace the painted surface — hide shell to prevent diamond z-fighting artifacts.
+        bool showShell = !(showTileVisuals && hideShellWhileShowingTiles);
+        if (_planet != null)
+            _planet.SetVisualShellVisible(showShell);
     }
 
     void CleanupRuntimeAssets()
