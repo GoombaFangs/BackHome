@@ -44,7 +44,7 @@ public static class CleanMissingPrefabs
                 return;
 
             EditorSceneManager.MarkAllScenesDirty();
-            Debug.Log($"[BackHome] Auto-removed {removed} missing prefab instance(s). Save PlanetA (Ctrl+S).");
+            Debug.Log($"[BackHome] Auto-removed {removed} missing prefab instance(s). Save PlanetNyxara (Ctrl+S).");
         };
     }
 

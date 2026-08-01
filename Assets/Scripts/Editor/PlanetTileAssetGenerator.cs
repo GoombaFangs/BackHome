@@ -5,7 +5,7 @@ using UnityEngine;
 
 /// <summary>
 /// Regenerates planet tile prefabs from Handpainted textures under
-/// Assets/Galaxy/Planets/Textures and rebuilds Palette_PlanetA.
+/// Assets/Galaxy/Planets/Textures and rebuilds Palette_PlanetNyxara.
 /// </summary>
 public static class PlanetTileAssetGenerator
 {
@@ -95,16 +95,16 @@ public static class PlanetTileAssetGenerator
         DeleteIfExists($"{TilesFolder}/TileGrass.prefab");
         DeleteIfExists($"{TilesFolder}/TileSnow.prefab");
 
-        PlanetTilePalette palette = CreateOrUpdatePalette($"{SoFolder}/Palette_PlanetA.asset", created);
+        PlanetTilePalette palette = CreateOrUpdatePalette($"{SoFolder}/Palette_PlanetNyxara.asset", created);
         CreateOrUpdatePlanetPrefab($"{PlanetFolder}/PlanetBase.prefab", "PlanetBase", 40f, defaultDirt, palette);
 
-        string planetAPath = $"{PlanetFolder}/PlanetA.prefab";
-        if (AssetDatabase.LoadAssetAtPath<GameObject>(planetAPath) == null)
+        string planetNyxaraPath = $"{PlanetFolder}/PlanetNyxara.prefab";
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(planetNyxaraPath) == null)
         {
             GameObject basePrefab = AssetDatabase.LoadAssetAtPath<GameObject>($"{PlanetFolder}/PlanetBase.prefab");
             GameObject instance = PrefabUtility.InstantiatePrefab(basePrefab) as GameObject;
-            instance.name = "PlanetA";
-            PrefabUtility.SaveAsPrefabAsset(instance, planetAPath);
+            instance.name = "PlanetNyxara";
+            PrefabUtility.SaveAsPrefabAsset(instance, planetNyxaraPath);
             Object.DestroyImmediate(instance);
         }
 

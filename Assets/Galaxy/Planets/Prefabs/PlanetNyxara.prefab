@@ -18,7 +18,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 500000, guid: aa06111e000000000000000000000006, type: 3}
       propertyPath: m_Name
-      value: PlanetA
+      value: PlanetNyxara
       objectReference: {fileID: 0}
     - target: {fileID: 500001, guid: aa06111e000000000000000000000006, type: 3}
       propertyPath: m_LocalPosition.x

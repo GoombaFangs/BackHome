@@ -13,7 +13,7 @@ public class EnemySpawner : MonoBehaviour
     [Serializable]
     public struct SpawnEntry
     {
-        [Tooltip("Enemy prefab to instantiate (e.g. Foe_creature).")]
+        [Tooltip("Enemy prefab to instantiate (e.g. Grimling).")]
         public GameObject prefab;
 
         [Min(0)]

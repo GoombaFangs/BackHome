@@ -125,5 +125,5 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c3f7a91e2b4d4856a8e0f1d2c3b4a596, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::GalaxyGate
-  targetSceneName: PlanetA
+  targetSceneName: PlanetNyxara
   proximityFallbackRadius: 2.4
