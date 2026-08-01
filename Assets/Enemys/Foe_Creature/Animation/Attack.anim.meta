@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 73d46114397df2342bccbac2de05a72c
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 355108
+  packageName: Foe Creature
+  packageVersion: 1.0.0
+  assetPath: Assets/My_Assets/Nomadic_UV/Foe_Creature/Animation/Attack.anim
+  uploadId: 846730
