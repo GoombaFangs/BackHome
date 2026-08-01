@@ -18811,7 +18811,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a7c3e91f4b2d4801a6e5f8c0d9b4a217, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::EnemySpawner
+  m_EditorClassIdentifier: Assembly-CSharp::CreatureSpawner
   planet: {fileID: 1475972787}
   spawnEntries:
   - prefab: {fileID: 9102089459880986193, guid: 999c9df1ae9ff0641a8369f4be6b7ed5, type: 3}

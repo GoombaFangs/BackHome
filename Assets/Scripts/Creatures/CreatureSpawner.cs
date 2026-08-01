@@ -3,17 +3,17 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Spawns enemy prefabs across a spherical planet walk surface.
+/// Spawns creature prefabs across a spherical planet walk surface.
 /// Place one spawner per planet (or per spawn config). Assign any planet + any prefabs.
 /// Combat / AI is out of scope — this only handles placement and orientation.
 /// </summary>
 [DefaultExecutionOrder(50)]
-public class EnemySpawner : MonoBehaviour
+public class CreatureSpawner : MonoBehaviour
 {
     [Serializable]
     public struct SpawnEntry
     {
-        [Tooltip("Enemy prefab to instantiate (e.g. Grimling).")]
+        [Tooltip("Creature prefab to instantiate (e.g. Grimling).")]
         public GameObject prefab;
 
         [Min(0)]
@@ -24,8 +24,8 @@ public class EnemySpawner : MonoBehaviour
     [Tooltip("Planet to spawn on. Leave empty to use SphericalPlanet.Instance / first in scene.")]
     [SerializeField] SphericalPlanet planet;
 
-    [Header("Enemies")]
-    [Tooltip("One row per enemy type. Same spawner can mix multiple prefabs.")]
+    [Header("Creatures")]
+    [Tooltip("One row per creature type. Same spawner can mix multiple prefabs.")]
     [SerializeField] SpawnEntry[] spawnEntries = Array.Empty<SpawnEntry>();
 
     [Header("Timing")]
@@ -34,7 +34,7 @@ public class EnemySpawner : MonoBehaviour
     [Header("Presentation")]
     [Tooltip("Optional Animator state to force on spawn (e.g. idle). Leave empty to leave Animator alone.")]
     [SerializeField] string initialAnimatorState = "idle";
-    [Tooltip("Parent for spawned instances. Leave empty to create a child named Enemies.")]
+    [Tooltip("Parent for spawned instances. Leave empty to create a child named Creatures.")]
     [SerializeField] Transform spawnRoot;
 
     // Internal placement defaults — not exposed in the Inspector.
@@ -120,10 +120,10 @@ public class EnemySpawner : MonoBehaviour
                 if (!TryGetSurfacePose(dir, out Vector3 position, out Quaternion rotation))
                     continue;
 
-                GameObject enemy = Instantiate(entry.prefab, position, rotation, spawnRoot);
-                enemy.name = $"{entry.prefab.name}_{_spawned.Count:00}";
-                ApplyInitialAnimatorState(enemy);
-                _spawned.Add(enemy);
+                GameObject creature = Instantiate(entry.prefab, position, rotation, spawnRoot);
+                creature.name = $"{entry.prefab.name}_{_spawned.Count:00}";
+                ApplyInitialAnimatorState(creature);
+                _spawned.Add(creature);
                 _acceptedDirs.Add(dir);
                 placed++;
             }
@@ -193,14 +193,14 @@ public class EnemySpawner : MonoBehaviour
         if (spawnRoot != null)
             return;
 
-        Transform existing = transform.Find("Enemies");
+        Transform existing = transform.Find("Creatures");
         if (existing != null)
         {
             spawnRoot = existing;
             return;
         }
 
-        var root = new GameObject("Enemies");
+        var root = new GameObject("Creatures");
         root.transform.SetParent(transform, false);
         spawnRoot = root.transform;
     }
@@ -340,12 +340,12 @@ public class EnemySpawner : MonoBehaviour
         return true;
     }
 
-    void ApplyInitialAnimatorState(GameObject enemy)
+    void ApplyInitialAnimatorState(GameObject creature)
     {
         if (string.IsNullOrWhiteSpace(initialAnimatorState))
             return;
 
-        Animator animator = enemy.GetComponentInChildren<Animator>();
+        Animator animator = creature.GetComponentInChildren<Animator>();
         if (animator == null || animator.runtimeAnimatorController == null)
             return;
 
