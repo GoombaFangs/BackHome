@@ -24,6 +24,7 @@ public class PlayerVitals : MonoBehaviour
     public float MaxHealth => stats != null ? stats.MaxHealth : 0f;
     public float AttackDamage => stats != null ? stats.AttackDamage : 0f;
     public float AttackSpeed => stats != null ? stats.AttackSpeed : 0f;
+    public float AttackRange => stats != null ? stats.AttackRange : 0f;
     public float MaxOxygen => stats != null ? stats.OxygenTank : 0f;
     public float CurrentHealth => _currentHealth;
     public float CurrentOxygen => _currentOxygen;

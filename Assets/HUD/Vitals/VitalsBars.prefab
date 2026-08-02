@@ -56,8 +56,10 @@ MonoBehaviour:
   labelColor: {r: 1, g: 1, b: 1, a: 0.95}
   healthFillColor: {r: 0.25, g: 0.85, b: 0.35, a: 1}
   healthLowColor: {r: 0.9, g: 0.2, b: 0.2, a: 1}
+  healthHitFlashColor: {r: 1, g: 1, b: 1, a: 1}
   oxygenFillColor: {r: 0.25, g: 0.65, b: 1, a: 1}
   backgroundColor: {r: 0.05, g: 0.05, b: 0.08, a: 0.85}
+  hitFlashDuration: 0.12
   healthBar: {fileID: 200001}
   oxygenBar: {fileID: 300001}
   healthFill: {fileID: 220001}

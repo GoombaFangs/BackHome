@@ -15,5 +15,6 @@ MonoBehaviour:
   displayName: Player
   maxHealth: 200
   attackDamage: 10
-  attackSpeed: 1
+  attackSpeed: 50
+  attackRange: 5
   oxygenTank: 90

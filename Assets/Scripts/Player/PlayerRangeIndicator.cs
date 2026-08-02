@@ -1,15 +1,15 @@
 using UnityEngine;
 
 /// <summary>
-/// Ground range ring under the player. World size is driven by <see cref="worldRadius"/>;
-/// the shader draws the ring at UV distance <c>_Radius</c> from the plane center.
+/// Ground range ring under the player. Ring size is driven by
+/// <see cref="PlayerStats.AttackRange"/> via <see cref="PlayerVitals"/> (not a local radius field).
 /// </summary>
 [ExecuteAlways]
 [DisallowMultipleComponent]
 [RequireComponent(typeof(MeshRenderer))]
 public class PlayerRangeIndicator : MonoBehaviour
 {
-    // Unity default Plane is 10x10 centered (half-extent 5). UVs span 0..1 across that.
+    // Unity default Plane is 10x10 centered. UVs span 0..1 across that.
     // Shader radius is UV distance from 0.5, so mesh radius = uvRadius * PlaneFullExtent.
     const float UnityPlaneFullExtent = 10f;
 
@@ -19,7 +19,7 @@ public class PlayerRangeIndicator : MonoBehaviour
     static readonly int SoftnessId = Shader.PropertyToID("_Softness");
     static readonly int OpacityId = Shader.PropertyToID("_Opacity");
 
-    [SerializeField, Min(0.05f)] float worldRadius = 2.5f;
+    [Header("Look")]
     [SerializeField, Range(0.05f, 0.5f)] float uvRadius = 0.45f;
     [SerializeField] Color color = new Color(1f, 1f, 0.95f, 0.65f);
     [SerializeField, Range(0.001f, 0.2f)] float thickness = 0.018f;
@@ -29,45 +29,42 @@ public class PlayerRangeIndicator : MonoBehaviour
 
     MeshRenderer _renderer;
     MaterialPropertyBlock _block;
+    PlayerVitals _vitals;
+    float _worldRadius = 5f;
 
-    /// <summary>Combat / gameplay radius in world units (matches the visible ring).</summary>
-    public float WorldRadius
-    {
-        get => worldRadius;
-        set
-        {
-            worldRadius = Mathf.Max(0.05f, value);
-            Apply();
-        }
-    }
+    /// <summary>Current ring radius in world units (from PlayerStats.AttackRange when available).</summary>
+    public float WorldRadius => _worldRadius;
 
-    /// <summary>Same as <see cref="WorldRadius"/> — explicit name for combat code.</summary>
-    public float GetCombatRadius() => worldRadius;
+    public float GetCombatRadius() => _worldRadius;
 
     void OnEnable()
     {
         Cache();
+        SyncRadiusFromStats();
         Apply();
     }
 
     void OnValidate()
     {
-        worldRadius = Mathf.Max(0.05f, worldRadius);
         uvRadius = Mathf.Clamp(uvRadius, 0.05f, 0.5f);
         thickness = Mathf.Clamp(thickness, 0.001f, 0.2f);
         softness = Mathf.Clamp(softness, 0f, 0.1f);
         opacity = Mathf.Clamp01(opacity);
         Cache();
+        SyncRadiusFromStats();
         Apply();
     }
 
     void LateUpdate()
     {
+        SyncRadiusFromStats();
         ApplyTransform();
+        ApplyMaterial();
     }
 
     void OnDrawGizmosSelected()
     {
+        SyncRadiusFromStats();
         Vector3 origin = transform.position;
         Vector3 up = SphericalPlanet.Instance != null
             ? SphericalPlanet.Instance.GetUpAt(origin)
@@ -84,7 +81,7 @@ public class PlayerRangeIndicator : MonoBehaviour
                 right = Vector3.Cross(up, Vector3.right);
             right.Normalize();
             Vector3 forward = Vector3.Cross(right, up).normalized;
-            Vector3 point = origin + (right * Mathf.Cos(t) + forward * Mathf.Sin(t)) * worldRadius;
+            Vector3 point = origin + (right * Mathf.Cos(t) + forward * Mathf.Sin(t)) * _worldRadius;
             if (i > 0)
                 Gizmos.DrawLine(prev, point);
             prev = point;
@@ -97,6 +94,17 @@ public class PlayerRangeIndicator : MonoBehaviour
             _renderer = GetComponent<MeshRenderer>();
         if (_block == null)
             _block = new MaterialPropertyBlock();
+        if (_vitals == null)
+            _vitals = GetComponentInParent<PlayerVitals>();
+    }
+
+    void SyncRadiusFromStats()
+    {
+        if (_vitals == null)
+            _vitals = GetComponentInParent<PlayerVitals>();
+
+        if (_vitals != null && _vitals.AttackRange > 0f)
+            _worldRadius = _vitals.AttackRange;
     }
 
     void Apply()
@@ -119,9 +127,8 @@ public class PlayerRangeIndicator : MonoBehaviour
             parentScale = Mathf.Max(0.0001f, (lossy.x + lossy.z) * 0.5f);
         }
 
-        // worldRadius = uvRadius * PlaneFullExtent * localScale * parentScale
         float denom = parentScale * UnityPlaneFullExtent * Mathf.Max(0.05f, uvRadius);
-        float local = worldRadius / denom;
+        float local = _worldRadius / denom;
         transform.localScale = new Vector3(local, local, local);
     }
 

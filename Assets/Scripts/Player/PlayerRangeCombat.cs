@@ -38,10 +38,12 @@ public class PlayerRangeCombat : MonoBehaviour
 
         float attackSpeed = _vitals.AttackSpeed;
         float damage = _vitals.AttackDamage;
-        if (attackSpeed <= 0f || damage <= 0f)
+        float radius = _vitals.AttackRange > 0f
+            ? _vitals.AttackRange
+            : (rangeIndicator != null ? rangeIndicator.GetCombatRadius() : fallbackRadius);
+        if (attackSpeed <= 0f || damage <= 0f || radius <= 0f)
             return;
 
-        float radius = rangeIndicator != null ? rangeIndicator.GetCombatRadius() : fallbackRadius;
         UpdateOccupancy(radius, damage);
 
         float interval = 1f / attackSpeed;
