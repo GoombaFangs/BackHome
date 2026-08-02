@@ -2692,7 +2692,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3257623581565853649, guid: c9ba9337b1f3238409496d899e3f611f, type: 3}
       propertyPath: m_LocalScale.y
-      value: 0.74074054
+      value: 0.7407408
       objectReference: {fileID: 0}
     - target: {fileID: 3257623581565853649, guid: c9ba9337b1f3238409496d899e3f611f, type: 3}
       propertyPath: m_LocalScale.z
@@ -2704,7 +2704,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3257623581565853649, guid: c9ba9337b1f3238409496d899e3f611f, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.03
+      value: 0.01999998
       objectReference: {fileID: 0}
     - target: {fileID: 3257623581565853649, guid: c9ba9337b1f3238409496d899e3f611f, type: 3}
       propertyPath: m_LocalPosition.z
@@ -2712,19 +2712,19 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3257623581565853649, guid: c9ba9337b1f3238409496d899e3f611f, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 1
+      value: 0.7071068
       objectReference: {fileID: 0}
     - target: {fileID: 3257623581565853649, guid: c9ba9337b1f3238409496d899e3f611f, type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: 3257623581565853649, guid: c9ba9337b1f3238409496d899e3f611f, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0
+      value: -0.7071068
       objectReference: {fileID: 0}
     - target: {fileID: 3257623581565853649, guid: c9ba9337b1f3238409496d899e3f611f, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: 3257623581565853649, guid: c9ba9337b1f3238409496d899e3f611f, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -2762,7 +2762,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: eb97aec02eeb04a4bb8926745621ba1c, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PlayerRangeIndicator
+  m_EditorClassIdentifier: Assembly-CSharp::AttackRangeIndicator
 --- !u!1001 &8604553615536710230
 PrefabInstance:
   m_ObjectHideFlags: 0
