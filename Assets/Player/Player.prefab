@@ -1004,86 +1004,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c1d2e3f4a5b6789012345678abcdef01, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerRangeIndicator
-  worldRadius: 2.5
-  uvRadius: 0.45
-  color: {r: 1, g: 1, b: 0.95, a: 0.65}
-  thickness: 0.018
-  softness: 0.005
-  opacity: 1
-  groundOffset: 0.03
---- !u!1001 &910000200
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 5319693474325473463}
-    m_Modifications:
-    - target: {fileID: 100000, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
-      propertyPath: m_Name
-      value: VitalsBars
-      objectReference: {fileID: 0}
-    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 2.15
-      objectReference: {fileID: 0}
-    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
---- !u!4 &910000201 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
-  m_PrefabInstance: {fileID: 910000200}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &910000202 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 100002, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
-  m_PrefabInstance: {fileID: 910000200}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f1a2b3c4d5e6f7081920a3b4c5d6e7f8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::VitalsBarsView
+  joystickRoot: {fileID: 0}
+  handleRect: {fileID: 0}
+  canvasInput: {fileID: 0}
+  joystickRange: 80
+  invertY: 0
 --- !u!1 &3358942844866990320
 GameObject:
   m_ObjectHideFlags: 0
@@ -2079,7 +2004,7 @@ Transform:
   - {fileID: 2265766923987293411}
   - {fileID: 5941073616710418071}
   - {fileID: 4380420613875206461}
-  - {fileID: 910000201}
+  - {fileID: 909903593}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
 --- !u!95 &7542673191595131398
@@ -2301,7 +2226,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerVitals
   stats: {fileID: 11400000, guid: b5c6d7e8f9012345678901abcdef2345, type: 2}
-  maxOxygen: 100
   oxygenDrainPerSecond: 4
   healthDrainPerSecond: 5
 --- !u!114 &8234567890123456790
@@ -2317,8 +2241,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WorldVitalsBars
   vitalsBarsPrefab: {fileID: 100002, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
-  bars: {fileID: 910000202}
+  bars: {fileID: 909903594}
   localOffset: {x: 0, y: 2.15, z: 0}
+  worldScale: 1
 --- !u!114 &8234567890123456791
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2773,6 +2698,79 @@ Transform:
   m_Children: []
   m_Father: {fileID: 2694099044398599341}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &910000200
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 5319693474325473463}
+    m_Modifications:
+    - target: {fileID: 100000, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
+      propertyPath: m_Name
+      value: VitalsBars
+      objectReference: {fileID: 0}
+    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 2.15
+      objectReference: {fileID: 0}
+    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
+--- !u!4 &909903593 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 100001, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
+  m_PrefabInstance: {fileID: 910000200}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &909903594 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 100002, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
+  m_PrefabInstance: {fileID: 910000200}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f1a2b3c4d5e6f7081920a3b4c5d6e7f8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::VitalsBarsView
 --- !u!1001 &8604553615536710230
 PrefabInstance:
   m_ObjectHideFlags: 0

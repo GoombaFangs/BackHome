@@ -1,20 +1,20 @@
 using UnityEngine;
 
 /// <summary>
-/// Wires <see cref="PlayerVitals"/> to a <see cref="VitalsBarsView"/> prefab instance
-/// and keeps the bars billboarded above the player.
+/// Wires a <see cref="Creature"/> to a <see cref="VitalsBarsView"/> above its head.
+/// Shows health only — oxygen stays hidden for creatures.
 /// </summary>
 [DefaultExecutionOrder(1000)]
-[RequireComponent(typeof(PlayerVitals))]
-public class WorldVitalsBars : MonoBehaviour
+[RequireComponent(typeof(Creature))]
+public class CreatureVitalsBars : MonoBehaviour
 {
     [SerializeField] VitalsBarsView vitalsBarsPrefab;
     [SerializeField] VitalsBarsView bars;
-    [SerializeField] Vector3 localOffset = new Vector3(0f, 2.15f, 0f);
-    [Tooltip("Extra world size multiplier. Usually set per-scene via SceneBootstrap.")]
-    [SerializeField, Min(0.1f)] float worldScale = 1f;
+    [SerializeField] Vector3 localOffset = new Vector3(0f, 2.2f, 0f);
+    [SerializeField, Min(0.1f)] float worldScale = 1.6f;
+    [SerializeField] bool hideWhenDead = true;
 
-    PlayerVitals _vitals;
+    Creature _creature;
     Camera _camera;
 
     public float WorldScale => worldScale;
@@ -32,17 +32,22 @@ public class WorldVitalsBars : MonoBehaviour
 
     void Awake()
     {
-        _vitals = GetComponent<PlayerVitals>();
+        _creature = GetComponent<Creature>();
         EnsureBars();
+        if (bars != null)
+            bars.SetOxygenVisible(false);
     }
 
     void OnEnable()
     {
-        if (_vitals == null)
-            _vitals = GetComponent<PlayerVitals>();
+        if (_creature == null)
+            _creature = GetComponent<Creature>();
 
-        if (_vitals != null)
-            _vitals.VitalsChanged += RefreshBars;
+        if (_creature != null)
+        {
+            _creature.HealthChanged += RefreshBars;
+            _creature.Died += OnDied;
+        }
 
         RefreshBars();
     }
@@ -54,8 +59,11 @@ public class WorldVitalsBars : MonoBehaviour
 
     void OnDisable()
     {
-        if (_vitals != null)
-            _vitals.VitalsChanged -= RefreshBars;
+        if (_creature == null)
+            return;
+
+        _creature.HealthChanged -= RefreshBars;
+        _creature.Died -= OnDied;
     }
 
     void LateUpdate()
@@ -88,7 +96,7 @@ public class WorldVitalsBars : MonoBehaviour
 
         if (vitalsBarsPrefab == null)
         {
-            Debug.LogWarning("WorldVitalsBars: assign VitalsBars prefab on the Player.", this);
+            Debug.LogWarning($"{name}: assign VitalsBars prefab on CreatureVitalsBars.", this);
             return;
         }
 
@@ -101,11 +109,20 @@ public class WorldVitalsBars : MonoBehaviour
 
     void RefreshBars()
     {
-        if (bars == null || _vitals == null)
+        if (bars == null || _creature == null)
             return;
 
-        bars.SetHealthValues(_vitals.CurrentHealth, _vitals.MaxHealth);
-        bars.SetOxygenValues(_vitals.CurrentOxygen, _vitals.MaxOxygen);
+        bars.SetOxygenVisible(false);
+        bars.SetHealthValues(_creature.CurrentHealth, _creature.MaxHealth);
+
+        bool show = !hideWhenDead || _creature.IsAlive;
+        if (bars.gameObject.activeSelf != show)
+            bars.gameObject.SetActive(show);
+    }
+
+    void OnDied(Creature _)
+    {
+        RefreshBars();
     }
 
     static float ApproxInverse(float value)

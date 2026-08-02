@@ -1473,7 +1473,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerVitals
   stats: {fileID: 11400000, guid: b5c6d7e8f9012345678901abcdef2345, type: 2}
-  maxOxygen: 100
   oxygenDrainPerSecond: 4
   healthDrainPerSecond: 5
 --- !u!114 &6485256786356532705
