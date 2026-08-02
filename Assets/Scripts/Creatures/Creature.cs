@@ -17,6 +17,8 @@ public class Creature : MonoBehaviour
     public string DisplayName => stats != null ? stats.DisplayName : name;
     public float MaxHealth => stats != null ? stats.MaxHealth : 0f;
     public float AttackDamage => stats != null ? stats.AttackDamage : 0f;
+    public float AttackSpeed => stats != null ? stats.AttackSpeed : 0f;
+    public float AttackRange => stats != null ? stats.AttackRange : 0f;
     public float CurrentHealth => _currentHealth;
     public float HealthNormalized => MaxHealth > 0f ? _currentHealth / MaxHealth : 0f;
     public bool IsAlive => _currentHealth > 0f && !_dying;

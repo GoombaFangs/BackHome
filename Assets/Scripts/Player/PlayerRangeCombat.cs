@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -8,22 +7,22 @@ using UnityEngine;
 [RequireComponent(typeof(PlayerVitals))]
 public class PlayerRangeCombat : MonoBehaviour
 {
-    [SerializeField] PlayerRangeIndicator rangeIndicator;
-    [Tooltip("Fallback radius if no PlayerRangeIndicator is found.")]
+    [SerializeField] AttackRangeIndicator rangeIndicator;
+    [Tooltip("Fallback radius if no AttackRangeIndicator is found.")]
     [SerializeField, Min(0.05f)] float fallbackRadius = 2.5f;
 
     PlayerVitals _vitals;
     float _tickCooldown;
-    readonly HashSet<Creature> _inside = new();
-    readonly HashSet<Creature> _hitThisFrame = new();
-    readonly HashSet<Creature> _currentlyInside = new();
-    readonly List<Creature> _removeBuffer = new();
+    readonly System.Collections.Generic.HashSet<Creature> _inside = new();
+    readonly System.Collections.Generic.HashSet<Creature> _hitThisFrame = new();
+    readonly System.Collections.Generic.HashSet<Creature> _currentlyInside = new();
+    readonly System.Collections.Generic.List<Creature> _removeBuffer = new();
 
     void Awake()
     {
         _vitals = GetComponent<PlayerVitals>();
         if (rangeIndicator == null)
-            rangeIndicator = GetComponentInChildren<PlayerRangeIndicator>(true);
+            rangeIndicator = GetComponentInChildren<AttackRangeIndicator>(true);
     }
 
     void Update()
@@ -38,9 +37,7 @@ public class PlayerRangeCombat : MonoBehaviour
 
         float attackSpeed = _vitals.AttackSpeed;
         float damage = _vitals.AttackDamage;
-        float radius = _vitals.AttackRange > 0f
-            ? _vitals.AttackRange
-            : (rangeIndicator != null ? rangeIndicator.GetCombatRadius() : fallbackRadius);
+        float radius = ResolveRadius();
         if (attackSpeed <= 0f || damage <= 0f || radius <= 0f)
             return;
 
@@ -53,6 +50,15 @@ public class PlayerRangeCombat : MonoBehaviour
 
         _tickCooldown = interval;
         DealTickDamage(damage);
+    }
+
+    float ResolveRadius()
+    {
+        if (_vitals.AttackRange > 0f)
+            return _vitals.AttackRange;
+        if (rangeIndicator != null)
+            return rangeIndicator.GetCombatRadius();
+        return fallbackRadius;
     }
 
     void UpdateOccupancy(float radius, float damage)
@@ -77,7 +83,6 @@ public class PlayerRangeCombat : MonoBehaviour
 
             _currentlyInside.Add(creature);
 
-            // First frame inside the ring — immediate hit (skip duplicate tick this frame).
             if (_inside.Add(creature))
             {
                 creature.TakeDamage(damage);

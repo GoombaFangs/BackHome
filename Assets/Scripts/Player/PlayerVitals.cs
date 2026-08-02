@@ -35,6 +35,7 @@ public class PlayerVitals : MonoBehaviour
     public bool IsOnSpaceship => SceneRoles.IsSpaceshipScene();
 
     public event Action VitalsChanged;
+    public event Action Damaged;
     public event Action Died;
 
     void Awake()
@@ -118,6 +119,7 @@ public class PlayerVitals : MonoBehaviour
 
         _currentHealth = Mathf.Max(0f, _currentHealth - amount);
         RaiseChanged();
+        Damaged?.Invoke();
 
         if (!IsAlive)
             Died?.Invoke();

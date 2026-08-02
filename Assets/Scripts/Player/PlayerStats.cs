@@ -16,7 +16,7 @@ public class PlayerStats : ScriptableObject
     [Tooltip("World-space radius of the attack ring around the player.")]
     [SerializeField, Min(0.05f)] float attackRange = 5f;
 
-    [Header("Survival")]
+    [Header("Vitality")]
     [SerializeField, Min(1f)] float maxHealth = 200f;
     [Tooltip("Oxygen tank capacity.")]
     [SerializeField, Min(1f)] float oxygenTank = 30f;

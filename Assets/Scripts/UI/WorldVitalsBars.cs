@@ -42,7 +42,10 @@ public class WorldVitalsBars : MonoBehaviour
             _vitals = GetComponent<PlayerVitals>();
 
         if (_vitals != null)
+        {
             _vitals.VitalsChanged += RefreshBars;
+            _vitals.Damaged += OnDamaged;
+        }
 
         RefreshBars();
     }
@@ -54,8 +57,11 @@ public class WorldVitalsBars : MonoBehaviour
 
     void OnDisable()
     {
-        if (_vitals != null)
-            _vitals.VitalsChanged -= RefreshBars;
+        if (_vitals == null)
+            return;
+
+        _vitals.VitalsChanged -= RefreshBars;
+        _vitals.Damaged -= OnDamaged;
     }
 
     void LateUpdate()
@@ -106,6 +112,12 @@ public class WorldVitalsBars : MonoBehaviour
 
         bars.SetHealthValues(_vitals.CurrentHealth, _vitals.MaxHealth);
         bars.SetOxygenValues(_vitals.CurrentOxygen, _vitals.MaxOxygen);
+    }
+
+    void OnDamaged()
+    {
+        if (bars != null)
+            bars.FlashHealthHit();
     }
 
     static float ApproxInverse(float value)
