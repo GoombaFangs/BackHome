@@ -13,5 +13,5 @@ MonoBehaviour:
   m_Name: Grimling_Stats
   m_EditorClassIdentifier: Assembly-CSharp::CreatureStats
   displayName: Grimling
-  maxHealth: 50
+  maxHealth: 800
   attackDamage: 10

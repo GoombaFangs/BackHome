@@ -8,8 +8,10 @@ using UnityEngine;
 public class Creature : MonoBehaviour
 {
     [SerializeField] CreatureStats stats;
+    [SerializeField, Min(0f)] float destroyDelay = 0.1f;
 
     float _currentHealth;
+    bool _dying;
 
     public CreatureStats Stats => stats;
     public string DisplayName => stats != null ? stats.DisplayName : name;
@@ -17,10 +19,11 @@ public class Creature : MonoBehaviour
     public float AttackDamage => stats != null ? stats.AttackDamage : 0f;
     public float CurrentHealth => _currentHealth;
     public float HealthNormalized => MaxHealth > 0f ? _currentHealth / MaxHealth : 0f;
-    public bool IsAlive => _currentHealth > 0f;
+    public bool IsAlive => _currentHealth > 0f && !_dying;
     public bool HasStats => stats != null;
 
     public event Action HealthChanged;
+    public event Action Damaged;
     public event Action<Creature> Died;
 
     void Awake()
@@ -30,6 +33,7 @@ public class Creature : MonoBehaviour
 
     void OnValidate()
     {
+        destroyDelay = Mathf.Max(0f, destroyDelay);
         if (!Application.isPlaying && stats != null)
             _currentHealth = stats.MaxHealth;
     }
@@ -45,6 +49,7 @@ public class Creature : MonoBehaviour
 
     public void ResetHealth()
     {
+        _dying = false;
         _currentHealth = MaxHealth;
         RaiseHealthChanged();
     }
@@ -56,9 +61,10 @@ public class Creature : MonoBehaviour
 
         _currentHealth = Mathf.Max(0f, _currentHealth - amount);
         RaiseHealthChanged();
+        Damaged?.Invoke();
 
-        if (!IsAlive)
-            Died?.Invoke(this);
+        if (_currentHealth <= 0f)
+            BeginDeath();
     }
 
     public void Heal(float amount)
@@ -72,6 +78,20 @@ public class Creature : MonoBehaviour
 
         _currentHealth = next;
         RaiseHealthChanged();
+    }
+
+    void BeginDeath()
+    {
+        if (_dying)
+            return;
+
+        _dying = true;
+        Died?.Invoke(this);
+
+        if (destroyDelay <= 0f)
+            Destroy(gameObject);
+        else
+            Destroy(gameObject, destroyDelay);
     }
 
     void RaiseHealthChanged()

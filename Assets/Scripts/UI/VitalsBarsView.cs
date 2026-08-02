@@ -24,8 +24,10 @@ public class VitalsBarsView : MonoBehaviour
     [Header("Colors")]
     [SerializeField] Color healthFillColor = new Color(0.25f, 0.85f, 0.35f, 1f);
     [SerializeField] Color healthLowColor = new Color(0.9f, 0.2f, 0.2f, 1f);
+    [SerializeField] Color healthHitFlashColor = new Color(1f, 1f, 1f, 1f);
     [SerializeField] Color oxygenFillColor = new Color(0.25f, 0.65f, 1f, 1f);
     [SerializeField] Color backgroundColor = new Color(0.05f, 0.05f, 0.08f, 0.85f);
+    [SerializeField, Min(0.01f)] float hitFlashDuration = 0.12f;
 
     [Header("References")]
     [SerializeField] Transform healthBar;
@@ -47,8 +49,22 @@ public class VitalsBarsView : MonoBehaviour
     float _healthMax = 1f;
     float _oxygenCurrent = 1f;
     float _oxygenMax = 1f;
+    float _hitFlashTimer;
 
     public bool ShowOxygen => showOxygen;
+
+    void Update()
+    {
+        if (_hitFlashTimer <= 0f)
+            return;
+
+        _hitFlashTimer -= Time.deltaTime;
+        if (_hitFlashTimer <= 0f)
+        {
+            _hitFlashTimer = 0f;
+            ApplyHealthFillColor(_previewHealth);
+        }
+    }
 
     void OnEnable()
     {
@@ -90,7 +106,23 @@ public class VitalsBarsView : MonoBehaviour
         _previewHealth = normalized;
         if (healthFill != null)
             ApplyFill(healthFill, normalized);
-        SetRendererColor(healthFillRenderer, Color.Lerp(healthLowColor, healthFillColor, Mathf.Clamp01(normalized * 1.5f)));
+
+        if (_hitFlashTimer <= 0f)
+            ApplyHealthFillColor(normalized);
+    }
+
+    /// <summary>Brief white flash on the health fill when taking a hit.</summary>
+    public void FlashHealthHit()
+    {
+        _hitFlashTimer = hitFlashDuration;
+        SetRendererColor(healthFillRenderer, healthHitFlashColor);
+    }
+
+    void ApplyHealthFillColor(float normalized)
+    {
+        SetRendererColor(
+            healthFillRenderer,
+            Color.Lerp(healthLowColor, healthFillColor, Mathf.Clamp01(normalized * 1.5f)));
     }
 
     /// <summary>

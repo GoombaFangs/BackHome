@@ -46,6 +46,7 @@ public class CreatureVitalsBars : MonoBehaviour
         if (_creature != null)
         {
             _creature.HealthChanged += RefreshBars;
+            _creature.Damaged += OnDamaged;
             _creature.Died += OnDied;
         }
 
@@ -63,6 +64,7 @@ public class CreatureVitalsBars : MonoBehaviour
             return;
 
         _creature.HealthChanged -= RefreshBars;
+        _creature.Damaged -= OnDamaged;
         _creature.Died -= OnDied;
     }
 
@@ -118,6 +120,12 @@ public class CreatureVitalsBars : MonoBehaviour
         bool show = !hideWhenDead || _creature.IsAlive;
         if (bars.gameObject.activeSelf != show)
             bars.gameObject.SetActive(show);
+    }
+
+    void OnDamaged()
+    {
+        if (bars != null)
+            bars.FlashHealthHit();
     }
 
     void OnDied(Creature _)

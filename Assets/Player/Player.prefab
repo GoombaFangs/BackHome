@@ -1001,14 +1001,16 @@ MonoBehaviour:
   m_GameObject: {fileID: 3323972926008969420}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c1d2e3f4a5b6789012345678abcdef01, type: 3}
+  m_Script: {fileID: 11500000, guid: eb97aec02eeb04a4bb8926745621ba1c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerRangeIndicator
-  joystickRoot: {fileID: 0}
-  handleRect: {fileID: 0}
-  canvasInput: {fileID: 0}
-  joystickRange: 80
-  invertY: 0
+  worldRadius: 2.5
+  uvRadius: 0.45
+  color: {r: 1, g: 1, b: 0.95, a: 0.65}
+  thickness: 0.018
+  softness: 0.005
+  opacity: 1
+  groundOffset: 0.03
 --- !u!1 &3358942844866990320
 GameObject:
   m_ObjectHideFlags: 0
@@ -1980,6 +1982,7 @@ GameObject:
   - component: {fileID: 8234567890123456790}
   - component: {fileID: 8234567890123456791}
   - component: {fileID: 8234567890123456792}
+  - component: {fileID: 8234567890123456793}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -2228,6 +2231,20 @@ MonoBehaviour:
   stats: {fileID: 11400000, guid: b5c6d7e8f9012345678901abcdef2345, type: 2}
   oxygenDrainPerSecond: 4
   healthDrainPerSecond: 5
+--- !u!114 &8234567890123456793
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7594552319720850513}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6f7a8b9c0d1123456789abcdef67890, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerRangeCombat
+  rangeIndicator: {fileID: 5094695516638323693}
+  fallbackRadius: 2.5
 --- !u!114 &8234567890123456790
 MonoBehaviour:
   m_ObjectHideFlags: 0

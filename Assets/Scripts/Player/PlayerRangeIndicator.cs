@@ -2,14 +2,17 @@ using UnityEngine;
 
 /// <summary>
 /// Ground range ring under the player. World size is driven by <see cref="worldRadius"/>;
-/// the shader keeps the ring near the plane edge via UV <c>_Radius</c>.
+/// the shader draws the ring at UV distance <c>_Radius</c> from the plane center.
 /// </summary>
 [ExecuteAlways]
 [DisallowMultipleComponent]
 [RequireComponent(typeof(MeshRenderer))]
 public class PlayerRangeIndicator : MonoBehaviour
 {
-    const float UnityPlaneHalfExtent = 5f;
+    // Unity default Plane is 10x10 centered (half-extent 5). UVs span 0..1 across that.
+    // Shader radius is UV distance from 0.5, so mesh radius = uvRadius * PlaneFullExtent.
+    const float UnityPlaneFullExtent = 10f;
+
     static readonly int ColorId = Shader.PropertyToID("_Color");
     static readonly int RadiusId = Shader.PropertyToID("_Radius");
     static readonly int ThicknessId = Shader.PropertyToID("_Thickness");
@@ -27,6 +30,7 @@ public class PlayerRangeIndicator : MonoBehaviour
     MeshRenderer _renderer;
     MaterialPropertyBlock _block;
 
+    /// <summary>Combat / gameplay radius in world units (matches the visible ring).</summary>
     public float WorldRadius
     {
         get => worldRadius;
@@ -36,6 +40,9 @@ public class PlayerRangeIndicator : MonoBehaviour
             Apply();
         }
     }
+
+    /// <summary>Same as <see cref="WorldRadius"/> — explicit name for combat code.</summary>
+    public float GetCombatRadius() => worldRadius;
 
     void OnEnable()
     {
@@ -56,8 +63,32 @@ public class PlayerRangeIndicator : MonoBehaviour
 
     void LateUpdate()
     {
-        // Keep the ring glued just above the feet if parent scale/pose changes.
         ApplyTransform();
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        Vector3 origin = transform.position;
+        Vector3 up = SphericalPlanet.Instance != null
+            ? SphericalPlanet.Instance.GetUpAt(origin)
+            : transform.up;
+
+        Gizmos.color = new Color(1f, 0.85f, 0.2f, 0.85f);
+        const int segments = 48;
+        Vector3 prev = Vector3.zero;
+        for (int i = 0; i <= segments; i++)
+        {
+            float t = (i / (float)segments) * Mathf.PI * 2f;
+            Vector3 right = Vector3.Cross(up, Vector3.forward);
+            if (right.sqrMagnitude < 0.001f)
+                right = Vector3.Cross(up, Vector3.right);
+            right.Normalize();
+            Vector3 forward = Vector3.Cross(right, up).normalized;
+            Vector3 point = origin + (right * Mathf.Cos(t) + forward * Mathf.Sin(t)) * worldRadius;
+            if (i > 0)
+                Gizmos.DrawLine(prev, point);
+            prev = point;
+        }
     }
 
     void Cache()
@@ -88,7 +119,8 @@ public class PlayerRangeIndicator : MonoBehaviour
             parentScale = Mathf.Max(0.0001f, (lossy.x + lossy.z) * 0.5f);
         }
 
-        float denom = parentScale * UnityPlaneHalfExtent * Mathf.Max(0.05f, uvRadius);
+        // worldRadius = uvRadius * PlaneFullExtent * localScale * parentScale
+        float denom = parentScale * UnityPlaneFullExtent * Mathf.Max(0.05f, uvRadius);
         float local = worldRadius / denom;
         transform.localScale = new Vector3(local, local, local);
     }
