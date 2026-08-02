@@ -175,7 +175,7 @@ public class CreatureSpawner : MonoBehaviour
         {
             planet = SphericalPlanet.Instance != null
                 ? SphericalPlanet.Instance
-                : FindFirstObjectByType<SphericalPlanet>();
+                : FindAnyObjectByType<SphericalPlanet>();
         }
 
         if (planet == null)

@@ -87,7 +87,7 @@ public class FloorVisibilityController : MonoBehaviour
             return;
         }
 
-        TouchController motor = FindFirstObjectByType<TouchController>();
+        TouchController motor = FindAnyObjectByType<TouchController>();
         if (motor != null)
             player = motor.transform;
     }

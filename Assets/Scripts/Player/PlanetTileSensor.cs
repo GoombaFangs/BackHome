@@ -29,7 +29,7 @@ public class PlanetTileSensor : MonoBehaviour
     public void Refresh()
     {
         if (_map == null)
-            _map = FindFirstObjectByType<PlanetTileMap>();
+            _map = FindAnyObjectByType<PlanetTileMap>();
 
         if (_map == null)
         {

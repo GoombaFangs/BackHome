@@ -2,38 +2,54 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// Health + oxygen. Oxygen drains outside the spaceship; HP drains when oxygen is empty.
+/// Runtime player vitals. Combat stats (HP, attack) come from a <see cref="PlayerStats"/> asset;
+/// oxygen drain stays here because it is player-only survival logic.
 /// </summary>
 public class PlayerVitals : MonoBehaviour
 {
-    [Header("Health")]
-    [SerializeField] float maxHealth = 100f;
-    [Tooltip("HP lost per second while oxygen is empty.")]
-    [SerializeField] float healthDrainPerSecond = 5f;
+    [Header("Stats")]
+    [SerializeField] PlayerStats stats;
 
     [Header("Oxygen")]
     [Tooltip("Oxygen tank capacity.")]
     [SerializeField] float maxOxygen = 100f;
     [Tooltip("Oxygen lost per second outside the spaceship.")]
     [SerializeField] float oxygenDrainPerSecond = 4f;
+    [Tooltip("HP lost per second while oxygen is empty.")]
+    [SerializeField] float healthDrainPerSecond = 5f;
 
     float _currentHealth;
     float _currentOxygen;
 
-    public float MaxHealth => maxHealth;
+    public PlayerStats Stats => stats;
+    public string DisplayName => stats != null ? stats.DisplayName : name;
+    public float MaxHealth => stats != null ? stats.MaxHealth : 0f;
+    public float AttackDamage => stats != null ? stats.AttackDamage : 0f;
     public float MaxOxygen => maxOxygen;
     public float CurrentHealth => _currentHealth;
     public float CurrentOxygen => _currentOxygen;
-    public float HealthNormalized => maxHealth > 0f ? _currentHealth / maxHealth : 0f;
+    public float HealthNormalized => MaxHealth > 0f ? _currentHealth / MaxHealth : 0f;
     public float OxygenNormalized => maxOxygen > 0f ? _currentOxygen / maxOxygen : 0f;
+    public bool IsAlive => _currentHealth > 0f;
+    public bool HasStats => stats != null;
     public bool IsOnSpaceship => SceneRoles.IsSpaceshipScene();
 
     public event Action VitalsChanged;
+    public event Action Died;
 
     void Awake()
     {
-        _currentHealth = maxHealth;
-        _currentOxygen = maxOxygen;
+        ResetVitals();
+    }
+
+    void OnValidate()
+    {
+        maxOxygen = Mathf.Max(1f, maxOxygen);
+        oxygenDrainPerSecond = Mathf.Max(0f, oxygenDrainPerSecond);
+        healthDrainPerSecond = Mathf.Max(0f, healthDrainPerSecond);
+
+        if (!Application.isPlaying && stats != null)
+            _currentHealth = stats.MaxHealth;
     }
 
     void Start()
@@ -65,25 +81,56 @@ public class PlayerVitals : MonoBehaviour
             {
                 _currentHealth = next;
                 RaiseChanged();
+                if (!IsAlive)
+                    Died?.Invoke();
             }
         }
     }
 
+    public void SetStats(PlayerStats newStats, bool refillHealth = true)
+    {
+        stats = newStats;
+        if (refillHealth)
+            ResetHealth();
+        else
+            RaiseChanged();
+    }
+
+    public void ResetVitals()
+    {
+        _currentHealth = MaxHealth;
+        _currentOxygen = maxOxygen;
+        RaiseChanged();
+    }
+
+    public void ResetHealth()
+    {
+        _currentHealth = MaxHealth;
+        RaiseChanged();
+    }
+
     public void TakeDamage(float amount)
     {
-        if (amount <= 0f || _currentHealth <= 0f)
+        if (!IsAlive || amount <= 0f)
             return;
 
         _currentHealth = Mathf.Max(0f, _currentHealth - amount);
         RaiseChanged();
+
+        if (!IsAlive)
+            Died?.Invoke();
     }
 
     public void Heal(float amount)
     {
-        if (amount <= 0f)
+        if (!IsAlive || amount <= 0f || MaxHealth <= 0f)
             return;
 
-        _currentHealth = Mathf.Min(maxHealth, _currentHealth + amount);
+        float next = Mathf.Min(MaxHealth, _currentHealth + amount);
+        if (Mathf.Approximately(next, _currentHealth))
+            return;
+
+        _currentHealth = next;
         RaiseChanged();
     }
 

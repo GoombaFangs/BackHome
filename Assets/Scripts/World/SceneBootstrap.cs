@@ -42,7 +42,7 @@ public class SceneBootstrap : MonoBehaviour
 
     static Transform FindExistingPlayer()
     {
-        TouchController motor = FindFirstObjectByType<TouchController>();
+        TouchController motor = FindAnyObjectByType<TouchController>();
         if (motor != null)
             return motor.transform;
 
@@ -62,7 +62,7 @@ public class SceneBootstrap : MonoBehaviour
 
     static void BindCameraTarget(Transform player)
     {
-        CameraFollow follow = Object.FindFirstObjectByType<CameraFollow>();
+        CameraFollow follow = Object.FindAnyObjectByType<CameraFollow>();
         if (follow == null && Camera.main != null)
             follow = Camera.main.GetComponent<CameraFollow>();
 

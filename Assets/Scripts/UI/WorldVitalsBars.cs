@@ -121,13 +121,13 @@ public class WorldVitalsBars : MonoBehaviour
         _camera = Camera.main;
         if (_camera == null)
         {
-            CameraFollow follow = FindFirstObjectByType<CameraFollow>();
+            CameraFollow follow = FindAnyObjectByType<CameraFollow>();
             if (follow != null)
                 _camera = follow.GetComponent<Camera>();
         }
 
         if (_camera == null)
-            _camera = FindFirstObjectByType<Camera>();
+            _camera = FindAnyObjectByType<Camera>();
 
         return _camera;
     }

@@ -114,7 +114,7 @@ public class PlanetWalker : MonoBehaviour
 
         SphericalPlanet planet = SphericalPlanet.Instance != null
             ? SphericalPlanet.Instance
-            : FindFirstObjectByType<SphericalPlanet>();
+            : FindAnyObjectByType<SphericalPlanet>();
 
         if (planet == null)
             return;

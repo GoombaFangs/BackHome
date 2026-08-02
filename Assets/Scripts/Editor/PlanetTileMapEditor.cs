@@ -149,7 +149,7 @@ public class PlanetTileMapEditor : Editor
         _lastLon = int.MinValue;
 
         // Make sure the tile surface is the one you see/paint.
-        var maps = Object.FindObjectsByType<PlanetTileMap>(FindObjectsSortMode.None);
+        var maps = Object.FindObjectsByType<PlanetTileMap>();
         for (int i = 0; i < maps.Length; i++)
         {
             if (maps[i] != null)
