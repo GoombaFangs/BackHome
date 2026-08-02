@@ -132,7 +132,7 @@ public class VitalsBars : MonoBehaviour
             bars.gameObject.SetActive(show);
     }
 
-    void OnDamaged()
+    void OnDamaged(float _)
     {
         if (bars != null)
             bars.FlashHealthHit();

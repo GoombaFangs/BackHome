@@ -68,6 +68,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: cccdb3f0c50f02d4f9beb307700c6823, type: 3}
       insertIndex: -1
       addedObject: {fileID: 8361180514612207393}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: cccdb3f0c50f02d4f9beb307700c6823, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8361180514612207394}
   m_SourcePrefab: {fileID: 100100000, guid: cccdb3f0c50f02d4f9beb307700c6823, type: 3}
 --- !u!1 &9102089459880986193 stripped
 GameObject:
@@ -109,6 +112,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Creature
   stats: {fileID: 11400000, guid: e2b5a6c7d8f990142536e7f8091a2b3c, type: 2}
+  destroyDelay: 0.1
 --- !u!114 &8361180514612207392
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -121,7 +125,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c2f5d93b0a4e6f7b8c9d0e1f2a3b4c5d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VitalsBars
-  vitalsBarsPrefab: {fileID: 100002, guid: a9b8c7d6e5f4039281706a5b4c3d2e1f, type: 3}
+  vitalsBarsPrefab: {fileID: 4599543907005462787, guid: ec9d854aad6107e42b2946a848819c27, type: 3}
   bars: {fileID: 0}
   localOffset: {x: 0, y: 2.2, z: 0}
   worldScale: 1.6
@@ -141,3 +145,18 @@ MonoBehaviour:
   rangeIndicator: {fileID: 0}
   rangerPrefab: {fileID: 4602144420521336352, guid: c9ba9337b1f3238409496d899e3f611f, type: 3}
   rangeColor: {r: 1, g: 0.35, b: 0.22, a: 0.55}
+--- !u!114 &8361180514612207394
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9102089459880986193}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d4a9e01f02c0aba7e000000000000002, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DamageNumbers
+  popupPrefab: {fileID: 100004, guid: e1f2a3b4c5d60718293a4b5c6d7e8f90, type: 3}
+  localOffset: {x: 0, y: 2.4, z: 0}
+  showOnHeal: 0

@@ -13,6 +13,7 @@ public interface IVitalsReadable
     bool IsAlive { get; }
 
     event Action VitalsChanged;
-    event Action Damaged;
+    /// <summary>Fired when damage is applied. Argument is the amount dealt.</summary>
+    event Action<float> Damaged;
     event Action Died;
 }

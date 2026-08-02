@@ -29,7 +29,7 @@ public class Creature : MonoBehaviour, IVitalsReadable
     public bool HasStats => stats != null;
 
     public event Action VitalsChanged;
-    public event Action Damaged;
+    public event Action<float> Damaged;
     public event Action<Creature> Died;
 
     event Action IVitalsReadable.Died
@@ -73,7 +73,7 @@ public class Creature : MonoBehaviour, IVitalsReadable
 
         _currentHealth = Mathf.Max(0f, _currentHealth - amount);
         RaiseVitalsChanged();
-        Damaged?.Invoke();
+        Damaged?.Invoke(amount);
 
         if (_currentHealth <= 0f)
             BeginDeath();
