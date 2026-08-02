@@ -5,7 +5,7 @@ using UnityEngine;
 /// Runtime player vitals. Capacity values (HP, attack, oxygen tank) come from <see cref="PlayerStats"/>;
 /// drain rates stay here as tuning for survival feel.
 /// </summary>
-public class PlayerVitals : MonoBehaviour
+public class PlayerVitals : MonoBehaviour, IVitalsReadable
 {
     [Header("Stats")]
     [SerializeField] PlayerStats stats;
@@ -32,6 +32,7 @@ public class PlayerVitals : MonoBehaviour
     public float OxygenNormalized => MaxOxygen > 0f ? _currentOxygen / MaxOxygen : 0f;
     public bool IsAlive => _currentHealth > 0f;
     public bool HasStats => stats != null;
+    public bool HasOxygen => MaxOxygen > 0f;
     public bool IsOnSpaceship => SceneRoles.IsSpaceshipScene();
 
     public event Action VitalsChanged;

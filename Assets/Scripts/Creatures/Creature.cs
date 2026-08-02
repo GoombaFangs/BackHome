@@ -5,13 +5,14 @@ using UnityEngine;
 /// Runtime creature instance. Reads base stats from a <see cref="CreatureStats"/> asset
 /// so the same component works for Grimling and future creatures.
 /// </summary>
-public class Creature : MonoBehaviour
+public class Creature : MonoBehaviour, IVitalsReadable
 {
     [SerializeField] CreatureStats stats;
     [SerializeField, Min(0f)] float destroyDelay = 0.1f;
 
     float _currentHealth;
     bool _dying;
+    Action _diedNoArg;
 
     public CreatureStats Stats => stats;
     public string DisplayName => stats != null ? stats.DisplayName : name;
@@ -20,13 +21,22 @@ public class Creature : MonoBehaviour
     public float AttackSpeed => stats != null ? stats.AttackSpeed : 0f;
     public float AttackRange => stats != null ? stats.AttackRange : 0f;
     public float CurrentHealth => _currentHealth;
+    public float CurrentOxygen => 0f;
+    public float MaxOxygen => 0f;
+    public bool HasOxygen => false;
     public float HealthNormalized => MaxHealth > 0f ? _currentHealth / MaxHealth : 0f;
     public bool IsAlive => _currentHealth > 0f && !_dying;
     public bool HasStats => stats != null;
 
-    public event Action HealthChanged;
+    public event Action VitalsChanged;
     public event Action Damaged;
     public event Action<Creature> Died;
+
+    event Action IVitalsReadable.Died
+    {
+        add => _diedNoArg += value;
+        remove => _diedNoArg -= value;
+    }
 
     void Awake()
     {
@@ -46,14 +56,14 @@ public class Creature : MonoBehaviour
         if (refillHealth)
             ResetHealth();
         else
-            RaiseHealthChanged();
+            RaiseVitalsChanged();
     }
 
     public void ResetHealth()
     {
         _dying = false;
         _currentHealth = MaxHealth;
-        RaiseHealthChanged();
+        RaiseVitalsChanged();
     }
 
     public void TakeDamage(float amount)
@@ -62,7 +72,7 @@ public class Creature : MonoBehaviour
             return;
 
         _currentHealth = Mathf.Max(0f, _currentHealth - amount);
-        RaiseHealthChanged();
+        RaiseVitalsChanged();
         Damaged?.Invoke();
 
         if (_currentHealth <= 0f)
@@ -79,7 +89,7 @@ public class Creature : MonoBehaviour
             return;
 
         _currentHealth = next;
-        RaiseHealthChanged();
+        RaiseVitalsChanged();
     }
 
     void BeginDeath()
@@ -88,6 +98,7 @@ public class Creature : MonoBehaviour
             return;
 
         _dying = true;
+        _diedNoArg?.Invoke();
         Died?.Invoke(this);
 
         if (destroyDelay <= 0f)
@@ -96,8 +107,8 @@ public class Creature : MonoBehaviour
             Destroy(gameObject, destroyDelay);
     }
 
-    void RaiseHealthChanged()
+    void RaiseVitalsChanged()
     {
-        HealthChanged?.Invoke();
+        VitalsChanged?.Invoke();
     }
 }

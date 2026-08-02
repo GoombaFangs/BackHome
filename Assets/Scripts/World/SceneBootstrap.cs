@@ -52,7 +52,7 @@ public class SceneBootstrap : MonoBehaviour
 
     void ApplyVitalsBarsSettings(Transform player)
     {
-        WorldVitalsBars vitals = player.GetComponent<WorldVitalsBars>();
+        VitalsBars vitals = player.GetComponent<VitalsBars>();
         if (vitals == null)
             return;
 

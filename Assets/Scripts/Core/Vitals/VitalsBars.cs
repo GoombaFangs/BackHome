@@ -1,20 +1,20 @@
 using UnityEngine;
 
 /// <summary>
-/// Wires <see cref="PlayerVitals"/> to a <see cref="VitalsBarsView"/> prefab instance
-/// and keeps the bars billboarded above the player.
+/// Billboard HP/oxygen bars for any <see cref="IVitalsReadable"/> on the same GameObject
+/// (player, creature, …).
 /// </summary>
 [DefaultExecutionOrder(1000)]
-[RequireComponent(typeof(PlayerVitals))]
-public class WorldVitalsBars : MonoBehaviour
+public class VitalsBars : MonoBehaviour
 {
     [SerializeField] VitalsBarsView vitalsBarsPrefab;
     [SerializeField] VitalsBarsView bars;
     [SerializeField] Vector3 localOffset = new Vector3(0f, 2.15f, 0f);
-    [Tooltip("Extra world size multiplier. Usually set per-scene via SceneBootstrap.")]
+    [Tooltip("Extra world size multiplier. SceneBootstrap can override this per scene.")]
     [SerializeField, Min(0.1f)] float worldScale = 1f;
+    [SerializeField] bool hideWhenDead;
 
-    PlayerVitals _vitals;
+    IVitalsReadable _source;
     Camera _camera;
 
     public float WorldScale => worldScale;
@@ -32,19 +32,21 @@ public class WorldVitalsBars : MonoBehaviour
 
     void Awake()
     {
-        _vitals = GetComponent<PlayerVitals>();
+        _source = GetComponent<IVitalsReadable>();
         EnsureBars();
+        ApplyOxygenVisibility();
     }
 
     void OnEnable()
     {
-        if (_vitals == null)
-            _vitals = GetComponent<PlayerVitals>();
+        if (_source == null)
+            _source = GetComponent<IVitalsReadable>();
 
-        if (_vitals != null)
+        if (_source != null)
         {
-            _vitals.VitalsChanged += RefreshBars;
-            _vitals.Damaged += OnDamaged;
+            _source.VitalsChanged += RefreshBars;
+            _source.Damaged += OnDamaged;
+            _source.Died += RefreshBars;
         }
 
         RefreshBars();
@@ -57,11 +59,12 @@ public class WorldVitalsBars : MonoBehaviour
 
     void OnDisable()
     {
-        if (_vitals == null)
+        if (_source == null)
             return;
 
-        _vitals.VitalsChanged -= RefreshBars;
-        _vitals.Damaged -= OnDamaged;
+        _source.VitalsChanged -= RefreshBars;
+        _source.Damaged -= OnDamaged;
+        _source.Died -= RefreshBars;
     }
 
     void LateUpdate()
@@ -94,7 +97,7 @@ public class WorldVitalsBars : MonoBehaviour
 
         if (vitalsBarsPrefab == null)
         {
-            Debug.LogWarning("WorldVitalsBars: assign VitalsBars prefab on the Player.", this);
+            Debug.LogWarning($"{name}: assign VitalsBars prefab on VitalsBars.", this);
             return;
         }
 
@@ -105,13 +108,28 @@ public class WorldVitalsBars : MonoBehaviour
         bars.transform.localScale = Vector3.one;
     }
 
-    void RefreshBars()
+    void ApplyOxygenVisibility()
     {
-        if (bars == null || _vitals == null)
+        if (bars == null)
             return;
 
-        bars.SetHealthValues(_vitals.CurrentHealth, _vitals.MaxHealth);
-        bars.SetOxygenValues(_vitals.CurrentOxygen, _vitals.MaxOxygen);
+        bars.SetOxygenVisible(_source != null && _source.HasOxygen);
+    }
+
+    void RefreshBars()
+    {
+        if (bars == null || _source == null)
+            return;
+
+        ApplyOxygenVisibility();
+        bars.SetHealthValues(_source.CurrentHealth, _source.MaxHealth);
+
+        if (_source.HasOxygen)
+            bars.SetOxygenValues(_source.CurrentOxygen, _source.MaxOxygen);
+
+        bool show = !hideWhenDead || _source.IsAlive;
+        if (bars.gameObject.activeSelf != show)
+            bars.gameObject.SetActive(show);
     }
 
     void OnDamaged()
@@ -131,13 +149,6 @@ public class WorldVitalsBars : MonoBehaviour
             return _camera;
 
         _camera = Camera.main;
-        if (_camera == null)
-        {
-            CameraFollow follow = FindAnyObjectByType<CameraFollow>();
-            if (follow != null)
-                _camera = follow.GetComponent<Camera>();
-        }
-
         if (_camera == null)
             _camera = FindAnyObjectByType<Camera>();
 
