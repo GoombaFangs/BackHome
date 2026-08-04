@@ -19357,6 +19357,7 @@ MonoBehaviour:
   - prefab: {fileID: 9102089459880986193, guid: 999c9df1ae9ff0641a8369f4be6b7ed5, type: 3}
     count: 30
     respawnTime: 7
+    lootDropPrefab: {fileID: 100001, guid: 5e6f7081920a3b4c5d6e7f8012345678, type: 3}
   spawnOnStart: 1
   initialAnimatorState: idle
   spawnRoot: {fileID: 335025311}

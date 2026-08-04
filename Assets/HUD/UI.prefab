@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 8686078795705392702}
   - component: {fileID: 8686078795705392703}
+  - component: {fileID: 8686078795705392704}
   m_Layer: 0
   m_Name: UI
   m_TagString: Untagged
@@ -48,6 +49,24 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerDeathUI
   shipSceneName: SpaceShip
   deathPanelPrefab: {fileID: 9207511818991568597, guid: 28a5be64fbebab74abad12c5a2a156eb, type: 3}
+--- !u!114 &8686078795705392704
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8133869685062393850}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 18293a4b5c6d7e8f0123456789abcdef, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::InventoryUI
+  inventoryPanelPrefab: {fileID: 300001, guid: 6f7081920a3b4c5d6e7f80123456789a, type: 3}
+  inventoryPanel: {fileID: 0}
+  contentPanel: {fileID: 0}
+  toggleButton: {fileID: 0}
+  contentText: {fileID: 0}
+  startOpen: 0
 --- !u!1001 &6602602588157785453
 PrefabInstance:
   m_ObjectHideFlags: 0

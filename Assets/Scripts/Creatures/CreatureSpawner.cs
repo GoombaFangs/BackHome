@@ -23,6 +23,9 @@ public class CreatureSpawner : MonoBehaviour
         [Tooltip("Seconds to wait after this creature dies before respawning it.")]
         [Min(0f)]
         public float respawnTime;
+
+        [Tooltip("Optional world loot prefab dropped when this creature dies.")]
+        public GameObject lootDropPrefab;
     }
 
     struct TrackedCreature
@@ -69,6 +72,7 @@ public class CreatureSpawner : MonoBehaviour
     readonly List<TrackedCreature> _tracked = new();
     readonly List<Vector3> _acceptedDirs = new();
     readonly List<PendingRespawn> _pendingRespawns = new();
+    LootDropPool _lootPool;
 
     public SphericalPlanet Planet => planet;
     public int SpawnedCount => _tracked.Count;
@@ -291,6 +295,32 @@ public class CreatureSpawner : MonoBehaviour
             spawnDir = tracked.spawnDir,
             readyAt = Time.time + delay
         });
+
+        TryDropLoot(tracked);
+    }
+
+    void TryDropLoot(TrackedCreature tracked)
+    {
+        SpawnEntry entry = spawnEntries[tracked.entryIndex];
+        if (entry.lootDropPrefab == null)
+            return;
+
+        Vector3 dropPos = tracked.instance != null
+            ? tracked.instance.transform.position
+            : transform.position;
+
+        EnsureLootPool();
+        _lootPool.Spawn(entry.lootDropPrefab, dropPos);
+    }
+
+    void EnsureLootPool()
+    {
+        if (_lootPool != null)
+            return;
+
+        _lootPool = GetComponent<LootDropPool>();
+        if (_lootPool == null)
+            _lootPool = gameObject.AddComponent<LootDropPool>();
     }
 
     void RemoveAcceptedDir(Vector3 dir)

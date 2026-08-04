@@ -33,6 +33,8 @@ public class SceneBootstrap : MonoBehaviour
             uiObject.name = uiPrefab.name;
         }
 
+        PlayerInventory.EnsureExists();
+
         if (player == null)
             return;
 
