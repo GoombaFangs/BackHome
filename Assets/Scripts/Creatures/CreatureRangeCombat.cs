@@ -14,6 +14,8 @@ public class CreatureRangeCombat : MonoBehaviour
     [SerializeField] Color rangeColor = new Color(1f, 0.35f, 0.22f, 0.55f);
 
     Creature _creature;
+    CreatureAnimator _anim;
+    CreatureChase _chase;
     PlayerVitals _player;
     float _tickCooldown;
     bool _playerInside;
@@ -22,6 +24,10 @@ public class CreatureRangeCombat : MonoBehaviour
     void Awake()
     {
         _creature = GetComponent<Creature>();
+        _anim = GetComponent<CreatureAnimator>();
+        if (_anim == null)
+            _anim = GetComponentInChildren<CreatureAnimator>();
+        _chase = GetComponent<CreatureChase>();
         EnsureRanger();
     }
 
@@ -32,6 +38,7 @@ public class CreatureRangeCombat : MonoBehaviour
         if (_creature == null || !_creature.IsAlive)
         {
             _playerInside = false;
+            _anim?.SetAttacking(false);
             if (rangeIndicator != null)
                 rangeIndicator.gameObject.SetActive(false);
             return;
@@ -40,11 +47,22 @@ public class CreatureRangeCombat : MonoBehaviour
         if (rangeIndicator != null && !rangeIndicator.gameObject.activeSelf)
             rangeIndicator.gameObject.SetActive(true);
 
+        // No damage / attack anim while idle or returning home.
+        if (_chase != null && !_chase.IsAggroed)
+        {
+            _playerInside = false;
+            _anim?.SetAttacking(false);
+            return;
+        }
+
         float attackSpeed = _creature.AttackSpeed;
         float damage = _creature.AttackDamage;
         float radius = ResolveRadius();
         if (attackSpeed <= 0f || damage <= 0f || radius <= 0f)
+        {
+            _anim?.SetAttacking(false);
             return;
+        }
 
         if (rangeIndicator != null)
             rangeIndicator.SetRadius(radius);
@@ -52,6 +70,7 @@ public class CreatureRangeCombat : MonoBehaviour
         if (!TryResolvePlayer(out PlayerVitals player) || !player.IsAlive)
         {
             _playerInside = false;
+            _anim?.SetAttacking(false);
             return;
         }
 
@@ -70,6 +89,10 @@ public class CreatureRangeCombat : MonoBehaviour
         {
             _playerInside = false;
         }
+
+        _anim?.SetAttacking(_playerInside);
+        if (_playerInside)
+            _anim?.SetAttackRate(attackSpeed);
 
         float interval = 1f / attackSpeed;
         _tickCooldown -= Time.deltaTime;

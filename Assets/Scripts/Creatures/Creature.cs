@@ -17,6 +17,7 @@ public class Creature : MonoBehaviour, IVitalsReadable
     public CreatureStats Stats => stats;
     public string DisplayName => stats != null ? stats.DisplayName : name;
     public float MaxHealth => stats != null ? stats.MaxHealth : 0f;
+    public float VisionRange => stats != null ? stats.VisionRange : 0f;
     public float AttackDamage => stats != null ? stats.AttackDamage : 0f;
     public float AttackSpeed => stats != null ? stats.AttackSpeed : 0f;
     public float AttackRange => stats != null ? stats.AttackRange : 0f;

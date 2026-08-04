@@ -18,9 +18,12 @@ public class CreatureStats : ScriptableObject
 
     [Header("Vitality")]
     [SerializeField, Min(1f)] float maxHealth = 50f;
+    [Tooltip("World-space radius in which this creature detects the player and starts chasing.")]
+    [SerializeField, Min(0f)] float visionRange = 10f;
 
     public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? name : displayName;
     public float MaxHealth => maxHealth;
+    public float VisionRange => visionRange;
     public float AttackDamage => attackDamage;
     public float AttackSpeed => attackSpeed;
     public float AttackRange => attackRange;
@@ -28,6 +31,7 @@ public class CreatureStats : ScriptableObject
     void OnValidate()
     {
         maxHealth = Mathf.Max(1f, maxHealth);
+        visionRange = Mathf.Max(0f, visionRange);
         attackDamage = Mathf.Max(0f, attackDamage);
         attackSpeed = Mathf.Max(0.01f, attackSpeed);
         attackRange = Mathf.Max(0.05f, attackRange);

@@ -5,7 +5,8 @@ using UnityEngine;
 /// <summary>
 /// Spawns creature prefabs across a spherical planet walk surface.
 /// Place one spawner per planet (or per spawn config). Assign any planet + any prefabs.
-/// Combat / AI is out of scope — this only handles placement and orientation.
+/// When a spawned creature dies, it is re-queued individually after that entry's respawn time
+/// (FIFO by death order — never batch-respawns several at once).
 /// </summary>
 [DefaultExecutionOrder(50)]
 public class CreatureSpawner : MonoBehaviour
@@ -18,6 +19,25 @@ public class CreatureSpawner : MonoBehaviour
 
         [Min(0)]
         public int count;
+
+        [Tooltip("Seconds to wait after this creature dies before respawning it.")]
+        [Min(0f)]
+        public float respawnTime;
+    }
+
+    struct TrackedCreature
+    {
+        public GameObject instance;
+        public Creature creature;
+        public int entryIndex;
+        public Vector3 spawnDir;
+    }
+
+    struct PendingRespawn
+    {
+        public int entryIndex;
+        public Vector3 spawnDir;
+        public float readyAt;
     }
 
     [Header("Planet")]
@@ -46,13 +66,13 @@ public class CreatureSpawner : MonoBehaviour
     const bool RandomYaw = true;
     static readonly LayerMask GroundLayer = 1 << 3; // Ground
 
-    readonly List<GameObject> _spawned = new();
+    readonly List<TrackedCreature> _tracked = new();
     readonly List<Vector3> _acceptedDirs = new();
-    PlanetTileMap _tiles;
+    readonly List<PendingRespawn> _pendingRespawns = new();
 
     public SphericalPlanet Planet => planet;
-    public IReadOnlyList<GameObject> Spawned => _spawned;
-    public int SpawnedCount => _spawned.Count;
+    public int SpawnedCount => _tracked.Count;
+    public int PendingRespawnCount => _pendingRespawns.Count;
 
     void OnValidate()
     {
@@ -63,6 +83,7 @@ public class CreatureSpawner : MonoBehaviour
         {
             SpawnEntry entry = spawnEntries[i];
             entry.count = Mathf.Max(0, entry.count);
+            entry.respawnTime = Mathf.Max(0f, entry.respawnTime);
             spawnEntries[i] = entry;
         }
     }
@@ -71,6 +92,26 @@ public class CreatureSpawner : MonoBehaviour
     {
         if (spawnOnStart)
             SpawnAll();
+    }
+
+    void Update()
+    {
+        if (_pendingRespawns.Count == 0)
+            return;
+
+        // One respawn per frame, in death order, only when that creature's timer is ready.
+        PendingRespawn next = _pendingRespawns[0];
+        if (Time.time < next.readyAt)
+            return;
+
+        _pendingRespawns.RemoveAt(0);
+        TryRespawn(next);
+    }
+
+    void OnDestroy()
+    {
+        UnsubscribeAll();
+        _pendingRespawns.Clear();
     }
 
     [ContextMenu("Spawn All")]
@@ -112,19 +153,14 @@ public class CreatureSpawner : MonoBehaviour
                 {
                     Debug.LogWarning(
                         $"{name}: placed {placed}/{entry.count} of '{entry.prefab.name}' " +
-                        $"(total {_spawned.Count}/{totalRequested}) — spacing or walkable filter blocked more.",
+                        $"(total {_tracked.Count}/{totalRequested}) — spacing or walkable filter blocked more.",
                         this);
                     break;
                 }
 
-                if (!TryGetSurfacePose(dir, out Vector3 position, out Quaternion rotation))
+                if (!TrySpawnAt(e, dir))
                     continue;
 
-                GameObject creature = Instantiate(entry.prefab, position, rotation, spawnRoot);
-                creature.name = $"{entry.prefab.name}_{_spawned.Count:00}";
-                ApplyInitialAnimatorState(creature);
-                _spawned.Add(creature);
-                _acceptedDirs.Add(dir);
                 placed++;
             }
         }
@@ -133,18 +169,22 @@ public class CreatureSpawner : MonoBehaviour
     [ContextMenu("Clear Spawned")]
     public void ClearSpawned()
     {
-        for (int i = 0; i < _spawned.Count; i++)
+        UnsubscribeAll();
+        _pendingRespawns.Clear();
+
+        for (int i = 0; i < _tracked.Count; i++)
         {
-            if (_spawned[i] == null)
+            GameObject instance = _tracked[i].instance;
+            if (instance == null)
                 continue;
 
             if (Application.isPlaying)
-                Destroy(_spawned[i]);
+                Destroy(instance);
             else
-                DestroyImmediate(_spawned[i]);
+                DestroyImmediate(instance);
         }
 
-        _spawned.Clear();
+        _tracked.Clear();
         _acceptedDirs.Clear();
     }
 
@@ -152,6 +192,126 @@ public class CreatureSpawner : MonoBehaviour
     {
         planet = target;
         _tiles = planet != null ? planet.GetComponent<PlanetTileMap>() : null;
+    }
+
+    void TryRespawn(PendingRespawn pending)
+    {
+        if (spawnEntries == null
+            || pending.entryIndex < 0
+            || pending.entryIndex >= spawnEntries.Length)
+            return;
+
+        SpawnEntry entry = spawnEntries[pending.entryIndex];
+        if (entry.prefab == null)
+            return;
+
+        if (!TryResolvePlanet())
+            return;
+
+        EnsureSpawnRoot();
+        _tiles?.EnsureWalkColliders();
+
+        Vector3 dir = pending.spawnDir.sqrMagnitude > 0.0001f
+            ? pending.spawnDir.normalized
+            : UnityEngine.Random.onUnitSphere;
+
+        if (!TrySpawnAt(pending.entryIndex, dir))
+        {
+            // Placement failed — retry soon, keep this slot at the front of the queue.
+            pending.readyAt = Time.time + 0.5f;
+            _pendingRespawns.Insert(0, pending);
+        }
+    }
+
+    bool TrySpawnAt(int entryIndex, Vector3 dir)
+    {
+        SpawnEntry entry = spawnEntries[entryIndex];
+        if (entry.prefab == null)
+            return false;
+
+        if (!TryGetSurfacePose(dir, out Vector3 position, out Quaternion rotation))
+            return false;
+
+        GameObject creature = Instantiate(entry.prefab, position, rotation, spawnRoot);
+        creature.name = $"{entry.prefab.name}_{_tracked.Count:00}";
+        ApplyInitialAnimatorState(creature);
+
+        Creature creatureComp = creature.GetComponent<Creature>();
+        if (creatureComp == null)
+            creatureComp = creature.GetComponentInChildren<Creature>();
+
+        var tracked = new TrackedCreature
+        {
+            instance = creature,
+            creature = creatureComp,
+            entryIndex = entryIndex,
+            spawnDir = dir.normalized
+        };
+
+        if (creatureComp != null)
+            creatureComp.Died += OnCreatureDied;
+
+        _tracked.Add(tracked);
+        _acceptedDirs.Add(dir.normalized);
+        return true;
+    }
+
+    void OnCreatureDied(Creature creature)
+    {
+        if (creature == null)
+            return;
+
+        int index = -1;
+        for (int i = 0; i < _tracked.Count; i++)
+        {
+            if (_tracked[i].creature == creature)
+            {
+                index = i;
+                break;
+            }
+        }
+
+        if (index < 0)
+            return;
+
+        TrackedCreature tracked = _tracked[index];
+        creature.Died -= OnCreatureDied;
+        _tracked.RemoveAt(index);
+        RemoveAcceptedDir(tracked.spawnDir);
+
+        if (spawnEntries == null
+            || tracked.entryIndex < 0
+            || tracked.entryIndex >= spawnEntries.Length)
+            return;
+
+        float delay = Mathf.Max(0f, spawnEntries[tracked.entryIndex].respawnTime);
+        _pendingRespawns.Add(new PendingRespawn
+        {
+            entryIndex = tracked.entryIndex,
+            spawnDir = tracked.spawnDir,
+            readyAt = Time.time + delay
+        });
+    }
+
+    void RemoveAcceptedDir(Vector3 dir)
+    {
+        for (int i = 0; i < _acceptedDirs.Count; i++)
+        {
+            if (Vector3.Dot(_acceptedDirs[i], dir) > 0.999f)
+            {
+                _acceptedDirs.RemoveAt(i);
+                return;
+            }
+        }
+    }
+
+    void UnsubscribeAll()
+    {
+        for (int i = 0; i < _tracked.Count; i++)
+        {
+            if (_tracked[i].creature != null)
+                _tracked[i].creature.Died -= OnCreatureDied;
+        }
     }
 
     int GetTotalRequestedCount()
@@ -168,6 +328,8 @@ public class CreatureSpawner : MonoBehaviour
 
         return total;
     }
+
+    PlanetTileMap _tiles;
 
     bool TryResolvePlanet()
     {
