@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 4583393186807943833}
   - component: {fileID: 6290676146077906177}
   m_Layer: 8
-  m_Name: Ranger
+  m_Name: AttackRangeIndicator
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -28,7 +28,7 @@ Transform:
   m_GameObject: {fileID: 4602144420521336352}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 3.2699974, z: 0}
+  m_LocalPosition: {x: 0, y: 3.5099971, z: 0}
   m_LocalScale: {x: 1.1111112, y: 1.1111112, z: 1.1111112}
   m_ConstrainProportionsScale: 1
   m_Children: []
