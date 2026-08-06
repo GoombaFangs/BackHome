@@ -3,8 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Mobile-optimized spherical tilemap.
-/// Stores tiles as data and renders as one combined mesh (submeshes by tile type).
+/// Spherical terrain tilemap: paint terrain ids, autotile to tileset UVs, one material mesh.
 /// </summary>
 [ExecuteAlways]
 [DefaultExecutionOrder(-50)]
@@ -15,23 +14,26 @@ public class PlanetTileMap : MonoBehaviour
     public struct TileSample
     {
         public int tileIndex;
+        public int terrainIndex;
         public string tileId;
         public bool walkable;
         public string zoneId;
     }
 
     [Header("Tile Size")]
-    [Tooltip("Tiles around the planet equator. Higher = smaller tiles (less blocky).")]
+    [Tooltip("Tiles around the planet equator. Higher = smaller tiles.")]
     [SerializeField, Range(16, 256)] int tilesAroundEquator = 72;
+
+    [Header("Tileset")]
+    [SerializeField] PlanetTileset tileset;
+    [Tooltip("Legacy palette — unused when tileset is assigned.")]
     [SerializeField] PlanetTilePalette palette;
-    [SerializeField] int fillTileIndex = 0;
 
     [Header("Mesh")]
     [SerializeField] float overlap = 1.03f;
     [SerializeField] float surfaceLift = 0.08f;
     [SerializeField] bool hidePlanetBaseMesh = true;
     [SerializeField] bool showTileVisuals = true;
-    [Tooltip("When tiles are shown, hide the VisualShell so they don't z-fight.")]
     [SerializeField] bool hideShellWhileShowingTiles = true;
     [SerializeField] bool useTileMeshCollider = true;
     [SerializeField] bool disableBaseSphereCollider = true;
@@ -40,6 +42,7 @@ public class PlanetTileMap : MonoBehaviour
     [Header("Serialized Map")]
     [SerializeField] int latitudeBands = 36;
     [SerializeField] int longitudeBands = 72;
+    [SerializeField] int[] terrainIds = Array.Empty<int>();
     [SerializeField] int[] tileIndices = Array.Empty<int>();
 
     SphericalPlanet _planet;
@@ -48,24 +51,17 @@ public class PlanetTileMap : MonoBehaviour
     MeshRenderer _tilesRenderer;
     MeshCollider _tilesCollider;
     Mesh _runtimeMesh;
-    Material[] _runtimeMaterials;
+    Material _runtimeMaterial;
 
+    public PlanetTileset Tileset => tileset;
     public PlanetTilePalette Palette => palette;
     public int TilesAroundEquator => tilesAroundEquator;
     public int LatitudeBands => latitudeBands;
     public int LongitudeBands => longitudeBands;
-    public int FillTileIndex => fillTileIndex;
     public int CellCount => latitudeBands * longitudeBands;
     public bool ShowTileVisuals => showTileVisuals;
-
-    /// <summary>
-    /// True when painted tiles are the visible / walkable planet surface.
-    /// </summary>
     public bool ProvidesWalkSurface => showTileVisuals;
 
-    /// <summary>
-    /// Radial distance from planet center to the outer tile surface (matches rendered tiles).
-    /// </summary>
     public float GetWalkSurfaceRadius(Vector3 directionFromCenter)
     {
         if (_planet == null)
@@ -103,12 +99,9 @@ public class PlanetTileMap : MonoBehaviour
             _planet = GetComponent<SphericalPlanet>();
         if (_planet == null)
             return Vector3.up;
-
-        // Faceted tiles still follow the heightmap slope for feet alignment.
         return _planet.GetTerrainNormal(directionFromCenter);
     }
 
-    /// <summary>Approximate world-space width of one equator tile.</summary>
     public float ApproximateTileWorldSize
     {
         get
@@ -121,55 +114,60 @@ public class PlanetTileMap : MonoBehaviour
         }
     }
 
+    public void SetTileset(PlanetTileset newTileset, bool refillBase)
+    {
+        tileset = newTileset;
+        if (refillBase)
+            FillTerrain(tileset != null ? tileset.BaseTerrainIndex : 0);
+        else
+        {
+            EnsureMapArrays();
+            PlanetBlobAutotile.ResolveAll(this);
+        }
+    }
+
     void OnEnable()
     {
         _planet = GetComponent<SphericalPlanet>();
         EnsureRenderObjects();
         ApplyBaseMeshVisibility();
-        if (!HasValidMap())
-            FillAll(fillTileIndex);
-        else
-            RebuildVisuals();
+
+        if (tileset != null && tileset.TerrainCount > 0)
+        {
+            if (!HasValidMap())
+                FillTerrain(tileset.BaseTerrainIndex);
+            else
+                RebuildVisuals();
+        }
 
         EnsureWalkColliders();
     }
 
-    void OnDisable()
-    {
-        CleanupRuntimeAssets();
-    }
-
-    void OnDestroy()
-    {
-        CleanupRuntimeAssets();
-    }
+    void OnDisable() => CleanupRuntimeAssets();
+    void OnDestroy() => CleanupRuntimeAssets();
 
     void OnValidate()
     {
         tilesAroundEquator = Mathf.Clamp(tilesAroundEquator, 16, 256);
         overlap = Mathf.Max(1f, overlap);
-        if (palette != null)
-            fillTileIndex = Mathf.Clamp(fillTileIndex, 0, Mathf.Max(0, palette.Count - 1));
-
         if (_planet == null)
             _planet = GetComponent<SphericalPlanet>();
-
         if (_tilesRenderer != null)
             _tilesRenderer.enabled = showTileVisuals;
         ApplyBaseMeshVisibility();
     }
 
-    /// <summary>
-    /// Sets how many tiles wrap the equator (higher = smaller tiles) and rebuilds the map.
-    /// </summary>
-    public void SetTilesAroundEquator(int count, bool refillWithFillTile = true)
+    public void SetTilesAroundEquator(int count, bool refillWithBase = true)
     {
         tilesAroundEquator = Mathf.Clamp(count, 16, 256);
         EnsureGridDimensionsFromEquator();
-        if (refillWithFillTile || !HasValidMap())
-            FillAll(fillTileIndex);
+        if (refillWithBase || !HasValidMap())
+            FillTerrain(tileset != null ? tileset.BaseTerrainIndex : 0);
         else
-            RebuildVisuals();
+        {
+            EnsureMapArrays();
+            PlanetBlobAutotile.ResolveAll(this);
+        }
     }
 
     public void EnsureGridDimensionsFromEquator()
@@ -180,84 +178,135 @@ public class PlanetTileMap : MonoBehaviour
 
     public bool HasValidMap()
     {
-        return tileIndices != null
-               && latitudeBands > 0
+        int cells = latitudeBands * longitudeBands;
+        return latitudeBands > 0
                && longitudeBands > 0
-               && tileIndices.Length == latitudeBands * longitudeBands;
+               && terrainIds != null
+               && tileIndices != null
+               && terrainIds.Length == cells
+               && tileIndices.Length == cells;
     }
 
-    public void FillAll(int tileIndex)
+    void EnsureMapArrays()
     {
         EnsureGridDimensionsFromEquator();
-        tileIndices = new int[latitudeBands * longitudeBands];
-        for (int i = 0; i < tileIndices.Length; i++)
-            tileIndices[i] = tileIndex;
-        RebuildVisuals();
+        int cells = latitudeBands * longitudeBands;
+        if (terrainIds == null || terrainIds.Length != cells)
+            terrainIds = new int[cells];
+        if (tileIndices == null || tileIndices.Length != cells)
+            tileIndices = new int[cells];
     }
 
-    public void SetTile(int lat, int lon, int tileIndex)
+    public void FillTerrain(int terrainIndex)
+    {
+        EnsureGridDimensionsFromEquator();
+        int cells = latitudeBands * longitudeBands;
+        terrainIds = new int[cells];
+        tileIndices = new int[cells];
+        for (int i = 0; i < cells; i++)
+            terrainIds[i] = terrainIndex;
+        PlanetBlobAutotile.ResolveAll(this);
+    }
+
+    /// <summary>Legacy helper — fills base terrain.</summary>
+    public void FillAll(int ignoredTileIndex = 0)
+    {
+        FillTerrain(tileset != null ? tileset.BaseTerrainIndex : 0);
+    }
+
+    public int GetTerrain(int lat, int lon)
     {
         if (!HasValidMap())
-            FillAll(fillTileIndex);
+            return tileset != null ? tileset.BaseTerrainIndex : 0;
+        lon = Mod(lon, longitudeBands);
+        if (lat < 0 || lat >= latitudeBands)
+            return tileset != null ? tileset.BaseTerrainIndex : 0;
+        return terrainIds[CellIndex(lat, lon)];
+    }
+
+    public bool SetTerrainSilent(int lat, int lon, int terrainIndex)
+    {
+        if (!HasValidMap())
+            FillTerrain(tileset != null ? tileset.BaseTerrainIndex : 0);
 
         lon = Mod(lon, longitudeBands);
         if (lat < 0 || lat >= latitudeBands)
-            return;
+            return false;
 
+        int maxT = tileset != null ? Mathf.Max(0, tileset.TerrainCount - 1) : 0;
+        terrainIndex = Mathf.Clamp(terrainIndex, 0, maxT);
         int cell = CellIndex(lat, lon);
-        if (tileIndices[cell] == tileIndex)
-            return;
-
-        tileIndices[cell] = tileIndex;
-        RebuildVisuals();
+        if (terrainIds[cell] == terrainIndex)
+            return false;
+        terrainIds[cell] = terrainIndex;
+        return true;
     }
 
-    /// <summary>
-    /// Paints a circular brush around a cell. Rebuilds visuals once.
-    /// </summary>
-    public bool PaintBrush(int centerLat, int centerLon, int tileIndex, int radiusCells)
+    public void SetTerrain(int lat, int lon, int terrainIndex)
+    {
+        if (SetTerrainSilent(lat, lon, terrainIndex))
+            PlanetBlobAutotile.ResolveRegion(this, lat, lon, 1);
+    }
+
+    public bool PaintTerrainBrush(int centerLat, int centerLon, int terrainIndex, int radiusCells, bool rebuild)
     {
         if (!HasValidMap())
-            FillAll(fillTileIndex);
+            FillTerrain(tileset != null ? tileset.BaseTerrainIndex : 0);
 
         radiusCells = Mathf.Max(0, radiusCells);
-        tileIndex = Mathf.Clamp(tileIndex, 0, palette != null ? Mathf.Max(0, palette.Count - 1) : 0);
-
         bool changed = false;
         for (int dLat = -radiusCells; dLat <= radiusCells; dLat++)
         {
             int lat = centerLat + dLat;
             if (lat < 0 || lat >= latitudeBands)
                 continue;
-
             for (int dLon = -radiusCells; dLon <= radiusCells; dLon++)
             {
                 if (dLat * dLat + dLon * dLon > radiusCells * radiusCells)
                     continue;
-
                 int lon = Mod(centerLon + dLon, longitudeBands);
-                int cell = CellIndex(lat, lon);
-                if (tileIndices[cell] == tileIndex)
-                    continue;
-
-                tileIndices[cell] = tileIndex;
-                changed = true;
+                if (SetTerrainSilent(lat, lon, terrainIndex))
+                    changed = true;
             }
         }
 
-        if (changed)
-            RebuildVisuals();
+        if (changed && rebuild)
+            PlanetBlobAutotile.ResolveRegion(this, centerLat, centerLon, radiusCells + 1);
         return changed;
     }
 
     public int GetTileIndex(int lat, int lon)
     {
         if (!HasValidMap())
-            return fillTileIndex;
+            return 0;
         lon = Mod(lon, longitudeBands);
         if (lat < 0 || lat >= latitudeBands)
-            return fillTileIndex;
+            return 0;
         return tileIndices[CellIndex(lat, lon)];
+    }
+
+    public bool SetVisualSilent(int lat, int lon, int visualIndex)
+    {
+        if (!HasValidMap())
+            return false;
+        lon = Mod(lon, longitudeBands);
+        if (lat < 0 || lat >= latitudeBands)
+            return false;
+        int cell = CellIndex(lat, lon);
+        if (tileIndices[cell] == visualIndex)
+            return false;
+        tileIndices[cell] = visualIndex;
+        return true;
+    }
+
+    public void SetVisualTiles(int[] visuals, bool rebuild)
+    {
+        if (visuals == null || visuals.Length != CellCount)
+            return;
+        EnsureMapArrays();
+        tileIndices = (int[])visuals.Clone();
+        if (rebuild)
+            RebuildVisuals();
     }
 
     public bool TryGetTile(Vector3 worldPosition, out TileSample sample)
@@ -267,16 +316,19 @@ public class PlanetTileMap : MonoBehaviour
             _planet = GetComponent<SphericalPlanet>();
         if (_planet == null || !HasValidMap())
             return false;
-
         if (!WorldToCell(worldPosition, out int lat, out int lon))
             return false;
 
-        int index = GetTileIndex(lat, lon);
-        var entry = palette != null ? palette.GetEntry(index) : null;
-        sample.tileIndex = index;
-        sample.tileId = entry != null ? entry.id : string.Empty;
-        sample.walkable = entry == null || entry.walkable;
-        sample.zoneId = entry != null ? entry.zoneId : string.Empty;
+        int terrain = GetTerrain(lat, lon);
+        int visual = GetTileIndex(lat, lon);
+        sample.terrainIndex = terrain;
+        sample.tileIndex = visual;
+
+        var t = tileset != null ? tileset.GetTerrain(terrain) : null;
+        var a = tileset != null ? tileset.GetEntry(visual) : null;
+        sample.tileId = a != null ? a.id : (t != null ? t.id : string.Empty);
+        sample.walkable = t == null || t.walkable;
+        sample.zoneId = t != null ? t.zoneId : (a != null ? a.zoneId : string.Empty);
         return true;
     }
 
@@ -302,27 +354,45 @@ public class PlanetTileMap : MonoBehaviour
         return true;
     }
 
+    public bool TryGetCellCenter(int lat, int lon, out Vector3 worldPoint)
+    {
+        worldPoint = default;
+        if (_planet == null)
+            _planet = GetComponent<SphericalPlanet>();
+        if (_planet == null || lat < 0 || lat >= latitudeBands)
+            return false;
+
+        lon = Mod(lon, longitudeBands);
+        float latStep = 180f / latitudeBands;
+        float lonStep = 360f / longitudeBands;
+        float latMid = -90f + (lat + 0.5f) * latStep;
+        float lonMid = (lon + 0.5f) * lonStep;
+        float latR = latMid * Mathf.Deg2Rad;
+        float lonR = lonMid * Mathf.Deg2Rad;
+        Vector3 up = new Vector3(
+            Mathf.Cos(latR) * Mathf.Cos(lonR),
+            Mathf.Sin(latR),
+            Mathf.Cos(latR) * Mathf.Sin(lonR));
+        worldPoint = _planet.Center + up * (GetWalkSurfaceRadius(up) + 0.02f);
+        return true;
+    }
+
     public void RebuildVisuals()
     {
         if (_planet == null)
             _planet = GetComponent<SphericalPlanet>();
         if (_planet == null)
             return;
-
         EnsureRenderObjects();
         ApplyBaseMeshVisibility();
         BuildCombinedMesh();
         EnsureWalkColliders();
     }
 
-    /// <summary>
-    /// Makes sure the tile MeshCollider is the walkable surface and the base sphere is off.
-    /// </summary>
     public void EnsureWalkColliders()
     {
         if (_planet == null)
             _planet = GetComponent<SphericalPlanet>();
-
         EnsureRenderObjects();
 
         if (_tilesCollider != null)
@@ -332,12 +402,10 @@ public class PlanetTileMap : MonoBehaviour
                 _tilesCollider.sharedMesh = null;
                 _tilesCollider.sharedMesh = _runtimeMesh;
             }
-
             _tilesCollider.convex = false;
             _tilesCollider.enabled = useTileMeshCollider && _tilesCollider.sharedMesh != null;
         }
 
-        // Never let the inner sphere steal ground raycasts from the outer tile mesh.
         var sphere = GetComponent<SphereCollider>();
         if (sphere != null)
             sphere.enabled = !(useTileMeshCollider && _tilesCollider != null && _tilesCollider.enabled);
@@ -348,25 +416,22 @@ public class PlanetTileMap : MonoBehaviour
     void BuildCombinedMesh()
     {
         CleanupRuntimeAssets();
-        if (!HasValidMap() || palette == null || palette.Count == 0)
+        if (!HasValidMap() || tileset == null || tileset.Texture == null || tileset.Count == 0)
         {
             if (_tilesFilter != null)
                 _tilesFilter.sharedMesh = null;
             return;
         }
 
-        int materialCount = palette.Count;
         var vertices = new List<Vector3>(CellCount * 4);
         var normals = new List<Vector3>(CellCount * 4);
         var uvs = new List<Vector2>(CellCount * 4);
-        var trianglesByMat = new List<int>[materialCount];
-        for (int i = 0; i < materialCount; i++)
-            trianglesByMat[i] = new List<int>();
+        var triangles = new List<int>(CellCount * 6);
 
         float latStep = 180f / latitudeBands;
         float lonStep = 360f / longitudeBands;
-        // Keep tiles clearly above heightmapped shell / base sphere.
         float lift = Mathf.Max(surfaceLift, _planet.Radius * 0.003f);
+        int fallback = Mathf.Max(0, tileset.IndexOfId("Fill_Grass"));
 
         for (int lat = 0; lat < latitudeBands; lat++)
         {
@@ -375,11 +440,20 @@ public class PlanetTileMap : MonoBehaviour
 
             for (int lon = 0; lon < longitudeBands; lon++)
             {
-                int tileIndex = Mathf.Clamp(GetTileIndex(lat, lon), 0, materialCount - 1);
+                int tileIndex = GetTileIndex(lat, lon);
+                if (tileIndex < 0 || tileIndex >= tileset.Count)
+                    tileIndex = fallback;
+                if (!tileset.TryGetCornerUvs(tileIndex, out Vector2 uvSW, out Vector2 uvSE, out Vector2 uvNE, out Vector2 uvNW))
+                {
+                    uvSW = new Vector2(0f, 0f);
+                    uvSE = new Vector2(1f, 0f);
+                    uvNE = new Vector2(1f, 1f);
+                    uvNW = new Vector2(0f, 1f);
+                }
+
                 float lon0 = lon * lonStep;
                 float lon1 = (lon + 1) * lonStep;
 
-                // Corners in LOCAL space (mesh lives under the planet transform).
                 Vector3 p00 = LocalSurfacePoint(lat0, lon0, lift);
                 Vector3 p01 = LocalSurfacePoint(lat0, lon1, lift);
                 Vector3 p10 = LocalSurfacePoint(lat1, lon0, lift);
@@ -393,8 +467,6 @@ public class PlanetTileMap : MonoBehaviour
                     p11 *= overlap;
                 }
 
-                int start = vertices.Count;
-                // SW, SE, NE, NW — then pick winding that faces outward.
                 Vector3 sw = p00;
                 Vector3 se = p01;
                 Vector3 ne = p11;
@@ -404,51 +476,49 @@ public class PlanetTileMap : MonoBehaviour
                 Vector3 outward = centerLocal.sqrMagnitude > 0.0001f
                     ? centerLocal.normalized
                     : Vector3.up;
-
-                // Candidate: SW -> SE -> NE -> NW (often CCW from outside in Unity).
                 Vector3 n = Vector3.Cross(se - sw, ne - sw);
                 bool flip = Vector3.Dot(n, outward) < 0f;
 
+                int start = vertices.Count;
+
                 if (!flip)
                 {
-                    AddVertexLocal(sw, new Vector2(0f, 0f), ref vertices, ref normals, ref uvs);
-                    AddVertexLocal(se, new Vector2(1f, 0f), ref vertices, ref normals, ref uvs);
-                    AddVertexLocal(ne, new Vector2(1f, 1f), ref vertices, ref normals, ref uvs);
-                    AddVertexLocal(nw, new Vector2(0f, 1f), ref vertices, ref normals, ref uvs);
+                    AddVertexLocal(sw, uvSW, vertices, normals, uvs);
+                    AddVertexLocal(se, uvSE, vertices, normals, uvs);
+                    AddVertexLocal(ne, uvNE, vertices, normals, uvs);
+                    AddVertexLocal(nw, uvNW, vertices, normals, uvs);
                 }
                 else
                 {
-                    AddVertexLocal(sw, new Vector2(0f, 0f), ref vertices, ref normals, ref uvs);
-                    AddVertexLocal(nw, new Vector2(0f, 1f), ref vertices, ref normals, ref uvs);
-                    AddVertexLocal(ne, new Vector2(1f, 1f), ref vertices, ref normals, ref uvs);
-                    AddVertexLocal(se, new Vector2(1f, 0f), ref vertices, ref normals, ref uvs);
+                    AddVertexLocal(sw, uvSW, vertices, normals, uvs);
+                    AddVertexLocal(nw, uvNW, vertices, normals, uvs);
+                    AddVertexLocal(ne, uvNE, vertices, normals, uvs);
+                    AddVertexLocal(se, uvSE, vertices, normals, uvs);
                 }
 
-                var tris = trianglesByMat[tileIndex];
-                tris.Add(start + 0);
-                tris.Add(start + 1);
-                tris.Add(start + 2);
-                tris.Add(start + 0);
-                tris.Add(start + 2);
-                tris.Add(start + 3);
+                triangles.Add(start + 0);
+                triangles.Add(start + 1);
+                triangles.Add(start + 2);
+                triangles.Add(start + 0);
+                triangles.Add(start + 2);
+                triangles.Add(start + 3);
             }
         }
 
-        _runtimeMesh = new Mesh { name = "PlanetTiles_Combined" };
+        _runtimeMesh = new Mesh { name = "PlanetTiles_Atlas" };
         _runtimeMesh.indexFormat = vertices.Count > 65535
             ? UnityEngine.Rendering.IndexFormat.UInt32
             : UnityEngine.Rendering.IndexFormat.UInt16;
         _runtimeMesh.SetVertices(vertices);
         _runtimeMesh.SetNormals(normals);
         _runtimeMesh.SetUVs(0, uvs);
-        _runtimeMesh.subMeshCount = materialCount;
-        for (int i = 0; i < materialCount; i++)
-            _runtimeMesh.SetTriangles(trianglesByMat[i], i, true);
+        _runtimeMesh.SetTriangles(triangles, 0, true);
         _runtimeMesh.RecalculateBounds();
 
         _tilesFilter.sharedMesh = _runtimeMesh;
-        _runtimeMaterials = BuildMaterials();
-        _tilesRenderer.sharedMaterials = _runtimeMaterials;
+        _runtimeMaterial = BuildAtlasMaterial();
+        _tilesRenderer.sharedMaterials = new[] { _runtimeMaterial };
+
         if (_tilesCollider != null)
         {
             _tilesCollider.sharedMesh = null;
@@ -460,41 +530,35 @@ public class PlanetTileMap : MonoBehaviour
         EnsureWalkColliders();
     }
 
-    Material[] BuildMaterials()
+    Material BuildAtlasMaterial()
     {
-        var mats = new Material[palette.Count];
         Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
         if (shader == null)
             shader = Shader.Find("Unlit/Texture");
         if (shader == null)
             shader = Shader.Find("Unlit/Color");
 
-        for (int i = 0; i < mats.Length; i++)
-        {
-            Material mat = new Material(shader);
-            mat.name = $"PlanetTile_{i}_Unlit";
-            if (mat.HasProperty("_Cull"))
-                mat.SetFloat("_Cull", 0f); // Off — avoid missing tiles from winding issues
-            if (mat.HasProperty("_BaseColor"))
-                mat.SetColor("_BaseColor", Color.white);
-            else
-                mat.color = Color.white;
-            if (palette.TryGetAlbedo(i, out Texture2D tex) && tex != null)
-            {
-                mat.mainTexture = tex;
-                if (mat.HasProperty("_BaseMap"))
-                    mat.SetTexture("_BaseMap", tex);
-                if (mat.HasProperty("_MainTex"))
-                    mat.SetTexture("_MainTex", tex);
-            }
+        var mat = new Material(shader) { name = "PlanetTiles_Atlas_Unlit" };
+        if (mat.HasProperty("_Cull"))
+            mat.SetFloat("_Cull", 0f);
+        if (mat.HasProperty("_BaseColor"))
+            mat.SetColor("_BaseColor", Color.white);
+        else
+            mat.color = Color.white;
 
-            mats[i] = mat;
+        Texture2D tex = tileset.Texture;
+        if (tex != null)
+        {
+            mat.mainTexture = tex;
+            if (mat.HasProperty("_BaseMap"))
+                mat.SetTexture("_BaseMap", tex);
+            if (mat.HasProperty("_MainTex"))
+                mat.SetTexture("_MainTex", tex);
         }
 
-        return mats;
+        return mat;
     }
 
-    /// <summary>Local-space point on the (optionally heightmapped) planet surface.</summary>
     Vector3 LocalSurfacePoint(float latDeg, float lonDeg, float lift)
     {
         float lat = latDeg * Mathf.Deg2Rad;
@@ -504,12 +568,16 @@ public class PlanetTileMap : MonoBehaviour
             Mathf.Sin(lat),
             Mathf.Cos(lat) * Mathf.Sin(lon));
         float terrainRadius = _planet.GetTerrainRadius(up);
-        // GetTerrainRadius is in world units along direction; with uniform scale this matches local.
         float scale = Mathf.Max(transform.lossyScale.x, 0.0001f);
         return up * ((terrainRadius + lift) / scale);
     }
 
-    void AddVertexLocal(Vector3 localPoint, Vector2 uv, ref List<Vector3> vertices, ref List<Vector3> normals, ref List<Vector2> uvs)
+    static void AddVertexLocal(
+        Vector3 localPoint,
+        Vector2 uv,
+        List<Vector3> vertices,
+        List<Vector3> normals,
+        List<Vector2> uvs)
     {
         Vector3 normal = localPoint.sqrMagnitude > 0.0001f ? localPoint.normalized : Vector3.up;
         vertices.Add(localPoint);
@@ -548,8 +616,8 @@ public class PlanetTileMap : MonoBehaviour
             ? UnityEngine.Rendering.ShadowCastingMode.On
             : UnityEngine.Rendering.ShadowCastingMode.Off;
         _tilesRenderer.receiveShadows = true;
-
         _tilesRoot.gameObject.layer = gameObject.layer;
+
         _tilesCollider = _tilesRoot.GetComponent<MeshCollider>();
         if (_tilesCollider == null)
             _tilesCollider = _tilesRoot.gameObject.AddComponent<MeshCollider>();
@@ -570,7 +638,6 @@ public class PlanetTileMap : MonoBehaviour
                 sphere.enabled = !useTileMeshCollider;
         }
 
-        // Tiles replace the painted surface — hide shell to prevent diamond z-fighting artifacts.
         bool showShell = !(showTileVisuals && hideShellWhileShowingTiles);
         if (_planet != null)
             _planet.SetVisualShellVisible(showShell);
@@ -585,16 +652,11 @@ public class PlanetTileMap : MonoBehaviour
             _runtimeMesh = null;
         }
 
-        if (_runtimeMaterials != null)
+        if (_runtimeMaterial != null)
         {
-            for (int i = 0; i < _runtimeMaterials.Length; i++)
-            {
-                if (_runtimeMaterials[i] == null)
-                    continue;
-                if (Application.isPlaying) Destroy(_runtimeMaterials[i]);
-                else DestroyImmediate(_runtimeMaterials[i]);
-            }
-            _runtimeMaterials = null;
+            if (Application.isPlaying) Destroy(_runtimeMaterial);
+            else DestroyImmediate(_runtimeMaterial);
+            _runtimeMaterial = null;
         }
     }
 
