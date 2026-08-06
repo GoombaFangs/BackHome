@@ -312,7 +312,7 @@ public static class NyxaraTileAtlasImporter
     static void AssignToOpenPlanet()
     {
         PlanetTileset tileset = AssetDatabase.LoadAssetAtPath<PlanetTileset>(TilesetPath);
-        PlanetTileMap[] maps = UnityEngine.Object.FindObjectsByType<PlanetTileMap>(FindObjectsSortMode.None);
+        PlanetTileMap[] maps = UnityEngine.Object.FindObjectsByType<PlanetTileMap>(FindObjectsInactive.Exclude);
         for (int i = 0; i < maps.Length; i++)
         {
             if (maps[i] == null)

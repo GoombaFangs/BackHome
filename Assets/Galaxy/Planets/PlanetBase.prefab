@@ -82,14 +82,21 @@ MonoBehaviour:
   tilesAroundEquator: 72
   tileset: {fileID: 11400000, guid: c8d9e0f1a2b34567890abcdef1234567, type: 2}
   palette: {fileID: 0}
-  overlap: 1.03
+  overlap: 1
   surfaceLift: 0.08
   hidePlanetBaseMesh: 1
   showTileVisuals: 1
   hideShellWhileShowingTiles: 1
   useTileMeshCollider: 1
   disableBaseSphereCollider: 1
-  castTileShadows: 0
+  castTileShadows: 1
+  enableBlocks: 1
+  blockHeight: 0.28
+  blockGap: 0.1
+  alternateTint: 1
+  tintEven: {r: 1, g: 1, b: 1, a: 1}
+  tintOdd: {r: 0.82, g: 0.9, b: 0.72, a: 1}
+  sideDarken: {r: 0.72, g: 0.72, b: 0.72, a: 1}
   latitudeBands: 36
   longitudeBands: 72
   terrainIds: 

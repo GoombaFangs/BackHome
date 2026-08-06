@@ -17,15 +17,8 @@ public class PlanetTileMapEditor : Editor
     static int _lastLon = int.MinValue;
     static bool _strokeActive;
 
-    void OnEnable()
-    {
-        SceneView.duringSceneGui -= DuringSceneGui;
-        SceneView.duringSceneGui += DuringSceneGui;
-    }
-
     void OnDisable()
     {
-        SceneView.duringSceneGui -= DuringSceneGui;
         if (_paintMode)
             ExitPaintMode();
     }
@@ -33,7 +26,9 @@ public class PlanetTileMapEditor : Editor
     public override void OnInspectorGUI()
     {
         serializedObject.Update();
-        var map = (PlanetTileMap)target;
+        var map = target as PlanetTileMap;
+        if (map == null)
+            return;
 
         EditorGUILayout.Space(6);
         EditorGUILayout.LabelField("Tile Size", EditorStyles.boldLabel);
@@ -168,8 +163,6 @@ public class PlanetTileMapEditor : Editor
             MarkDirty(map);
         }
         EditorGUILayout.EndHorizontal();
-
-        SceneView.RepaintAll();
     }
 
     static void EnterPaintMode(PlanetTileMap map)
@@ -201,68 +194,84 @@ public class PlanetTileMapEditor : Editor
         SceneView.RepaintAll();
     }
 
-    void DuringSceneGui(SceneView sceneView)
+    void OnSceneGUI()
     {
         var map = target as PlanetTileMap;
         if (map == null)
             return;
 
-        if (_showGrid)
-            DrawGridPreview(map);
-
-        DrawSceneOverlay(map);
-        UpdateHover(map);
-
-        if (_paintMode)
-            DrawBrushPreview(map);
-
-        if (!_paintMode)
+        SceneView sceneView = SceneView.currentDrawingSceneView;
+        if (sceneView == null || sceneView.camera == null)
             return;
 
-        if (Tools.current != Tool.None)
-            Tools.current = Tool.None;
-
         Event e = Event.current;
-        HandleHotkeys(map, e);
+        if (e == null)
+            return;
 
-        int controlId = GUIUtility.GetControlID(FocusType.Passive);
-        if (e.type == EventType.Layout || e.type == EventType.MouseMove)
-            HandleUtility.AddDefaultControl(controlId);
-
-        switch (e.GetTypeForControl(controlId))
+        try
         {
-            case EventType.MouseDown:
-                if (e.alt)
+            if (e.type == EventType.Repaint)
+            {
+                if (_showGrid)
+                    DrawGridPreview(map);
+                DrawSceneOverlay(map);
+                if (_paintMode)
+                    DrawBrushPreview(map);
+            }
+
+            UpdateHover(map);
+
+            if (!_paintMode)
+                return;
+
+            if (Tools.current != Tool.None)
+                Tools.current = Tool.None;
+
+            HandleHotkeys(map, e);
+
+            int controlId = GUIUtility.GetControlID(FocusType.Passive);
+            if (e.type == EventType.Layout || e.type == EventType.MouseMove)
+                HandleUtility.AddDefaultControl(controlId);
+
+            switch (e.GetTypeForControl(controlId))
+            {
+                case EventType.MouseDown:
+                    if (e.alt)
+                        break;
+                    if (e.button == 0 || e.button == 1)
+                    {
+                        GUIUtility.hotControl = controlId;
+                        _strokeActive = true;
+                        Undo.RecordObject(map, "Paint Planet Terrain");
+                        TryPaint(map, e.mousePosition, force: true, erase: e.button == 1 || _eraseMode);
+                        e.Use();
+                    }
                     break;
-                if (e.button == 0 || e.button == 1)
-                {
-                    GUIUtility.hotControl = controlId;
-                    _strokeActive = true;
-                    Undo.RecordObject(map, "Paint Planet Terrain");
-                    TryPaint(map, e.mousePosition, force: true, erase: e.button == 1 || _eraseMode);
-                    e.Use();
-                }
-                break;
 
-            case EventType.MouseDrag:
-                if (GUIUtility.hotControl == controlId && _strokeActive && (e.button == 0 || e.button == 1) && !e.alt)
-                {
-                    TryPaint(map, e.mousePosition, force: false, erase: e.button == 1 || _eraseMode);
-                    e.Use();
-                }
-                break;
+                case EventType.MouseDrag:
+                    if (GUIUtility.hotControl == controlId && _strokeActive && (e.button == 0 || e.button == 1) && !e.alt)
+                    {
+                        TryPaint(map, e.mousePosition, force: false, erase: e.button == 1 || _eraseMode);
+                        e.Use();
+                    }
+                    break;
 
-            case EventType.MouseUp:
-                if (GUIUtility.hotControl == controlId)
-                {
-                    GUIUtility.hotControl = 0;
-                    _strokeActive = false;
-                    _lastLat = int.MinValue;
-                    _lastLon = int.MinValue;
-                    MarkDirty(map);
-                    e.Use();
-                }
-                break;
+                case EventType.MouseUp:
+                    if (GUIUtility.hotControl == controlId)
+                    {
+                        GUIUtility.hotControl = 0;
+                        _strokeActive = false;
+                        _lastLat = int.MinValue;
+                        _lastLon = int.MinValue;
+                        MarkDirty(map);
+                        e.Use();
+                    }
+                    break;
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogException(ex);
         }
     }
 
@@ -311,7 +320,7 @@ public class PlanetTileMapEditor : Editor
         if (e.keyCode == KeyCode.F)
         {
             _floodPending = true;
-            if (TryPickCell(map, e.mousePosition, out int lat, out int lon))
+            if (map.Tileset != null && TryPickCell(map, e.mousePosition, out int lat, out int lon))
             {
                 Undo.RecordObject(map, "Flood Fill Terrain");
                 int terrain = _eraseMode ? map.Tileset.BaseTerrainIndex : _terrainBrush;
@@ -397,7 +406,7 @@ public class PlanetTileMapEditor : Editor
 
     static void DrawBrushPreview(PlanetTileMap map)
     {
-        if (_hoverLat == int.MinValue || map.Tileset == null)
+        if (_hoverLat == int.MinValue || map.Tileset == null || map.LongitudeBands <= 0)
             return;
 
         var t = map.Tileset.GetTerrain(_eraseMode ? map.Tileset.BaseTerrainIndex : _terrainBrush);
@@ -418,7 +427,10 @@ public class PlanetTileMapEditor : Editor
                 if (!map.TryGetCellCenter(lat, lon, out Vector3 p))
                     continue;
                 float size = map.ApproximateTileWorldSize * 0.35f;
-                Handles.DrawSolidDisc(p, (p - map.transform.position).normalized, size);
+                Vector3 normal = p - map.transform.position;
+                if (normal.sqrMagnitude < 0.0001f)
+                    continue;
+                Handles.DrawSolidDisc(p, normal.normalized, size);
             }
         }
     }
@@ -508,9 +520,12 @@ public class PlanetTileMapEditor : Editor
         if (planet == null || !map.HasValidMap())
             return;
 
-        Handles.color = new Color(1f, 1f, 1f, 0.12f);
         int latBands = map.LatitudeBands;
         int lonBands = map.LongitudeBands;
+        if (latBands <= 0 || lonBands <= 0)
+            return;
+
+        Handles.color = new Color(1f, 1f, 1f, 0.12f);
         float latStep = 180f / latBands;
         float lonStep = 360f / lonBands;
         int latStepDraw = Mathf.Max(1, latBands / 12);
@@ -560,12 +575,16 @@ public class PlanetTileMapEditor : Editor
 
     static int Mod(int value, int modulus)
     {
+        if (modulus <= 0)
+            return 0;
         int m = value % modulus;
         return m < 0 ? m + modulus : m;
     }
 
     static void MarkDirty(PlanetTileMap map)
     {
+        if (map == null)
+            return;
         EditorUtility.SetDirty(map);
         if (PrefabUtility.IsPartOfPrefabInstance(map))
             PrefabUtility.RecordPrefabInstancePropertyModifications(map);

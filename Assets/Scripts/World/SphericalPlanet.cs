@@ -63,8 +63,15 @@ public class SphericalPlanet : MonoBehaviour
     public void SetVisualShellVisible(bool visible)
     {
         _shellVisible = visible;
-        if (_shellRenderer != null)
-            _shellRenderer.enabled = visible && useVisualShell && _runtimeShellMaterial != null;
+        if (_shellRenderer == null)
+            return;
+
+#if UNITY_EDITOR
+        // Avoid SendMessage-during-OnValidate when toggling renderer.enabled.
+        if (!Application.isPlaying && UnityEditor.EditorApplication.isUpdating)
+            return;
+#endif
+        _shellRenderer.enabled = visible && useVisualShell && _runtimeShellMaterial != null;
     }
 
     void OnEnable()
