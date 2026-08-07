@@ -6,7 +6,7 @@ using StarterAssets;
 /// On the ship / flat scenes this stays idle and <see cref="TouchController"/> handles movement.
 /// On Planet/Galaxy scenes, sticks to the tile MeshCollider (or planet collider) via raycasts.
 /// </summary>
-[DefaultExecutionOrder(20)]
+[DefaultExecutionOrder(20)] // PINK_FIX
 [RequireComponent(typeof(StarterAssetsInputs))]
 [RequireComponent(typeof(TouchController))]
 public class PlanetWalker : MonoBehaviour
@@ -208,9 +208,11 @@ public class PlanetWalker : MonoBehaviour
         }
 
         Vector3 moveDir = GetTangentMoveDirection(moveInput, up);
-        Vector3 probeOrigin = transform.position;
-        if (moveDir.sqrMagnitude > 0.001f)
-            probeOrigin += moveDir * (targetSpeed * Time.deltaTime);
+        float step = targetSpeed * Time.deltaTime;
+        Vector3 moveDelta = moveDir.sqrMagnitude > 0.001f ? moveDir * step : Vector3.zero;
+        moveDelta = ResolveObstacleMove(moveDelta, up);
+
+        Vector3 probeOrigin = transform.position + moveDelta;
 
         Vector3 radial = (probeOrigin - _planet.Center).normalized;
         if (TryStickToCollider(radial, out Vector3 next, out Vector3 surfaceNormal))
@@ -225,7 +227,7 @@ public class PlanetWalker : MonoBehaviour
             _grounded = false;
             Vector3 toCenter = (_planet.Center - transform.position).normalized;
             _fallVelocity += toCenter * (gravityStrength * Time.deltaTime);
-            next = transform.position + moveDir * (targetSpeed * Time.deltaTime) + _fallVelocity * Time.deltaTime;
+            next = transform.position + moveDelta + _fallVelocity * Time.deltaTime;
 
             float minDist = GetFallbackSurfaceRadius(radial) + footOffset;
             Vector3 fromCenter = next - _planet.Center;
@@ -250,6 +252,82 @@ public class PlanetWalker : MonoBehaviour
 
         ApplyPose(next, faceDir.normalized, up);
         UpdateAnimator(targetSpeed, inputMagnitude);
+    }
+
+    /// <summary>
+    /// Capsule-cast along the tangent move so rocks/props on Ground stop the player.
+    /// Floor-like hits (normal aligned with planet up) are ignored so we can still walk onto props.
+    /// </summary>
+    Vector3 ResolveObstacleMove(Vector3 desiredDelta, Vector3 up)
+    {
+        if (desiredDelta.sqrMagnitude < 0.0000001f)
+            return desiredDelta;
+
+        float radius = _controller != null ? Mathf.Max(0.2f, _controller.radius * 0.9f) : 0.28f;
+        float height = _controller != null ? Mathf.Max(1.4f, _controller.height) : 1.8f;
+        Vector3 bottom = transform.position + up * (radius + 0.05f);
+        Vector3 top = transform.position + up * (height - radius);
+
+        float dist = desiredDelta.magnitude;
+        Vector3 dir = desiredDelta / dist;
+        float skin = 0.04f;
+
+        if (!Physics.CapsuleCast(
+                bottom,
+                top,
+                radius,
+                dir,
+                out RaycastHit hit,
+                dist + skin,
+                groundLayer,
+                QueryTriggerInteraction.Ignore))
+        {
+            return desiredDelta;
+        }
+
+        // Standing surface under / ahead — allow (will snap onto it via radial stick).
+        if (Vector3.Dot(hit.normal, up) > 0.45f)
+            return desiredDelta;
+
+        // Only block planet props / planet children, not unrelated scene geometry.
+        if (_planet != null
+            && hit.collider != null
+            && hit.collider.transform != _planet.transform
+            && !hit.collider.transform.IsChildOf(_planet.transform))
+        {
+            return desiredDelta;
+        }
+
+        // Hard stop just before the wall, then try a single slide.
+        float allowed = Mathf.Max(0f, hit.distance - skin);
+        Vector3 limited = dir * allowed;
+        Vector3 remainder = desiredDelta - limited;
+        Vector3 slide = Vector3.ProjectOnPlane(remainder, hit.normal);
+        slide = Vector3.ProjectOnPlane(slide, up);
+
+        if (slide.sqrMagnitude < 0.0000001f)
+            return limited;
+
+        float slideDist = slide.magnitude;
+        Vector3 slideDir = slide / slideDist;
+        if (Physics.CapsuleCast(
+                bottom + limited,
+                top + limited,
+                radius,
+                slideDir,
+                out RaycastHit slideHit,
+                slideDist + skin,
+                groundLayer,
+                QueryTriggerInteraction.Ignore))
+        {
+            if (Vector3.Dot(slideHit.normal, up) <= 0.45f)
+            {
+                float slideAllowed = Mathf.Max(0f, slideHit.distance - skin);
+                return limited + slideDir * slideAllowed;
+            }
+        }
+
+        return limited + slide;
     }
 
     bool TryStickToCollider(Vector3 radial, out Vector3 feetPosition, out Vector3 normal)
