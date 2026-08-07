@@ -2,20 +2,20 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// Reimports CasualToon and reassigns it to Nyxara materials after domain reload.
+/// Menu-only: reimport CasualToon and fix Nyxara materials that lost the shader.
 /// </summary>
-[InitializeOnLoad]
 public static class CasualShaderForceImport
 {
     const string ShaderPath = "Assets/Shaders/Casual/CasualShader.shader";
     const string ShaderName = "BackHome/CasualToon";
 
-    static CasualShaderForceImport()
+    [MenuItem("BackHome/Reimport Casual Shader")]
+    public static void MenuReimport()
     {
-        EditorApplication.delayCall += Run;
+        Run();
     }
 
-    static void Run()
+    public static void Run()
     {
         if (Application.isPlaying)
             return;
@@ -53,11 +53,5 @@ public static class CasualShaderForceImport
             AssetDatabase.SaveAssets();
 
         Debug.Log("[BackHome] CasualToon OK (" + sh.name + "), updated " + n + " material(s).");
-    }
-
-    [MenuItem("BackHome/Reimport Casual Shader")]
-    public static void MenuReimport()
-    {
-        Run();
     }
 }

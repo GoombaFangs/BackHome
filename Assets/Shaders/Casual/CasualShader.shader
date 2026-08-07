@@ -47,7 +47,7 @@ Shader "BackHome/CasualToon"
         Pass
         {
             Name "ForwardLit"
-            Tags { "LightMode" = "UniversalForward" }
+            Tags { "LightMode" = "UniversalForwardOnly" }
 
             Cull [_Cull]
             ZWrite On

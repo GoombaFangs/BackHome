@@ -21,12 +21,70 @@ public static class NyxaraPropPrefabSetup
     [MenuItem("BackHome/Setup All Nyxara Prop Prefabs")]
     public static void BuildAllMenu() => BuildAll(silent: false);
 
-    public static void BuildAll(bool silent)
+    /// <summary>Unity batchmode: -executeMethod NyxaraPropPrefabSetup.BuildNewPropsBatch</summary>
+    public static void BuildNewPropsBatch()
+    {
+        try
+        {
+            BuildMissing(silent: true);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogException(ex);
+            EditorApplication.Exit(1);
+            return;
+        }
+
+        EditorApplication.Exit(0);
+    }
+
+    public static void BuildAll(bool silent) => BuildJobs(DiscoverModels(), silent);
+
+    /// <summary>Builds only models that do not yet have a prefab under PrefabsRoot.</summary>
+    public static void BuildMissing(bool silent)
+    {
+        EnsureFolder(PrefabsRoot);
+        var jobs = DiscoverModels()
+            .Where(j => AssetDatabase.LoadAssetAtPath<GameObject>($"{PrefabsRoot}/{j.PrefabName}.prefab") == null)
+            .ToList();
+        if (jobs.Count == 0)
+        {
+            Debug.Log("[BackHome] No missing Nyxara prop prefabs.");
+            if (!silent)
+                EditorUtility.DisplayDialog("Nyxara Props", "All discovered models already have prefabs.", "OK");
+            return;
+        }
+
+        BuildJobs(jobs, silent);
+    }
+
+    [MenuItem("BackHome/Setup Missing Nyxara Prop Prefabs")]
+    public static void BuildMissingMenu() => BuildMissing(silent: false);
+
+    public static void BuildNames(bool silent, params string[] prefabNames)
+    {
+        if (prefabNames == null || prefabNames.Length == 0)
+        {
+            BuildAll(silent);
+            return;
+        }
+
+        var wanted = new HashSet<string>(prefabNames, StringComparer.OrdinalIgnoreCase);
+        var jobs = DiscoverModels().Where(j => wanted.Contains(j.PrefabName)).ToList();
+        if (jobs.Count == 0)
+        {
+            Debug.LogWarning("[BackHome] No matching Nyxara models for: " + string.Join(", ", prefabNames));
+            return;
+        }
+
+        BuildJobs(jobs, silent);
+    }
+
+    static void BuildJobs(List<ModelJob> jobs, bool silent)
     {
         EnsureFolder(MaterialsRoot);
         EnsureFolder(PrefabsRoot);
 
-        var jobs = DiscoverModels();
         if (jobs.Count == 0)
         {
             if (!silent)
@@ -444,8 +502,12 @@ public static class NyxaraPropPrefabSetup
         instance.transform.SetParent(root.transform, false);
         instance.name = "Model";
         instance.transform.localPosition = Vector3.zero;
-        instance.transform.localRotation = Quaternion.identity;
-        instance.transform.localScale = Vector3.one;
+        // Match existing Nyxara prop prefabs (FBX cm → Unity units + Blender-style axis).
+        instance.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+        instance.transform.localScale = Vector3.one * 100f;
+
+        if (root.GetComponent<PlanetSurfaceAlign>() == null)
+            root.AddComponent<PlanetSurfaceAlign>();
 
         var renderers = root.GetComponentsInChildren<Renderer>(true);
         for (int i = 0; i < renderers.Length; i++)
@@ -495,13 +557,12 @@ public static class NyxaraPropPrefabSetup
 
         if (hasBounds && localBounds.size.sqrMagnitude > 0.0001f)
         {
-            // Prefer mesh colliders on the actual meshes (handles huge FBX scales).
-            AttachMeshColliders(root);
+            NyxaraPropColliderSetup.ApplyColliders(root, destroyImmediate: false);
         }
         else
         {
-            AttachMeshColliders(root);
-            if (root.GetComponentInChildren<MeshCollider>(true) == null)
+            NyxaraPropColliderSetup.ApplyColliders(root, destroyImmediate: false);
+            if (root.GetComponentInChildren<Collider>(true) == null)
             {
                 var box = root.AddComponent<BoxCollider>();
                 box.center = new Vector3(0f, 0.5f, 0f);
@@ -518,35 +579,6 @@ public static class NyxaraPropPrefabSetup
         return prefabAsset;
     }
 
-    static void AttachMeshColliders(GameObject root)
-    {
-        bool skip = root.name.IndexOf("Grass", System.StringComparison.OrdinalIgnoreCase) >= 0;
-        BoxCollider[] boxes = root.GetComponents<BoxCollider>();
-        for (int i = boxes.Length - 1; i >= 0; i--)
-        {
-            BoxCollider box = boxes[i];
-            if (box != null)
-                Undo.DestroyObjectImmediate(box);
-        }
-
-        if (skip)
-            return;
-
-        MeshFilter[] filters = root.GetComponentsInChildren<MeshFilter>(true);
-        for (int i = 0; i < filters.Length; i++)
-        {
-            MeshFilter mf = filters[i];
-            if (mf == null || mf.sharedMesh == null)
-                continue;
-            MeshCollider mc = mf.GetComponent<MeshCollider>();
-            if (mc == null)
-                mc = mf.gameObject.AddComponent<MeshCollider>();
-            mc.sharedMesh = mf.sharedMesh;
-            mc.convex = false;
-            mc.isTrigger = false;
-        }
-    }
-
     static void SetLayerRecursive(GameObject go, int layer)
     {
         go.layer = layer;
@@ -559,10 +591,24 @@ public static class NyxaraPropPrefabSetup
     {
         if (AssetDatabase.IsValidFolder(assetFolder))
             return;
+
+        // If the folder already exists on disk (e.g. broken .meta), CreateFolder
+        // would spawn "Materials 1", "Materials 2", ... — never do that.
+        string abs = ToAbsolute(assetFolder);
+        if (Directory.Exists(abs))
+        {
+            Debug.LogWarning(
+                $"[BackHome] Folder exists on disk but AssetDatabase rejects it (likely bad .meta GUID): {assetFolder}");
+            return;
+        }
+
         string parent = Path.GetDirectoryName(assetFolder)?.Replace('\\', '/');
         string name = Path.GetFileName(assetFolder);
-        if (!string.IsNullOrEmpty(parent) && !string.IsNullOrEmpty(name))
-            AssetDatabase.CreateFolder(parent, name);
+        if (string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(name))
+            return;
+        if (!AssetDatabase.IsValidFolder(parent) && !Directory.Exists(ToAbsolute(parent)))
+            EnsureFolder(parent);
+        AssetDatabase.CreateFolder(parent, name);
     }
 
     static string ToAbsolute(string assetPath)

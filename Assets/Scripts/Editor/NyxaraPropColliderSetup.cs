@@ -3,13 +3,17 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// Adds Ground-layer MeshColliders to Nyxara prop prefabs so the player cannot walk through them.
+/// Adds Ground-layer colliders to Nyxara prop prefabs.
+/// High-poly meshes use BoxCollider (MeshCollider warns / breaks above ~2M tris).
 /// Menu: BackHome → Setup Nyxara Prop Colliders
 /// </summary>
 public static class NyxaraPropColliderSetup
 {
     const string PrefabsFolder = "Assets/Galaxy/Planets/Nyxara/Objects/Prefabs";
     const string GroundLayerName = "Ground";
+
+    /// <summary>Above this, MeshCollider spam / Fast Midphase fails — use BoxCollider.</summary>
+    const int MaxMeshColliderTriangles = 50_000;
 
     [MenuItem("BackHome/Setup Nyxara Prop Colliders")]
     public static void SetupAllMenu() => SetupAll(showDialog: true);
@@ -63,7 +67,7 @@ public static class NyxaraPropColliderSetup
         {
             EditorUtility.DisplayDialog(
                 "Prop Colliders",
-                $"Updated {ok}/{guids.Length} prefabs.\nLayer: {GroundLayerName}\nMeshCollider on meshes (Grass skipped).",
+                $"Updated {ok}/{guids.Length} prefabs.\nHeavy meshes → BoxCollider; light meshes → MeshCollider.",
                 "OK");
         }
 
@@ -79,45 +83,7 @@ public static class NyxaraPropColliderSetup
         try
         {
             SetLayerRecursive(root, groundLayer);
-
-            // Remove broken / tiny root box colliders from older setup.
-            BoxCollider[] boxes = root.GetComponents<BoxCollider>();
-            for (int i = 0; i < boxes.Length; i++)
-                Undo.DestroyObjectImmediate(boxes[i]);
-
-            bool skipSolid = IsNonBlockingProp(root.name);
-            MeshFilter[] filters = root.GetComponentsInChildren<MeshFilter>(true);
-
-            if (skipSolid)
-            {
-                // Ensure no leftover solid colliders on decorative grass.
-                Collider[] cols = root.GetComponentsInChildren<Collider>(true);
-                for (int i = 0; i < cols.Length; i++)
-                    Undo.DestroyObjectImmediate(cols[i]);
-            }
-            else
-            {
-                for (int i = 0; i < filters.Length; i++)
-                {
-                    MeshFilter mf = filters[i];
-                    if (mf == null || mf.sharedMesh == null)
-                        continue;
-
-                    MeshCollider mc = mf.GetComponent<MeshCollider>();
-                    if (mc == null)
-                        mc = mf.gameObject.AddComponent<MeshCollider>();
-
-                    mc.sharedMesh = mf.sharedMesh;
-                    mc.convex = false;
-                    mc.isTrigger = false;
-                    mf.gameObject.layer = groundLayer;
-                }
-
-                // Fallback if FBX has no MeshFilter yet (rare): fitted box from renderers.
-                if (filters.Length == 0 || root.GetComponentInChildren<MeshCollider>(true) == null)
-                    AddBoundsBoxCollider(root);
-            }
-
+            ApplyColliders(root, destroyImmediate: true);
             PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
             return true;
         }
@@ -127,11 +93,73 @@ public static class NyxaraPropColliderSetup
         }
     }
 
+    /// <summary>Shared by prefab setup + collider menu.</summary>
+    public static void ApplyColliders(GameObject root, bool destroyImmediate)
+    {
+        // Clear existing colliders on this prop hierarchy.
+        Collider[] existing = root.GetComponentsInChildren<Collider>(true);
+        for (int i = existing.Length - 1; i >= 0; i--)
+        {
+            if (existing[i] == null)
+                continue;
+            if (destroyImmediate)
+                Object.DestroyImmediate(existing[i]);
+            else
+                Undo.DestroyObjectImmediate(existing[i]);
+        }
+
+        if (IsNonBlockingProp(root.name))
+            return;
+
+        MeshFilter[] filters = root.GetComponentsInChildren<MeshFilter>(true);
+        bool addedAny = false;
+
+        for (int i = 0; i < filters.Length; i++)
+        {
+            MeshFilter mf = filters[i];
+            if (mf == null || mf.sharedMesh == null)
+                continue;
+
+            Mesh mesh = mf.sharedMesh;
+            int triCount = EstimateTriangleCount(mesh);
+
+            if (triCount > MaxMeshColliderTriangles)
+            {
+                AddFittedBoxCollider(mf.gameObject, mesh.bounds);
+                addedAny = true;
+            }
+            else
+            {
+                MeshCollider mc = mf.gameObject.AddComponent<MeshCollider>();
+                mc.sharedMesh = mesh;
+                mc.convex = false;
+                mc.isTrigger = false;
+                // Avoid Fast Midphase warning / physics bugs on large meshes.
+                mc.cookingOptions =
+                    MeshColliderCookingOptions.CookForFasterSimulation |
+                    MeshColliderCookingOptions.EnableMeshCleaning |
+                    MeshColliderCookingOptions.WeldColocatedVertices;
+                addedAny = true;
+            }
+        }
+
+        if (!addedAny)
+            AddBoundsBoxCollider(root);
+    }
+
+    static int EstimateTriangleCount(Mesh mesh)
+    {
+        // Works for non-readable imported meshes (unlike mesh.triangles).
+        int tris = 0;
+        for (int s = 0; s < mesh.subMeshCount; s++)
+            tris += (int)(mesh.GetIndexCount(s) / 3);
+        return tris;
+    }
+
     static bool IsNonBlockingProp(string name)
     {
         if (string.IsNullOrEmpty(name))
             return false;
-        // Soft foliage — don't block the player.
         return name.IndexOf("Grass", System.StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
@@ -141,6 +169,14 @@ public static class NyxaraPropColliderSetup
         Transform t = go.transform;
         for (int i = 0; i < t.childCount; i++)
             SetLayerRecursive(t.GetChild(i).gameObject, layer);
+    }
+
+    static void AddFittedBoxCollider(GameObject go, Bounds meshLocalBounds)
+    {
+        BoxCollider box = go.AddComponent<BoxCollider>();
+        box.center = meshLocalBounds.center;
+        box.size = Vector3.Max(meshLocalBounds.size, Vector3.one * 0.05f);
+        box.isTrigger = false;
     }
 
     static void AddBoundsBoxCollider(GameObject root)
