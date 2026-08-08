@@ -1,0 +1,505 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+/// <summary>
+/// Runtime rock streaming for spherical planets — same pooled streaming approach as
+/// <see cref="PlanetTreeStreamer"/> / <see cref="PlanetGrassStreamer"/>, tuned for rocks:
+/// one rock per walkable grass tile (when the density roll succeeds), weighted random mix among
+/// Rock / Rock2 / Rock3 / Rock4, colliders and shadows on by default.
+///
+/// Menu: BackHome → Setup Nyxara Rock Streaming (adds this + wires Rock..Rock4).
+/// </summary>
+[DisallowMultipleComponent]
+[RequireComponent(typeof(SphericalPlanet))]
+public class PlanetRockStreamer : MonoBehaviour
+{
+    const int Rock1Index = 0;
+    const int Rock2Index = 1;
+    const int Rock3Index = 2;
+    const int Rock4Index = 3;
+    const int PoolCount = 4;
+
+    enum RockPick
+    {
+        Empty,
+        Rock1,
+        Rock2,
+        Rock3,
+        Rock4,
+    }
+
+    [Header("Prefabs")]
+    [SerializeField] GameObject rock1Prefab;
+    [SerializeField] GameObject rock2Prefab;
+    [SerializeField] GameObject rock3Prefab;
+    [SerializeField] GameObject rock4Prefab;
+
+    [Header("Streaming Range")]
+    [Tooltip("World-space radius around the player kept filled with rocks. Push past the visible horizon so spawn/despawn happens off-screen.")]
+    [SerializeField, Min(4f)] float visibleRadius = 48f;
+    [Tooltip("Seconds between rescans. Higher = cheaper, lower = rocks keep up better with fast movement.")]
+    [SerializeField, Min(0.05f)] float refreshInterval = 0.4f;
+
+    [Header("Density")]
+    [Tooltip("Master rock amount. 0 = none, 1 = a rock on every eligible tile.")]
+    [SerializeField, Range(0f, 1f)] float density = 0.03f;
+    [Tooltip("Relative mix between the four rock variants on tiles that do get a rock.")]
+    [SerializeField, Min(0f)] float rock1Weight = 1f;
+    [SerializeField, Min(0f)] float rock2Weight = 1f;
+    [SerializeField, Min(0f)] float rock3Weight = 1f;
+    [SerializeField, Min(0f)] float rock4Weight = 1f;
+    [Tooltip("How far a rock can drift from its tile center.")]
+    [SerializeField, Min(0f)] float jitterRadius = 0.9f;
+    [SerializeField] float hover = 0.05f;
+
+    [Header("Mobile Safety Cap")]
+    [SerializeField, Min(1)] int maxActiveRocks = 80;
+    [SerializeField, Min(1)] int maxSpawnsPerRefresh = 8;
+    [SerializeField] bool disableShadows = false;
+    [SerializeField] bool disableColliders = false;
+
+    [Header("Anchor")]
+    [SerializeField] Transform anchorOverride;
+
+    SphericalPlanet _planet;
+    PlanetTileMap _tiles;
+    Transform _root;
+    Transform _cachedAnchor;
+
+    readonly Dictionary<int, ActiveRock> _active = new();
+    readonly HashSet<int> _desired = new();
+    readonly List<int> _toDespawn = new();
+    readonly List<CellPick> _toSpawn = new();
+    Stack<GameObject>[] _pools;
+
+    float _refreshTimer;
+    int _longitudeBandsAtSetup;
+    bool _loggedMissingPrefab;
+
+    struct ActiveRock
+    {
+        public GameObject Instance;
+        public int PrefabIndex;
+    }
+
+    struct CellPick
+    {
+        public int Lat;
+        public int Lon;
+        public int PrefabIndex;
+        public float SqrDistance;
+    }
+
+    void Awake()
+    {
+        _planet = GetComponent<SphericalPlanet>();
+        _tiles = GetComponent<PlanetTileMap>();
+
+        WarnIfPrefabMissing(rock1Prefab, "Rock");
+        WarnIfPrefabMissing(rock2Prefab, "Rock2");
+        WarnIfPrefabMissing(rock3Prefab, "Rock3");
+        WarnIfPrefabMissing(rock4Prefab, "Rock4");
+
+        var rootGo = new GameObject("RockStream (Runtime)");
+        rootGo.hideFlags = HideFlags.DontSave;
+        _root = rootGo.transform;
+        _root.SetParent(transform, false);
+
+        _pools = new Stack<GameObject>[PoolCount];
+        for (int i = 0; i < PoolCount; i++)
+            _pools[i] = new Stack<GameObject>();
+    }
+
+    void OnEnable()
+    {
+        _refreshTimer = 0f;
+        if (_root != null)
+            _root.gameObject.SetActive(true);
+    }
+
+    void OnDisable()
+    {
+        if (_root != null)
+            _root.gameObject.SetActive(false);
+    }
+
+    void OnDestroy()
+    {
+        if (_root != null)
+            Destroy(_root.gameObject);
+    }
+
+    void Update()
+    {
+        if (!HasAnyPrefab())
+            return;
+        if (_tiles == null || !_tiles.HasValidMap() || _tiles.Tileset == null)
+            return;
+
+        _refreshTimer -= Time.deltaTime;
+        if (_refreshTimer > 0f)
+            return;
+        _refreshTimer = refreshInterval;
+
+        Refresh();
+    }
+
+    [ContextMenu("Refresh Now")]
+    public void ForceRefresh()
+    {
+        _refreshTimer = 0f;
+        if (_tiles != null && _tiles.HasValidMap())
+            Refresh();
+    }
+
+    void WarnIfPrefabMissing(GameObject prefab, string label)
+    {
+        if (prefab == null)
+            Debug.LogWarning($"[PlanetRockStreamer] {label} Prefab is not assigned — it will be skipped. Assign it in the Inspector or re-run BackHome → Setup Nyxara Rock Streaming.", this);
+    }
+
+    bool HasAnyPrefab() => rock1Prefab != null || rock2Prefab != null || rock3Prefab != null || rock4Prefab != null;
+
+    GameObject PrefabAt(int index)
+    {
+        switch (index)
+        {
+            case Rock1Index: return rock1Prefab;
+            case Rock2Index: return rock2Prefab;
+            case Rock3Index: return rock3Prefab;
+            case Rock4Index: return rock4Prefab;
+            default: return null;
+        }
+    }
+
+    Transform ResolveAnchor()
+    {
+        if (anchorOverride != null)
+            return anchorOverride;
+
+        if (_cachedAnchor != null)
+            return _cachedAnchor;
+
+        PlanetWalker walker = FindAnyObjectByType<PlanetWalker>();
+        if (walker != null)
+        {
+            _cachedAnchor = walker.transform;
+            return _cachedAnchor;
+        }
+
+        if (Camera.main != null)
+        {
+            _cachedAnchor = Camera.main.transform;
+            return _cachedAnchor;
+        }
+
+        return null;
+    }
+
+    void Refresh()
+    {
+        Transform anchor = ResolveAnchor();
+        if (anchor == null)
+            return;
+
+        _longitudeBandsAtSetup = _tiles.LongitudeBands;
+        Vector3 anchorPos = anchor.position;
+
+        if (!_tiles.WorldToCell(anchorPos, out int centerLat, out int centerLon))
+            return;
+
+        float tileSize = Mathf.Max(0.5f, _tiles.ApproximateTileWorldSize);
+        int latWindow = Mathf.Clamp(
+            Mathf.CeilToInt(visibleRadius / tileSize) + 1,
+            1,
+            Mathf.Max(1, _tiles.LatitudeBands / 2));
+
+        float latStep = 180f / _tiles.LatitudeBands;
+        float midLatDeg = -90f + (centerLat + 0.5f) * latStep;
+        float cosLat = Mathf.Max(0.15f, Mathf.Abs(Mathf.Cos(midLatDeg * Mathf.Deg2Rad)));
+        int lonWindow = Mathf.Clamp(
+            Mathf.CeilToInt(visibleRadius / (tileSize * cosLat)) + 1,
+            1,
+            Mathf.Max(1, _tiles.LongitudeBands / 2));
+
+        float sqrRadius = visibleRadius * visibleRadius;
+
+        _desired.Clear();
+        _toSpawn.Clear();
+
+        int latMin = Mathf.Max(0, centerLat - latWindow);
+        int latMax = Mathf.Min(_tiles.LatitudeBands - 1, centerLat + latWindow);
+
+        for (int lat = latMin; lat <= latMax; lat++)
+        {
+            for (int lonOffset = -lonWindow; lonOffset <= lonWindow; lonOffset++)
+            {
+                int lon = Mod(centerLon + lonOffset, _tiles.LongitudeBands);
+                if (!IsRockCell(lat, lon))
+                    continue;
+
+                RockPick pick = PickForCell(lat, lon);
+                if (pick == RockPick.Empty)
+                    continue;
+
+                if (!_tiles.TryGetCellCenter(lat, lon, out Vector3 cellCenter))
+                    continue;
+
+                float sqrDist = (cellCenter - anchorPos).sqrMagnitude;
+                if (sqrDist > sqrRadius)
+                    continue;
+
+                int prefabIndex = PrefabIndexFor(pick);
+                if (PrefabAt(prefabIndex) == null)
+                    continue;
+
+                int key = PackKey(lat, lon);
+                _desired.Add(key);
+                if (!_active.ContainsKey(key))
+                    _toSpawn.Add(new CellPick { Lat = lat, Lon = lon, PrefabIndex = prefabIndex, SqrDistance = sqrDist });
+            }
+        }
+
+        _toDespawn.Clear();
+        foreach (KeyValuePair<int, ActiveRock> pair in _active)
+        {
+            if (!_desired.Contains(pair.Key))
+                _toDespawn.Add(pair.Key);
+        }
+
+        for (int i = 0; i < _toDespawn.Count; i++)
+            Despawn(_toDespawn[i]);
+
+        if (_toSpawn.Count > 1)
+            _toSpawn.Sort((a, b) => a.SqrDistance.CompareTo(b.SqrDistance));
+
+        int spawned = 0;
+        for (int i = 0; i < _toSpawn.Count && spawned < maxSpawnsPerRefresh; i++)
+        {
+            if (_active.Count >= maxActiveRocks)
+                break;
+
+            CellPick pick = _toSpawn[i];
+            if (TrySpawn(pick.Lat, pick.Lon, pick.PrefabIndex))
+                spawned++;
+        }
+    }
+
+    RockPick PickForCell(int lat, int lon)
+    {
+        // Salt 15/17 decorrelates rock rolls from grass (6/8) and trees on the same tile.
+        if (Hash01(lat, lon, 15) >= density)
+            return RockPick.Empty;
+        return PickVariant(lat, lon, 17);
+    }
+
+    RockPick PickVariant(int lat, int lon, int salt)
+    {
+        float w1 = rock1Prefab != null ? rock1Weight : 0f;
+        float w2 = rock2Prefab != null ? rock2Weight : 0f;
+        float w3 = rock3Prefab != null ? rock3Weight : 0f;
+        float w4 = rock4Prefab != null ? rock4Weight : 0f;
+
+        float total = w1 + w2 + w3 + w4;
+        if (total <= 0f)
+            return RockPick.Empty;
+
+        float roll = Hash01(lat, lon, salt) * total;
+        if (roll < w1)
+            return RockPick.Rock1;
+        roll -= w1;
+        if (roll < w2)
+            return RockPick.Rock2;
+        roll -= w2;
+        if (roll < w3)
+            return RockPick.Rock3;
+        return RockPick.Rock4;
+    }
+
+    int PrefabIndexFor(RockPick pick)
+    {
+        switch (pick)
+        {
+            case RockPick.Rock1: return Rock1Index;
+            case RockPick.Rock2: return Rock2Index;
+            case RockPick.Rock3: return Rock3Index;
+            case RockPick.Rock4: return Rock4Index;
+            default: return -1;
+        }
+    }
+
+    bool IsRockCell(int lat, int lon)
+    {
+        PlanetTileset tileset = _tiles.Tileset;
+        if (tileset == null)
+            return false;
+
+        int terrainIndex = _tiles.GetTerrain(lat, lon);
+        PlanetTileset.Terrain terrain = tileset.GetTerrain(terrainIndex);
+        if (terrain == null || !terrain.walkable)
+            return false;
+
+        return !string.IsNullOrEmpty(terrain.id)
+               && terrain.id.IndexOf("Grass", System.StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    bool TrySpawn(int lat, int lon, int prefabIndex)
+    {
+        GameObject prefab = PrefabAt(prefabIndex);
+        if (prefab == null)
+        {
+            LogMissingPrefabOnce(prefabIndex);
+            return false;
+        }
+
+        if (!_tiles.TryGetCellCenter(lat, lon, out Vector3 cellCenter))
+            return false;
+
+        Vector3 up = (cellCenter - _planet.Center).normalized;
+        Vector3 east = Vector3.Cross(Vector3.up, up);
+        if (east.sqrMagnitude < 0.0001f)
+            east = Vector3.Cross(Vector3.right, up);
+        east.Normalize();
+        Vector3 north = Vector3.Cross(up, east).normalized;
+
+        float angle = Hash01(lat, lon, 50) * Mathf.PI * 2f;
+        float radius = jitterRadius * Mathf.Sqrt(Hash01(lat, lon, 51));
+        Vector3 jittered = cellCenter + (east * Mathf.Cos(angle) + north * Mathf.Sin(angle)) * radius;
+
+        Vector3 pointUp = (jittered - _planet.Center).normalized;
+        float surfaceRadius = _tiles.ProvidesWalkSurface
+            ? _tiles.GetWalkSurfaceRadius(pointUp)
+            : _planet.GetTerrainRadius(pointUp);
+        Vector3 position = _planet.Center + pointUp * (surfaceRadius + hover);
+
+        Vector3 normal = _tiles.ProvidesWalkSurface
+            ? _tiles.GetWalkSurfaceNormal(pointUp)
+            : _planet.GetTerrainNormal(pointUp);
+        if (Vector3.Dot(normal, pointUp) < 0f)
+            normal = -normal;
+
+        float yaw = Hash01(lat, lon, 52) * 360f;
+        Quaternion rotation = PlanetSurfacePose.RotationFromUp(normal, yaw);
+
+        GameObject instance = Rent(prefabIndex, prefab);
+        if (instance == null)
+            return false;
+
+        instance.transform.SetPositionAndRotation(position, rotation);
+        instance.transform.localScale = Vector3.one;
+        instance.name = NameFor(prefabIndex);
+        instance.SetActive(true);
+
+        _active[PackKey(lat, lon)] = new ActiveRock { Instance = instance, PrefabIndex = prefabIndex };
+        return true;
+    }
+
+    static string NameFor(int prefabIndex)
+    {
+        switch (prefabIndex)
+        {
+            case Rock1Index: return "Rock";
+            case Rock2Index: return "Rock2";
+            case Rock3Index: return "Rock3";
+            case Rock4Index: return "Rock4";
+            default: return "Rock";
+        }
+    }
+
+    void LogMissingPrefabOnce(int prefabIndex)
+    {
+        if (_loggedMissingPrefab)
+            return;
+
+        _loggedMissingPrefab = true;
+        Debug.LogWarning($"[PlanetRockStreamer] Missing {NameFor(prefabIndex)} prefab — assign it on the component.", this);
+    }
+
+    void Despawn(int key)
+    {
+        if (!_active.TryGetValue(key, out ActiveRock rock))
+            return;
+
+        _active.Remove(key);
+        if (rock.Instance == null)
+            return;
+
+        rock.Instance.SetActive(false);
+        rock.Instance.transform.SetParent(_root, false);
+        _pools[rock.PrefabIndex].Push(rock.Instance);
+    }
+
+    GameObject Rent(int prefabIndex, GameObject prefab)
+    {
+        Stack<GameObject> pool = _pools[prefabIndex];
+        while (pool.Count > 0)
+        {
+            GameObject pooled = pool.Pop();
+            if (pooled != null)
+                return pooled;
+        }
+
+        GameObject instance = Instantiate(prefab, _root);
+        PrepareInstance(instance);
+        return instance;
+    }
+
+    void PrepareInstance(GameObject instance)
+    {
+        PlanetSurfaceAlign align = instance.GetComponent<PlanetSurfaceAlign>();
+        if (align != null)
+            align.enabled = false;
+
+        if (disableShadows)
+        {
+            Renderer[] renderers = instance.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                renderers[i].shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderers[i].receiveShadows = false;
+            }
+        }
+
+        if (disableColliders)
+        {
+            Collider[] colliders = instance.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
+                colliders[i].enabled = false;
+        }
+    }
+
+    int PackKey(int lat, int lon) => lat * _longitudeBandsAtSetup + lon;
+
+    static int Mod(int value, int modulus)
+    {
+        int m = value % modulus;
+        return m < 0 ? m + modulus : m;
+    }
+
+    static float Hash01(int lat, int lon, int salt)
+    {
+        unchecked
+        {
+            uint h = 2166136261u;
+            h = (h ^ (uint)lat) * 16777619u;
+            h = (h ^ (uint)lon) * 16777619u;
+            h = (h ^ (uint)salt) * 16777619u;
+
+            h ^= h >> 16;
+            h *= 0x85ebca6bu;
+            h ^= h >> 13;
+            h *= 0xc2b2ae35u;
+            h ^= h >> 16;
+
+            return (h & 0x00FFFFFFu) / (float)0x01000000u;
+        }
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        Transform anchor = anchorOverride != null ? anchorOverride : _cachedAnchor;
+        Vector3 center = anchor != null ? anchor.position : transform.position;
+        Gizmos.color = new Color(0.5f, 0.45f, 0.4f, 0.6f);
+        Gizmos.DrawWireSphere(center, visibleRadius);
+    }
+}

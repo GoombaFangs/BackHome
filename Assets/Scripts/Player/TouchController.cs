@@ -93,6 +93,10 @@ public class TouchController : MonoBehaviour
 
     void Update()
     {
+        PlanetWalker walker = GetComponent<PlanetWalker>();
+        if (walker != null && walker.IsWalkingOnPlanet)
+            return;
+
         _hasAnimator = TryGetComponent(out _animator);
         if (_camera == null)
             _camera = Camera.main;

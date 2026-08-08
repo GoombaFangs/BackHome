@@ -5,6 +5,7 @@ using UnityEngine;
 /// Does not orbit with the player's facing (avoids dizzy spinning on planets).
 /// On curved surfaces, the "behind" axis is parallel-transported so it never flips mid-orbit.
 /// Terrain bumps are filtered via radial up + separately damped focus height.
+/// Motion framing: slight zoom-out on walk start, then sustained sphere-aware perspective settle.
 /// </summary>
 public class CameraFollow : MonoBehaviour
 {
@@ -33,19 +34,78 @@ public class CameraFollow : MonoBehaviour
     [Tooltip("How quickly the camera pivot tracks height/radial bob. Lower = less shake on uneven terrain.")]
     [SerializeField] float heightSmoothSpeed = 2.5f;
 
+    [Header("Motion Framing")]
+    [Tooltip("Pull framing out while moving, then settle into a sphere-readable travel pose.")]
+    [SerializeField] bool enableMotionFraming = true;
+    [Tooltip("Extra height while moving (dolly zoom-out).")]
+    [SerializeField] float moveExtraHeight = 2.2f;
+    [Tooltip("Extra back distance while moving.")]
+    [SerializeField] float moveExtraBack = 1.4f;
+    [Tooltip("Extra FOV while moving (subtle perspective widen). 0 = leave FOV alone.")]
+    [SerializeField] float moveExtraFov = 3.5f;
+    [Tooltip("Onset punch multiplier on the motion zoom when walk starts.")]
+    [SerializeField] float walkStartBoost = 1.4f;
+    [Tooltip("How long the start boost fades into sustained travel framing.")]
+    [SerializeField] float walkStartBoostDuration = 0.55f;
+    [Tooltip("How fast framing expands when motion begins.")]
+    [SerializeField] float zoomOutSpeed = 7f;
+    [Tooltip("How fast framing returns when stopping.")]
+    [SerializeField] float zoomInSpeed = 3.2f;
+    [Tooltip("Seconds of continuous walking before full sustained perspective correction.")]
+    [SerializeField] float sustainSettleTime = 1.35f;
+    [Tooltip("During sustained walk, bias pitch more top-down (extra height, less back) so sphere curvature reads flatter.")]
+    [SerializeField] float sustainPitchHeight = 1.6f;
+    [Tooltip("During sustained walk, reduce back offset (pairs with sustainPitchHeight).")]
+    [SerializeField] float sustainPitchBack = -0.6f;
+    [Tooltip("Focus look-ahead along move direction (world units at full motion).")]
+    [SerializeField] float lookAheadDistance = 2.8f;
+    [SerializeField] float lookAheadSmoothSpeed = 6f;
+    [Tooltip("Fallback speed used to normalize velocity when PlanetWalker is absent.")]
+    [SerializeField] float referenceMoveSpeed = 12f;
+
     Vector3 _smoothedUp = Vector3.up;
     Vector3 _smoothedBack = Vector3.forward;
     Vector3 _smoothedFocus;
     bool _hasBasis;
     bool _hasFocus;
 
+    PlanetWalker _walker;
+    Camera _camera;
+    float _baseFov;
+    bool _hasBaseFov;
+
+    float _smoothedMotion;
+    float _onsetBoost = 1f;
+    float _sustainAmount;
+    float _movingTimer;
+    Vector3 _smoothedLookAhead;
+    Vector3 _lastTargetPos;
+    bool _hasLastTargetPos;
+
     public void SetTarget(Transform newTarget)
     {
         target = newTarget;
         _hasBasis = false;
         _hasFocus = false;
+        _walker = target != null ? target.GetComponent<PlanetWalker>() : null;
+        _hasLastTargetPos = false;
+        _smoothedLookAhead = Vector3.zero;
+        _smoothedMotion = 0f;
+        _onsetBoost = 1f;
+        _sustainAmount = 0f;
+        _movingTimer = 0f;
         if (target != null && alignToTargetUp)
             _smoothedUp = ResolveDesiredUp(target.position, target.up);
+    }
+
+    void Awake()
+    {
+        _camera = GetComponent<Camera>();
+        if (_camera != null)
+        {
+            _baseFov = _camera.fieldOfView;
+            _hasBaseFov = true;
+        }
     }
 
     void LateUpdate()
@@ -64,14 +124,17 @@ public class CameraFollow : MonoBehaviour
         else
             _smoothedUp = Vector3.Slerp(_smoothedUp, desiredUp, 1f - Mathf.Exp(-upSmoothSpeed * Time.deltaTime)).normalized;
 
+        SampleMotion(_smoothedUp);
         UpdateSmoothedFocus(_smoothedUp);
 
         Vector3 back = ResolveBackDirection(_smoothedUp, previousUp);
         Vector3 right = Vector3.Cross(_smoothedUp, back).normalized;
 
+        ResolveFramingOffsets(out float height, out float backDist, out float fov);
+
         Vector3 desired = _smoothedFocus
-                          + _smoothedUp * offsetHeight
-                          - back * offsetBack
+                          + _smoothedUp * height
+                          - back * backDist
                           + right * offsetSide;
 
         if (smoothSpeed <= 0f)
@@ -85,6 +148,106 @@ public class CameraFollow : MonoBehaviour
             if (toTarget.sqrMagnitude > 0.001f)
                 transform.rotation = Quaternion.LookRotation(toTarget.normalized, _smoothedUp);
         }
+
+        if (_hasBaseFov && _camera != null && enableMotionFraming && moveExtraFov > 0.01f)
+        {
+            float fovSpeed = _smoothedMotion > 0.05f ? zoomOutSpeed : zoomInSpeed;
+            _camera.fieldOfView = Mathf.Lerp(_camera.fieldOfView, fov, 1f - Mathf.Exp(-fovSpeed * Time.deltaTime));
+        }
+    }
+
+    void SampleMotion(Vector3 up)
+    {
+        Vector3 velocity = Vector3.zero;
+        float amount = 0f;
+
+        if (_walker == null && target != null)
+            _walker = target.GetComponent<PlanetWalker>();
+
+        if (_walker != null && _walker.IsWalkingOnPlanet)
+        {
+            velocity = _walker.PlanarVelocity;
+            amount = _walker.MotionAmount;
+        }
+        else if (target != null)
+        {
+            if (_hasLastTargetPos && Time.deltaTime > 0.0001f)
+            {
+                Vector3 delta = target.position - _lastTargetPos;
+                velocity = Vector3.ProjectOnPlane(delta, up) / Time.deltaTime;
+            }
+
+            float refSpeed = Mathf.Max(0.01f, referenceMoveSpeed);
+            amount = Mathf.Clamp01(velocity.magnitude / refSpeed);
+            _lastTargetPos = target.position;
+            _hasLastTargetPos = true;
+        }
+
+        float previousMotion = _smoothedMotion;
+        float motionT = amount > _smoothedMotion
+            ? (zoomOutSpeed <= 0f ? 1f : 1f - Mathf.Exp(-zoomOutSpeed * Time.deltaTime))
+            : (zoomInSpeed <= 0f ? 1f : 1f - Mathf.Exp(-zoomInSpeed * Time.deltaTime));
+        _smoothedMotion = Mathf.Lerp(_smoothedMotion, amount, motionT);
+
+        // Punch zoom when motion rises from near-idle.
+        if (amount > 0.15f && previousMotion < 0.12f)
+            _onsetBoost = Mathf.Max(_onsetBoost, walkStartBoost);
+
+        if (_onsetBoost > 1.001f)
+        {
+            float decay = walkStartBoostDuration <= 0.01f
+                ? 1f
+                : Time.deltaTime / walkStartBoostDuration;
+            _onsetBoost = Mathf.Lerp(_onsetBoost, 1f, Mathf.Clamp01(decay));
+        }
+        else
+        {
+            _onsetBoost = 1f;
+        }
+
+        if (amount > 0.08f)
+            _movingTimer += Time.deltaTime;
+        else
+            _movingTimer = Mathf.Max(0f, _movingTimer - Time.deltaTime * 1.6f);
+
+        float sustainTarget = sustainSettleTime <= 0.01f
+            ? (amount > 0.08f ? 1f : 0f)
+            : Mathf.Clamp01(_movingTimer / sustainSettleTime);
+        float sustainT = 1f - Mathf.Exp(-(amount > 0.08f ? 3.5f : zoomInSpeed) * Time.deltaTime);
+        _sustainAmount = Mathf.Lerp(_sustainAmount, sustainTarget * _smoothedMotion, sustainT);
+
+        Vector3 lookDir = Vector3.ProjectOnPlane(velocity, up);
+        Vector3 desiredLookAhead = lookDir.sqrMagnitude > 0.01f
+            ? lookDir.normalized * (lookAheadDistance * _smoothedMotion)
+            : Vector3.zero;
+
+        // Keep look-ahead on the current tangent plane (sphere-safe).
+        desiredLookAhead = Vector3.ProjectOnPlane(desiredLookAhead, up);
+        float lookT = lookAheadSmoothSpeed <= 0f ? 1f : 1f - Mathf.Exp(-lookAheadSmoothSpeed * Time.deltaTime);
+        _smoothedLookAhead = Vector3.Lerp(_smoothedLookAhead, desiredLookAhead, lookT);
+        _smoothedLookAhead = Vector3.ProjectOnPlane(_smoothedLookAhead, up);
+    }
+
+    void ResolveFramingOffsets(out float height, out float backDist, out float fov)
+    {
+        height = offsetHeight;
+        backDist = offsetBack;
+        fov = _hasBaseFov ? _baseFov : 60f;
+
+        if (!enableMotionFraming)
+            return;
+
+        float zoom = _smoothedMotion * _onsetBoost;
+        height += moveExtraHeight * zoom;
+        backDist += moveExtraBack * zoom;
+
+        // Sustained walk: pitch more top-down so curved ground foreshortens less on screen.
+        height += sustainPitchHeight * _sustainAmount;
+        backDist += sustainPitchBack * _sustainAmount;
+
+        height = Mathf.Max(1f, height);
+        backDist = Mathf.Max(0.5f, backDist);
+        fov = _baseFov + moveExtraFov * _smoothedMotion;
     }
 
     Vector3 ResolveDesiredUp(Vector3 worldPosition, Vector3 fallbackUp)
@@ -100,10 +263,10 @@ public class CameraFollow : MonoBehaviour
 
     void UpdateSmoothedFocus(Vector3 up)
     {
-        Vector3 targetPos = target.position;
+        Vector3 targetPos = target.position + _smoothedLookAhead;
         if (!_hasFocus)
         {
-            _smoothedFocus = targetPos;
+            _smoothedFocus = target.position;
             _hasFocus = true;
             return;
         }

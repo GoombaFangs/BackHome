@@ -93,6 +93,7 @@ public class PlanetTileMap : MonoBehaviour
     public int CellCount => latitudeBands * longitudeBands;
     public bool ShowTileVisuals => showTileVisuals;
     public bool ProvidesWalkSurface => showTileVisuals;
+    public MeshCollider WalkMeshCollider => _tilesCollider;
 
     public float GetWalkSurfaceRadius(Vector3 directionFromCenter)
     {

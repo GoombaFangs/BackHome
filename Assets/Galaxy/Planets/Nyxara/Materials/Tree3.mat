@@ -37,23 +37,23 @@ Material:
     - _Contrast: 1.05
     - _Cull: 0
     - _OutlineWidth: 0.012
-    - _RimLightMask: 0.75
-    - _RimPower: 3.5
-    - _Saturation: 1.12
+    - _RimLightMask: 0.474
+    - _RimPower: 1.75
+    - _Saturation: 1.17
     - _ShadeFloor: 0.48
     - _ShadeSoftness: 0.35
     - _ShadeSteps: 3
-    - _SpecularSize: 0.22
-    - _SpecularSoftness: 0.06
+    - _SpecularSize: 0.21
+    - _SpecularSoftness: 0.259
     m_Colors:
     - _AmbientTint: {r: 0.55, g: 0.62, b: 0.85, a: 1}
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _KeyTint: {r: 1, g: 0.98, b: 0.94, a: 1}
     - _OutlineColor: {r: 0.08, g: 0.08, b: 0.12, a: 1}
-    - _RimColor: {r: 0.85, g: 0.95, b: 1, a: 0.35}
+    - _RimColor: {r: 0.4811321, g: 0.19290671, b: 0.4327594, a: 0.74509805}
     - _ShadowColor: {r: 0.55, g: 0.58, b: 0.75, a: 1}
     - _ShadowTint: {r: 0.62, g: 0.68, b: 0.92, a: 1}
-    - _SpecularColor: {r: 1, g: 1, b: 1, a: 0.55}
+    - _SpecularColor: {r: 0.4666667, g: 0.38431376, b: 0.57254905, a: 0.55}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using StarterAssets;
 
@@ -6,7 +7,7 @@ using StarterAssets;
 /// On the ship / flat scenes this stays idle and <see cref="TouchController"/> handles movement.
 /// On Planet/Galaxy scenes, sticks to the tile MeshCollider (or planet collider) via raycasts.
 /// </summary>
-[DefaultExecutionOrder(20)] // PINK_FIX
+[DefaultExecutionOrder(20)]
 [RequireComponent(typeof(StarterAssetsInputs))]
 [RequireComponent(typeof(TouchController))]
 public class PlanetWalker : MonoBehaviour
@@ -43,6 +44,8 @@ public class PlanetWalker : MonoBehaviour
     bool _grounded;
     bool _ownsControl;
     bool _sceneAllowsPlanetWalk;
+    bool _pendingFootResnap;
+    float _footDropBelowPivot = -1f;
 
     int _animIDSpeed;
     int _animIDGrounded;
@@ -52,9 +55,14 @@ public class PlanetWalker : MonoBehaviour
 
     public bool IsWalkingOnPlanet => _ownsControl && _planet != null;
 
+    /// <summary>Intended tangent velocity (units/sec). Drives motion-aware camera framing.</summary>
+    public Vector3 PlanarVelocity { get; private set; }
+
+    /// <summary>0..1 move intensity from stick magnitude (run threshold maps near 1).</summary>
+    public float MotionAmount { get; private set; }
+
     void Awake()
     {
-        footOffset = Mathf.Clamp(footOffset, 0.001f, 0.2f);
         gravityStrength = Mathf.Max(10f, gravityStrength);
         groundProbeDistance = Mathf.Max(4f, groundProbeDistance);
 
@@ -104,6 +112,9 @@ public class PlanetWalker : MonoBehaviour
                 return;
         }
 
+        if (_pendingFootResnap)
+            ResnapIfFootClearanceReady();
+
         TickPlanetWalk();
     }
 
@@ -122,8 +133,17 @@ public class PlanetWalker : MonoBehaviour
         _planet = planet;
         _tiles = planet.GetComponent<PlanetTileMap>();
         if (_tiles != null)
-            _tiles.EnsureWalkColliders();
+        {
+            if (_tiles.ProvidesWalkSurface && _tiles.WalkMeshCollider != null
+                && _tiles.WalkMeshCollider.sharedMesh == null)
+            {
+                _tiles.RebuildVisuals();
+            }
 
+            _tiles.EnsureWalkColliders();
+        }
+
+        _footDropBelowPivot = -1f;
         TakeControl();
 
         Vector3 preferredUp = transform.position - _planet.Center;
@@ -148,6 +168,9 @@ public class PlanetWalker : MonoBehaviour
 
     void StopPlanetWalk()
     {
+        PlanarVelocity = Vector3.zero;
+        MotionAmount = 0f;
+
         if (!_ownsControl)
             return;
 
@@ -208,6 +231,11 @@ public class PlanetWalker : MonoBehaviour
         }
 
         Vector3 moveDir = GetTangentMoveDirection(moveInput, up);
+        PlanarVelocity = moveDir.sqrMagnitude > 0.001f ? moveDir * targetSpeed : Vector3.zero;
+        MotionAmount = inputMagnitude > 0.01f
+            ? Mathf.Clamp01(inputMagnitude / runInputThreshold)
+            : 0f;
+
         float step = targetSpeed * Time.deltaTime;
         Vector3 moveDelta = moveDir.sqrMagnitude > 0.001f ? moveDir * step : Vector3.zero;
         moveDelta = ResolveObstacleMove(moveDelta, up);
@@ -229,7 +257,7 @@ public class PlanetWalker : MonoBehaviour
             _fallVelocity += toCenter * (gravityStrength * Time.deltaTime);
             next = transform.position + moveDelta + _fallVelocity * Time.deltaTime;
 
-            float minDist = GetFallbackSurfaceRadius(radial) + footOffset;
+            float minDist = GetFallbackSurfaceRadius(radial) + GetPivotClearance(radial);
             Vector3 fromCenter = next - _planet.Center;
             if (fromCenter.magnitude < minDist)
             {
@@ -244,6 +272,23 @@ public class PlanetWalker : MonoBehaviour
             }
         }
 
+        // Safety net: whatever branch produced `next` (mesh raycast or analytic fallback),
+        // never let the character render below the known-good analytic floor. This guards
+        // against bad/stale collider data (e.g. a prop mid-rebuild) or a big delta-time spike
+        // punching the capsule through the mesh — both of which previously left the player
+        // stuck under the terrain with no way to recover.
+        Vector3 fromCenterFinal = next - _planet.Center;
+        float finalRadius = fromCenterFinal.magnitude;
+        Vector3 finalUp = finalRadius > 0.0001f ? fromCenterFinal / finalRadius : up;
+        float floorRadius = GetFallbackSurfaceRadius(finalUp) + GetPivotClearance(finalUp);
+        if (finalRadius < floorRadius - 0.001f)
+        {
+            next = _planet.Center + finalUp * floorRadius;
+            up = finalUp;
+            _grounded = true;
+            _fallVelocity = Vector3.zero;
+        }
+
         Vector3 faceDir = moveDir.sqrMagnitude > 0.001f
             ? Vector3.ProjectOnPlane(moveDir, up)
             : Vector3.ProjectOnPlane(transform.forward, up);
@@ -255,22 +300,24 @@ public class PlanetWalker : MonoBehaviour
     }
 
     /// <summary>
-    /// Capsule-cast along the tangent move so rocks/props on Ground stop the player.
-    /// Floor-like hits (normal aligned with planet up) are ignored so we can still walk onto props.
+    /// Capsule-cast along tangent move. Steep walls block; outward slopes / walkable tops are allowed
+    /// so the player can step onto rocks and props (height comes from radial snap).
     /// </summary>
     Vector3 ResolveObstacleMove(Vector3 desiredDelta, Vector3 up)
     {
         if (desiredDelta.sqrMagnitude < 0.0000001f)
             return desiredDelta;
 
-        float radius = _controller != null ? Mathf.Max(0.2f, _controller.radius * 0.9f) : 0.28f;
-        float height = _controller != null ? Mathf.Max(1.4f, _controller.height) : 1.8f;
+        float scale = Mathf.Max(transform.lossyScale.x, transform.lossyScale.y, transform.lossyScale.z);
+        float radius = (_controller != null ? Mathf.Max(0.2f, _controller.radius * 0.9f) : 0.28f) * scale;
+        float height = (_controller != null ? Mathf.Max(1.4f, _controller.height) : 1.8f) * scale;
         Vector3 bottom = transform.position + up * (radius + 0.05f);
         Vector3 top = transform.position + up * (height - radius);
 
         float dist = desiredDelta.magnitude;
         Vector3 dir = desiredDelta / dist;
         float skin = 0.04f;
+        Vector3 radial = (transform.position - _planet.Center).normalized;
 
         if (!Physics.CapsuleCast(
                 bottom,
@@ -285,20 +332,13 @@ public class PlanetWalker : MonoBehaviour
             return desiredDelta;
         }
 
-        // Standing surface under / ahead — allow (will snap onto it via radial stick).
-        if (Vector3.Dot(hit.normal, up) > 0.45f)
+        if (!IsPlanetObstacle(hit.collider))
             return desiredDelta;
 
-        // Only block planet props / planet children, not unrelated scene geometry.
-        if (_planet != null
-            && hit.collider != null
-            && hit.collider.transform != _planet.transform
-            && !hit.collider.transform.IsChildOf(_planet.transform))
-        {
+        // Floor or outward-facing slope — walk onto it; radial snap sets height.
+        if (IsWalkableObstacleHit(hit.normal, up, radial))
             return desiredDelta;
-        }
 
-        // Hard stop just before the wall, then try a single slide.
         float allowed = Mathf.Max(0f, hit.distance - skin);
         Vector3 limited = dir * allowed;
         Vector3 remainder = desiredDelta - limited;
@@ -318,16 +358,42 @@ public class PlanetWalker : MonoBehaviour
                 out RaycastHit slideHit,
                 slideDist + skin,
                 groundLayer,
-                QueryTriggerInteraction.Ignore))
+                QueryTriggerInteraction.Ignore)
+            && IsPlanetObstacle(slideHit.collider)
+            && !IsWalkableObstacleHit(slideHit.normal, up, radial))
         {
-            if (Vector3.Dot(slideHit.normal, up) <= 0.45f)
-            {
-                float slideAllowed = Mathf.Max(0f, slideHit.distance - skin);
-                return limited + slideDir * slideAllowed;
-            }
+            float slideAllowed = Mathf.Max(0f, slideHit.distance - skin);
+            return limited + slideDir * slideAllowed;
         }
 
         return limited + slide;
+    }
+
+    static bool IsWalkableObstacleHit(Vector3 normal, Vector3 up, Vector3 radial)
+    {
+        if (normal.sqrMagnitude < 0.001f)
+            return false;
+
+        normal.Normalize();
+        if (Vector3.Dot(normal, up) > 0.4f)
+            return true;
+
+        // Outward-facing prop slope (common when stepping onto a rock on the sphere).
+        return Vector3.Dot(normal, radial) > 0.2f;
+    }
+
+    bool IsPlanetObstacle(Collider col)
+    {
+        if (col == null || _planet == null)
+            return false;
+
+        if (col.transform == _planet.transform)
+            return false;
+
+        if (!col.transform.IsChildOf(_planet.transform))
+            return false;
+
+        return !IsNonBlockingPropCollider(col);
     }
 
     bool TryStickToCollider(Vector3 radial, out Vector3 feetPosition, out Vector3 normal)
@@ -348,8 +414,98 @@ public class PlanetWalker : MonoBehaviour
         if (Vector3.Dot(normal, radial) < 0f)
             normal = -normal;
 
-        feetPosition = hit.point + normal * footOffset;
+        feetPosition = hit.point + normal * GetPivotClearance(normal);
         return true;
+    }
+
+    void ResnapIfFootClearanceReady()
+    {
+        if (_planet == null)
+            return;
+
+        float previous = _footDropBelowPivot;
+        _footDropBelowPivot = -1f;
+        float next = GetFootDropBelowPivot();
+        if (previous >= 0f && Mathf.Abs(next - previous) < 0.02f)
+        {
+            _pendingFootResnap = false;
+            return;
+        }
+
+        Vector3 up = transform.position - _planet.Center;
+        if (up.sqrMagnitude < 0.0001f)
+            up = Vector3.up;
+        SnapToSurface(up);
+        _pendingFootResnap = false;
+    }
+
+    float GetPivotClearance(Vector3 up)
+    {
+        float scale = Mathf.Max(transform.lossyScale.x, transform.lossyScale.y, transform.lossyScale.z);
+        float clearance = Mathf.Max(footOffset, 0.02f * scale);
+
+        if (_controller != null)
+        {
+            // Keep the capsule bottom above the surface when the pivot sits at the feet.
+            float soleOffset = (_controller.center.y - _controller.height * 0.5f) * scale;
+            clearance = Mathf.Max(clearance, soleOffset + 0.04f * scale);
+        }
+
+        float footDrop = GetFootDropBelowPivot() * scale;
+        if (footDrop > clearance + 0.02f)
+            _pendingFootResnap = true;
+
+        return Mathf.Max(clearance, footDrop + footOffset * scale, 0.02f);
+    }
+
+    float GetFootDropBelowPivot()
+    {
+        if (_footDropBelowPivot >= 0f)
+            return _footDropBelowPivot;
+
+        float below = 0f;
+        if (_animator != null && _animator.isHuman)
+        {
+            if (!_animator.isInitialized)
+                _animator.Update(0f);
+
+            below = Mathf.Max(below, GetLocalFootDrop(_animator.GetBoneTransform(HumanBodyBones.LeftFoot)));
+            below = Mathf.Max(below, GetLocalFootDrop(_animator.GetBoneTransform(HumanBodyBones.RightFoot)));
+        }
+
+        if (below < 0.001f)
+            below = GetRendererDropBelowPivot();
+
+        if (below < 0.001f && _controller != null)
+            below = Mathf.Max(0f, _controller.height * 0.5f - _controller.center.y);
+
+        _footDropBelowPivot = below;
+        return _footDropBelowPivot;
+    }
+
+    float GetLocalFootDrop(Transform foot)
+    {
+        if (foot == null)
+            return 0f;
+
+        return Mathf.Max(0f, -transform.InverseTransformPoint(foot.position).y);
+    }
+
+    float GetRendererDropBelowPivot()
+    {
+        float below = 0f;
+        Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null || !renderer.enabled)
+                continue;
+
+            Vector3 localMin = transform.InverseTransformPoint(renderer.bounds.min);
+            below = Mathf.Max(below, -localMin.y);
+        }
+
+        return below;
     }
 
     bool TryRaycastPlanetGround(Vector3 origin, Vector3 direction, float maxDistance, out RaycastHit best)
@@ -365,28 +521,73 @@ public class PlanetWalker : MonoBehaviour
         if (hits == null || hits.Length == 0)
             return false;
 
-        float bestDist = float.MaxValue;
+        Vector3 radial = direction.sqrMagnitude > 0.001f ? -direction.normalized : Vector3.up;
+        MeshCollider tileCollider = _tiles != null ? _tiles.WalkMeshCollider : null;
+        bool tilesProvideWalkSurface = _tiles != null && _tiles.ProvidesWalkSurface;
+        float minAcceptableRadius = GetFallbackSurfaceRadius(radial) - 0.05f;
+
+        float bestRadius = -1f;
         bool found = false;
         for (int i = 0; i < hits.Length; i++)
         {
             Collider col = hits[i].collider;
-            if (col == null)
+            if (col == null || _planet == null)
                 continue;
 
-            // Prefer tile mesh / planet colliders; ignore the player capsule etc.
-            if (_planet != null
-                && (col.transform == _planet.transform || col.transform.IsChildOf(_planet.transform)))
+            if (!IsWalkSurfaceCollider(col, tileCollider, tilesProvideWalkSurface))
+                continue;
+
+            Vector3 normal = hits[i].normal.sqrMagnitude > 0.001f
+                ? hits[i].normal.normalized
+                : radial;
+            if (Vector3.Dot(normal, radial) < 0.35f)
+                continue;
+
+            float surfaceRadius = (hits[i].point - _planet.Center).magnitude;
+            if (surfaceRadius < minAcceptableRadius)
+                continue;
+
+            if (surfaceRadius > bestRadius)
             {
-                if (hits[i].distance < bestDist)
-                {
-                    bestDist = hits[i].distance;
-                    best = hits[i];
-                    found = true;
-                }
+                bestRadius = surfaceRadius;
+                best = hits[i];
+                found = true;
             }
         }
 
         return found;
+    }
+
+    static bool IsWalkSurfaceCollider(Collider col, MeshCollider tileCollider, bool tilesProvideWalkSurface)
+    {
+        if (col == null)
+            return false;
+
+        if (tilesProvideWalkSurface && tileCollider != null && tileCollider.enabled)
+            return col == tileCollider;
+
+        if (col is SphereCollider && col.GetComponent<SphericalPlanet>() != null)
+            return !tilesProvideWalkSurface || tileCollider == null || !tileCollider.enabled;
+
+        return false;
+    }
+
+    static bool IsNonBlockingPropCollider(Collider col)
+    {
+        if (col == null)
+            return true;
+
+        Transform t = col.transform;
+        while (t != null)
+        {
+            if (t.name.IndexOf("Grass", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+            if (t.GetComponent<SphericalPlanet>() != null)
+                break;
+            t = t.parent;
+        }
+
+        return false;
     }
 
     float GetFallbackSurfaceRadius(Vector3 radial)
@@ -446,8 +647,19 @@ public class PlanetWalker : MonoBehaviour
 
         if (!TryStickToCollider(up, out Vector3 point, out Vector3 normal))
         {
-            point = _planet.Center + up * (GetFallbackSurfaceRadius(up) + footOffset);
+            point = _planet.Center + up * (GetFallbackSurfaceRadius(up) + GetPivotClearance(up));
             normal = up;
+        }
+
+        // Same floor safety net as TickPlanetWalk — never spawn/snap under the analytic surface.
+        Vector3 fromCenter = point - _planet.Center;
+        float radius = fromCenter.magnitude;
+        Vector3 radialUp = radius > 0.0001f ? fromCenter / radius : normal;
+        float floorRadius = GetFallbackSurfaceRadius(radialUp) + GetPivotClearance(radialUp);
+        if (radius < floorRadius - 0.001f)
+        {
+            point = _planet.Center + radialUp * floorRadius;
+            normal = radialUp;
         }
 
         transform.position = point;

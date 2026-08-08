@@ -29,6 +29,7 @@ Primary feel reference for planet locomotion and follow camera.
 - Damp focus height separately from planar follow so hills don’t shake the camera.
 - Do **not** auto-orbit the camera when the player walks “backward” unless explicitly requested — XP Hero keeps a fixed compass.
 - Keep `followTargetFacing` off for the default casual XP Hero feel.
+- Motion framing: slight zoom-out punch when walk starts, then settle into a more top-down travel pitch + look-ahead so sphere foreshortening stays readable. Idle framing returns softly.
 
 ## When changing camera/controls
 
