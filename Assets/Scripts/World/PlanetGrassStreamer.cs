@@ -16,10 +16,13 @@ using UnityEngine;
 /// assigned grass variants (Grass1 / Grass2 / Grass3 / Grass_Luminous_Toadstool / Hollow_Log),
 /// weighted by their respective sliders.
 ///
+/// Lives on the shared "Streamers" GameObject alongside the tree/rock streamers, not on the planet
+/// itself — keeps the planet hierarchy free of manager components. Assign <see cref="planet"/>
+/// explicitly, or leave it empty to auto-resolve via <see cref="SphericalPlanet.Instance"/>.
+///
 /// Menu: BackHome → Setup Nyxara Grass Streaming (adds this + wires all grass prefabs).
 /// </summary>
 [DisallowMultipleComponent]
-[RequireComponent(typeof(SphericalPlanet))]
 public class PlanetGrassStreamer : MonoBehaviour
 {
     const int Grass1Index = 0;
@@ -38,6 +41,10 @@ public class PlanetGrassStreamer : MonoBehaviour
         Grass4,
         Grass5,
     }
+
+    [Header("Planet")]
+    [Tooltip("Planet to stream grass onto. Leave empty to use SphericalPlanet.Instance / first in scene.")]
+    [SerializeField] SphericalPlanet planet;
 
     [Header("Prefabs")]
     [SerializeField] GameObject grass1Prefab;
@@ -114,8 +121,10 @@ public class PlanetGrassStreamer : MonoBehaviour
 
     void Awake()
     {
-        _planet = GetComponent<SphericalPlanet>();
-        _tiles = GetComponent<PlanetTileMap>();
+        _planet = ResolvePlanet();
+        _tiles = _planet != null ? _planet.GetComponent<PlanetTileMap>() : null;
+        if (_planet == null)
+            Debug.LogWarning("[PlanetGrassStreamer] No planet assigned and none found in the scene — grass streaming disabled.", this);
         MigrateLegacyPrefabs();
 
         WarnIfPrefabMissing(grass1Prefab, "Grass1");
@@ -187,12 +196,19 @@ public class PlanetGrassStreamer : MonoBehaviour
 #if UNITY_EDITOR
         // Safety net when the scene component is missing newer serialized fields (Unity sometimes
         // drops them if the scene was saved before the script recompiled).
-        const string grassFolder = "Assets/Galaxy/Planets/Nyxara/Objects/Models/Grass";
+        const string grassFolder = "Assets/Galaxy/Planets/Nyxara/Environment/Grass";
         if (grass4Prefab == null)
             grass4Prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(grassFolder + "/Grass_Luminous_Toadstool.prefab");
         if (grass5Prefab == null)
             grass5Prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(grassFolder + "/Hollow_Log.prefab");
 #endif
+    }
+
+    SphericalPlanet ResolvePlanet()
+    {
+        if (planet != null)
+            return planet;
+        return SphericalPlanet.Instance != null ? SphericalPlanet.Instance : FindAnyObjectByType<SphericalPlanet>();
     }
 
     void WarnIfPrefabMissing(GameObject prefab, string label)

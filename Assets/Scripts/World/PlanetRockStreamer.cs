@@ -7,10 +7,13 @@ using UnityEngine;
 /// one rock per walkable grass tile (when the density roll succeeds), weighted random mix among
 /// Rock / Rock2 / Rock3 / Rock4, colliders and shadows on by default.
 ///
+/// Lives on the shared "Streamers" GameObject alongside the grass/tree streamers, not on the planet
+/// itself — keeps the planet hierarchy free of manager components. Assign <see cref="planet"/>
+/// explicitly, or leave it empty to auto-resolve via <see cref="SphericalPlanet.Instance"/>.
+///
 /// Menu: BackHome → Setup Nyxara Rock Streaming (adds this + wires Rock..Rock4).
 /// </summary>
 [DisallowMultipleComponent]
-[RequireComponent(typeof(SphericalPlanet))]
 public class PlanetRockStreamer : MonoBehaviour
 {
     const int Rock1Index = 0;
@@ -27,6 +30,10 @@ public class PlanetRockStreamer : MonoBehaviour
         Rock3,
         Rock4,
     }
+
+    [Header("Planet")]
+    [Tooltip("Planet to stream rocks onto. Leave empty to use SphericalPlanet.Instance / first in scene.")]
+    [SerializeField] SphericalPlanet planet;
 
     [Header("Prefabs")]
     [SerializeField] GameObject rock1Prefab;
@@ -92,8 +99,10 @@ public class PlanetRockStreamer : MonoBehaviour
 
     void Awake()
     {
-        _planet = GetComponent<SphericalPlanet>();
-        _tiles = GetComponent<PlanetTileMap>();
+        _planet = ResolvePlanet();
+        _tiles = _planet != null ? _planet.GetComponent<PlanetTileMap>() : null;
+        if (_planet == null)
+            Debug.LogWarning("[PlanetRockStreamer] No planet assigned and none found in the scene — rock streaming disabled.", this);
 
         WarnIfPrefabMissing(rock1Prefab, "Rock");
         WarnIfPrefabMissing(rock2Prefab, "Rock2");
@@ -156,6 +165,13 @@ public class PlanetRockStreamer : MonoBehaviour
     {
         if (prefab == null)
             Debug.LogWarning($"[PlanetRockStreamer] {label} Prefab is not assigned — it will be skipped. Assign it in the Inspector or re-run BackHome → Setup Nyxara Rock Streaming.", this);
+    }
+
+    SphericalPlanet ResolvePlanet()
+    {
+        if (planet != null)
+            return planet;
+        return SphericalPlanet.Instance != null ? SphericalPlanet.Instance : FindAnyObjectByType<SphericalPlanet>();
     }
 
     bool HasAnyPrefab() => rock1Prefab != null || rock2Prefab != null || rock3Prefab != null || rock4Prefab != null;

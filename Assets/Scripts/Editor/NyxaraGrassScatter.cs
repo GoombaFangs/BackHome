@@ -16,7 +16,7 @@ using UnityEngine.SceneManagement;
 public static class NyxaraGrassScatter
 {
     const string ScenePath = "Assets/Scenes/Galaxy/PlanetNyxara.unity";
-    const string GrassFolder = "Assets/Galaxy/Planets/Nyxara/Objects/Models/Grass";
+    const string GrassFolder = "Assets/Galaxy/Planets/Nyxara/Environment/Grass";
     const string GrassPrefabPath = GrassFolder + "/Grass.prefab";
     const string Grass2PrefabPath = GrassFolder + "/Grass2.prefab";
     const string Grass3PrefabPath = GrassFolder + "/Grass3.prefab";
@@ -87,12 +87,14 @@ public static class NyxaraGrassScatter
             return missingMessage;
         }
 
-        PlanetGrassStreamer streamer = planet.GetComponent<PlanetGrassStreamer>();
+        Transform streamersRoot = NyxaraStreamersRoot.FindOrCreate();
+        PlanetGrassStreamer streamer = streamersRoot.GetComponent<PlanetGrassStreamer>();
         bool isNew = streamer == null;
         if (isNew)
-            streamer = Undo.AddComponent<PlanetGrassStreamer>(planet.gameObject);
+            streamer = Undo.AddComponent<PlanetGrassStreamer>(streamersRoot.gameObject);
 
         var so = new SerializedObject(streamer);
+        so.FindProperty("planet").objectReferenceValue = planet;
         so.FindProperty("grass1Prefab").objectReferenceValue = grassPrefab;
         so.FindProperty("grass2Prefab").objectReferenceValue = grass2Prefab;
         so.FindProperty("grass3Prefab").objectReferenceValue = grass3Prefab;
@@ -106,7 +108,7 @@ public static class NyxaraGrassScatter
 
         string resultMessage = $"Removed {removed} static grass objects.\n"
                                 + (isNew ? "Added" : "Updated")
-                                + " PlanetGrassStreamer (Grass/Grass2/Grass3/Grass_Luminous_Toadstool/Hollow_Log) — grass now streams in near the player at runtime.";
+                                + " PlanetGrassStreamer on 'Streamers' (Grass/Grass2/Grass3/Grass_Luminous_Toadstool/Hollow_Log) — grass now streams in near the player at runtime.";
         Debug.Log($"[BackHome] {resultMessage}");
         return resultMessage;
     }

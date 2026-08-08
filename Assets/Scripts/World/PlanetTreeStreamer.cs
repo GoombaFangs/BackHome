@@ -9,13 +9,16 @@ using UnityEngine;
 /// visually prominent (unlike grass blades where disabling both is basically free and unnoticed).
 ///
 /// Each walkable tile gets one deterministic roll: empty, or one of the assigned tree variants
-/// (Tree1 / Tree2 / Tree3 / Tree4 / Tree5 / Tree6), weighted by their respective sliders. A variant
+/// (Tree1 / Tree2 / Tree3 / Tree4 / Tree5), weighted by their respective sliders. A variant
 /// with no prefab assigned is skipped automatically rather than distorting the others' odds.
 ///
-/// Menu: BackHome → Setup Nyxara Tree Streaming (adds this + wires Tree1..Tree6).
+/// Lives on the shared "Streamers" GameObject alongside the grass/rock streamers, not on the planet
+/// itself — keeps the planet hierarchy free of manager components. Assign <see cref="planet"/>
+/// explicitly, or leave it empty to auto-resolve via <see cref="SphericalPlanet.Instance"/>.
+///
+/// Menu: BackHome → Setup Nyxara Tree Streaming (adds this + wires Tree1..Tree5).
 /// </summary>
 [DisallowMultipleComponent]
-[RequireComponent(typeof(SphericalPlanet))]
 public class PlanetTreeStreamer : MonoBehaviour
 {
     const int Tree1Index = 0;
@@ -23,8 +26,7 @@ public class PlanetTreeStreamer : MonoBehaviour
     const int Tree3Index = 2;
     const int Tree4Index = 3;
     const int Tree5Index = 4;
-    const int Tree6Index = 5;
-    const int PoolCount = 6;
+    const int PoolCount = 5;
 
     enum TreePick
     {
@@ -34,8 +36,11 @@ public class PlanetTreeStreamer : MonoBehaviour
         Tree3,
         Tree4,
         Tree5,
-        Tree6,
     }
+
+    [Header("Planet")]
+    [Tooltip("Planet to stream trees onto. Leave empty to use SphericalPlanet.Instance / first in scene.")]
+    [SerializeField] SphericalPlanet planet;
 
     [Header("Prefabs")]
     [SerializeField] GameObject tree1Prefab;
@@ -43,7 +48,6 @@ public class PlanetTreeStreamer : MonoBehaviour
     [SerializeField] GameObject tree3Prefab;
     [SerializeField] GameObject tree4Prefab;
     [SerializeField] GameObject tree5Prefab;
-    [SerializeField] GameObject tree6Prefab;
 
     [Header("Streaming Range")]
     [Tooltip("World-space radius around the player kept filled with trees. Push this out past what the camera can actually see (screen edge or planet horizon) so spawn/despawn pop-in happens off-screen instead of in view.")]
@@ -54,13 +58,12 @@ public class PlanetTreeStreamer : MonoBehaviour
     [Header("Density")]
     [Tooltip("Master tree amount. 0 = no trees, 1 = a tree on every walkable tile. Trees are large — keep this far lower than grass density.")]
     [SerializeField, Range(0f, 1f)] float density = 0.03f;
-    [Tooltip("Relative mix between the six tree variants on tiles that do get a tree (does not affect overall density). A variant with no prefab assigned is skipped automatically.")]
+    [Tooltip("Relative mix between the five tree variants on tiles that do get a tree (does not affect overall density). A variant with no prefab assigned is skipped automatically.")]
     [SerializeField, Min(0f)] float tree1Weight = 1f;
     [SerializeField, Min(0f)] float tree2Weight = 1f;
     [SerializeField, Min(0f)] float tree3Weight = 1f;
     [SerializeField, Min(0f)] float tree4Weight = 1f;
     [SerializeField, Min(0f)] float tree5Weight = 1f;
-    [SerializeField, Min(0f)] float tree6Weight = 1f;
     [Tooltip("How far a tree can drift from its tile center.")]
     [SerializeField, Min(0f)] float jitterRadius = 1.2f;
     [SerializeField] float hover = 0.05f;
@@ -110,15 +113,16 @@ public class PlanetTreeStreamer : MonoBehaviour
 
     void Awake()
     {
-        _planet = GetComponent<SphericalPlanet>();
-        _tiles = GetComponent<PlanetTileMap>();
+        _planet = ResolvePlanet();
+        _tiles = _planet != null ? _planet.GetComponent<PlanetTileMap>() : null;
+        if (_planet == null)
+            Debug.LogWarning("[PlanetTreeStreamer] No planet assigned and none found in the scene — tree streaming disabled.", this);
 
         WarnIfPrefabMissing(tree1Prefab, "Tree1");
         WarnIfPrefabMissing(tree2Prefab, "Tree2");
         WarnIfPrefabMissing(tree3Prefab, "Tree3");
         WarnIfPrefabMissing(tree4Prefab, "Tree4");
         WarnIfPrefabMissing(tree5Prefab, "Tree5");
-        WarnIfPrefabMissing(tree6Prefab, "Tree6");
 
         var rootGo = new GameObject("TreeStream (Runtime)");
         rootGo.hideFlags = HideFlags.DontSave;
@@ -179,7 +183,14 @@ public class PlanetTreeStreamer : MonoBehaviour
             Debug.LogWarning($"[PlanetTreeStreamer] {label} Prefab is not assigned — it will be skipped. Assign it in the Inspector or re-run BackHome → Setup Nyxara Tree Streaming.", this);
     }
 
-    bool HasAnyPrefab() => tree1Prefab != null || tree2Prefab != null || tree3Prefab != null || tree4Prefab != null || tree5Prefab != null || tree6Prefab != null;
+    SphericalPlanet ResolvePlanet()
+    {
+        if (planet != null)
+            return planet;
+        return SphericalPlanet.Instance != null ? SphericalPlanet.Instance : FindAnyObjectByType<SphericalPlanet>();
+    }
+
+    bool HasAnyPrefab() => tree1Prefab != null || tree2Prefab != null || tree3Prefab != null || tree4Prefab != null || tree5Prefab != null;
 
     GameObject PrefabAt(int index)
     {
@@ -190,7 +201,6 @@ public class PlanetTreeStreamer : MonoBehaviour
             case Tree3Index: return tree3Prefab;
             case Tree4Index: return tree4Prefab;
             case Tree5Index: return tree5Prefab;
-            case Tree6Index: return tree6Prefab;
             default: return null;
         }
     }
@@ -325,9 +335,8 @@ public class PlanetTreeStreamer : MonoBehaviour
         float w3 = tree3Prefab != null ? tree3Weight : 0f;
         float w4 = tree4Prefab != null ? tree4Weight : 0f;
         float w5 = tree5Prefab != null ? tree5Weight : 0f;
-        float w6 = tree6Prefab != null ? tree6Weight : 0f;
 
-        float total = w1 + w2 + w3 + w4 + w5 + w6;
+        float total = w1 + w2 + w3 + w4 + w5;
         if (total <= 0f)
             return TreePick.Empty;
 
@@ -343,10 +352,7 @@ public class PlanetTreeStreamer : MonoBehaviour
         roll -= w3;
         if (roll < w4)
             return TreePick.Tree4;
-        roll -= w4;
-        if (roll < w5)
-            return TreePick.Tree5;
-        return TreePick.Tree6;
+        return TreePick.Tree5;
     }
 
     int PrefabIndexFor(TreePick pick)
@@ -358,7 +364,6 @@ public class PlanetTreeStreamer : MonoBehaviour
             case TreePick.Tree3: return Tree3Index;
             case TreePick.Tree4: return Tree4Index;
             case TreePick.Tree5: return Tree5Index;
-            case TreePick.Tree6: return Tree6Index;
             default: return -1;
         }
     }
@@ -438,7 +443,6 @@ public class PlanetTreeStreamer : MonoBehaviour
             case Tree3Index: return "Tree3";
             case Tree4Index: return "Tree4";
             case Tree5Index: return "Tree5";
-            case Tree6Index: return "Tree6";
             default: return "Tree";
         }
     }

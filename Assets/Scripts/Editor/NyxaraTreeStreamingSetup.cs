@@ -6,7 +6,7 @@ using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Editor tooling for Nyxara tree streaming — mirrors <see cref="NyxaraGrassScatter"/>'s streaming
-/// setup but wires up <see cref="PlanetTreeStreamer"/> with Tree1..Tree6. Tree_Emerald_Canopy and
+/// setup but wires up <see cref="PlanetTreeStreamer"/> with Tree1..Tree5. Tree_Emerald_Canopy and
 /// Tree_Verdant_Crown are intentionally excluded (kept as hand-placed decoration, not part of the
 /// streamed mix).
 /// Menu: BackHome → Setup Nyxara Tree Streaming (Recommended)
@@ -14,13 +14,12 @@ using UnityEngine.SceneManagement;
 public static class NyxaraTreeStreamingSetup
 {
     const string ScenePath = "Assets/Scenes/Galaxy/PlanetNyxara.unity";
-    const string TreesFolder = "Assets/Galaxy/Planets/Nyxara/Objects/Models/Trees";
+    const string TreesFolder = "Assets/Galaxy/Planets/Nyxara/Environment/Trees";
     const string Tree1PrefabPath = TreesFolder + "/Tree1.prefab";
     const string Tree2PrefabPath = TreesFolder + "/Tree2.prefab";
     const string Tree3PrefabPath = TreesFolder + "/Tree3.prefab";
     const string Tree4PrefabPath = TreesFolder + "/Tree4.prefab";
     const string Tree5PrefabPath = TreesFolder + "/Tree5.prefab";
-    const string Tree6PrefabPath = TreesFolder + "/Tree6.prefab";
 
     [MenuItem("BackHome/Setup Nyxara Tree Streaming (Recommended)")]
     public static void SetupStreamingMenu()
@@ -63,8 +62,7 @@ public static class NyxaraTreeStreamingSetup
         GameObject tree3 = AssetDatabase.LoadAssetAtPath<GameObject>(Tree3PrefabPath);
         GameObject tree4 = AssetDatabase.LoadAssetAtPath<GameObject>(Tree4PrefabPath);
         GameObject tree5 = AssetDatabase.LoadAssetAtPath<GameObject>(Tree5PrefabPath);
-        GameObject tree6 = AssetDatabase.LoadAssetAtPath<GameObject>(Tree6PrefabPath);
-        if (tree1 == null || tree2 == null || tree3 == null || tree4 == null || tree5 == null || tree6 == null)
+        if (tree1 == null || tree2 == null || tree3 == null || tree4 == null || tree5 == null)
         {
             string missingMessage =
                 "Missing prefab(s).\n"
@@ -72,24 +70,24 @@ public static class NyxaraTreeStreamingSetup
                 + $"Tree2: {(tree2 != null ? "OK" : "MISSING")}\n"
                 + $"Tree3: {(tree3 != null ? "OK" : "MISSING")}\n"
                 + $"Tree4: {(tree4 != null ? "OK" : "MISSING")}\n"
-                + $"Tree5: {(tree5 != null ? "OK" : "MISSING")}\n"
-                + $"Tree6: {(tree6 != null ? "OK" : "MISSING")}";
+                + $"Tree5: {(tree5 != null ? "OK" : "MISSING")}";
             Debug.LogError($"[BackHome] Tree Streaming: {missingMessage}");
             return missingMessage;
         }
 
-        PlanetTreeStreamer streamer = planet.GetComponent<PlanetTreeStreamer>();
+        Transform streamersRoot = NyxaraStreamersRoot.FindOrCreate();
+        PlanetTreeStreamer streamer = streamersRoot.GetComponent<PlanetTreeStreamer>();
         bool isNew = streamer == null;
         if (isNew)
-            streamer = Undo.AddComponent<PlanetTreeStreamer>(planet.gameObject);
+            streamer = Undo.AddComponent<PlanetTreeStreamer>(streamersRoot.gameObject);
 
         var so = new SerializedObject(streamer);
+        so.FindProperty("planet").objectReferenceValue = planet;
         so.FindProperty("tree1Prefab").objectReferenceValue = tree1;
         so.FindProperty("tree2Prefab").objectReferenceValue = tree2;
         so.FindProperty("tree3Prefab").objectReferenceValue = tree3;
         so.FindProperty("tree4Prefab").objectReferenceValue = tree4;
         so.FindProperty("tree5Prefab").objectReferenceValue = tree5;
-        so.FindProperty("tree6Prefab").objectReferenceValue = tree6;
         so.ApplyModifiedPropertiesWithoutUndo();
 
         EditorUtility.SetDirty(streamer);
@@ -97,7 +95,7 @@ public static class NyxaraTreeStreamingSetup
         AssetDatabase.SaveAssets();
 
         string resultMessage = (isNew ? "Added" : "Updated")
-                                + " PlanetTreeStreamer (Tree1/Tree2/Tree3/Tree4/Tree5/Tree6) — trees now stream in near the player at runtime.";
+                                + " PlanetTreeStreamer on 'Streamers' (Tree1/Tree2/Tree3/Tree4/Tree5) — trees now stream in near the player at runtime.";
         Debug.Log($"[BackHome] {resultMessage}");
         return resultMessage;
     }

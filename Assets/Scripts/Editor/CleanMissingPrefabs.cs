@@ -5,7 +5,9 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// Removes Missing Prefab instances left behind after deleting assets (e.g. GrondPlanet).
+/// Removes Missing Prefab instances left behind after deleting prefab assets that are
+/// still referenced by scene objects. Runs automatically once per editor session and is
+/// also available as a manual menu command.
 /// </summary>
 public static class CleanMissingPrefabs
 {
@@ -44,7 +46,7 @@ public static class CleanMissingPrefabs
                 return;
 
             EditorSceneManager.MarkAllScenesDirty();
-            Debug.Log($"[BackHome] Auto-removed {removed} missing prefab instance(s). Save PlanetNyxara (Ctrl+S).");
+            Debug.Log($"[BackHome] Auto-removed {removed} missing prefab instance(s). Save the open scene(s) (Ctrl+S).");
         };
     }
 

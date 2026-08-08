@@ -27,8 +27,6 @@ public class PlanetTileMap : MonoBehaviour
 
     [Header("Tileset")]
     [SerializeField] PlanetTileset tileset;
-    [Tooltip("Legacy palette — unused when tileset is assigned.")]
-    [SerializeField] PlanetTilePalette palette;
 
     [Header("Mesh")]
     [Tooltip("Slight scale to hide seams when blocks are off. Ignored while blocks are enabled.")]
@@ -86,7 +84,6 @@ public class PlanetTileMap : MonoBehaviour
     Material _runtimeMaterial;
 
     public PlanetTileset Tileset => tileset;
-    public PlanetTilePalette Palette => palette;
     public int TilesAroundEquator => tilesAroundEquator;
     public int LatitudeBands => latitudeBands;
     public int LongitudeBands => longitudeBands;

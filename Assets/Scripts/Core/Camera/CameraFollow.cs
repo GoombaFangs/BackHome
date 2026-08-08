@@ -38,28 +38,28 @@ public class CameraFollow : MonoBehaviour
     [Tooltip("Pull framing out while moving, then settle into a sphere-readable travel pose.")]
     [SerializeField] bool enableMotionFraming = true;
     [Tooltip("Extra height while moving (dolly zoom-out).")]
-    [SerializeField] float moveExtraHeight = 2.2f;
+    [SerializeField] float moveExtraHeight = 1.1f;
     [Tooltip("Extra back distance while moving.")]
-    [SerializeField] float moveExtraBack = 1.4f;
+    [SerializeField] float moveExtraBack = 0.7f;
     [Tooltip("Extra FOV while moving (subtle perspective widen). 0 = leave FOV alone.")]
-    [SerializeField] float moveExtraFov = 3.5f;
+    [SerializeField] float moveExtraFov = 1.5f;
     [Tooltip("Onset punch multiplier on the motion zoom when walk starts.")]
-    [SerializeField] float walkStartBoost = 1.4f;
+    [SerializeField] float walkStartBoost = 1.12f;
     [Tooltip("How long the start boost fades into sustained travel framing.")]
-    [SerializeField] float walkStartBoostDuration = 0.55f;
+    [SerializeField] float walkStartBoostDuration = 0.9f;
     [Tooltip("How fast framing expands when motion begins.")]
-    [SerializeField] float zoomOutSpeed = 7f;
+    [SerializeField] float zoomOutSpeed = 3.5f;
     [Tooltip("How fast framing returns when stopping.")]
-    [SerializeField] float zoomInSpeed = 3.2f;
+    [SerializeField] float zoomInSpeed = 2.2f;
     [Tooltip("Seconds of continuous walking before full sustained perspective correction.")]
-    [SerializeField] float sustainSettleTime = 1.35f;
+    [SerializeField] float sustainSettleTime = 2f;
     [Tooltip("During sustained walk, bias pitch more top-down (extra height, less back) so sphere curvature reads flatter.")]
-    [SerializeField] float sustainPitchHeight = 1.6f;
+    [SerializeField] float sustainPitchHeight = 0.8f;
     [Tooltip("During sustained walk, reduce back offset (pairs with sustainPitchHeight).")]
-    [SerializeField] float sustainPitchBack = -0.6f;
+    [SerializeField] float sustainPitchBack = -0.3f;
     [Tooltip("Focus look-ahead along move direction (world units at full motion).")]
-    [SerializeField] float lookAheadDistance = 2.8f;
-    [SerializeField] float lookAheadSmoothSpeed = 6f;
+    [SerializeField] float lookAheadDistance = 1.4f;
+    [SerializeField] float lookAheadSmoothSpeed = 3.5f;
     [Tooltip("Fallback speed used to normalize velocity when PlanetWalker is absent.")]
     [SerializeField] float referenceMoveSpeed = 12f;
 
@@ -189,8 +189,8 @@ public class CameraFollow : MonoBehaviour
             : (zoomInSpeed <= 0f ? 1f : 1f - Mathf.Exp(-zoomInSpeed * Time.deltaTime));
         _smoothedMotion = Mathf.Lerp(_smoothedMotion, amount, motionT);
 
-        // Punch zoom when motion rises from near-idle.
-        if (amount > 0.15f && previousMotion < 0.12f)
+        // Soft onset: only a gentle nudge when leaving idle, not a hard punch.
+        if (amount > 0.2f && previousMotion < 0.08f)
             _onsetBoost = Mathf.Max(_onsetBoost, walkStartBoost);
 
         if (_onsetBoost > 1.001f)
@@ -198,7 +198,7 @@ public class CameraFollow : MonoBehaviour
             float decay = walkStartBoostDuration <= 0.01f
                 ? 1f
                 : Time.deltaTime / walkStartBoostDuration;
-            _onsetBoost = Mathf.Lerp(_onsetBoost, 1f, Mathf.Clamp01(decay));
+            _onsetBoost = Mathf.Lerp(_onsetBoost, 1f, Mathf.Clamp01(decay * 0.65f));
         }
         else
         {
@@ -208,12 +208,13 @@ public class CameraFollow : MonoBehaviour
         if (amount > 0.08f)
             _movingTimer += Time.deltaTime;
         else
-            _movingTimer = Mathf.Max(0f, _movingTimer - Time.deltaTime * 1.6f);
+            _movingTimer = Mathf.Max(0f, _movingTimer - Time.deltaTime * 0.9f);
 
         float sustainTarget = sustainSettleTime <= 0.01f
             ? (amount > 0.08f ? 1f : 0f)
             : Mathf.Clamp01(_movingTimer / sustainSettleTime);
-        float sustainT = 1f - Mathf.Exp(-(amount > 0.08f ? 3.5f : zoomInSpeed) * Time.deltaTime);
+        float sustainBlend = amount > 0.08f ? Mathf.Min(zoomOutSpeed, 2.2f) : zoomInSpeed;
+        float sustainT = 1f - Mathf.Exp(-sustainBlend * Time.deltaTime);
         _sustainAmount = Mathf.Lerp(_sustainAmount, sustainTarget * _smoothedMotion, sustainT);
 
         Vector3 lookDir = Vector3.ProjectOnPlane(velocity, up);

@@ -12,7 +12,7 @@ using UnityEngine.SceneManagement;
 public static class NyxaraRockStreamingSetup
 {
     const string ScenePath = "Assets/Scenes/Galaxy/PlanetNyxara.unity";
-    const string RocksFolder = "Assets/Galaxy/Planets/Nyxara/Objects/Models/Rock";
+    const string RocksFolder = "Assets/Galaxy/Planets/Nyxara/Environment/Rock";
     const string Rock1PrefabPath = RocksFolder + "/Rock.prefab";
     const string Rock2PrefabPath = RocksFolder + "/Rock2.prefab";
     const string Rock3PrefabPath = RocksFolder + "/Rock3.prefab";
@@ -70,12 +70,14 @@ public static class NyxaraRockStreamingSetup
             return missingMessage;
         }
 
-        PlanetRockStreamer streamer = planet.GetComponent<PlanetRockStreamer>();
+        Transform streamersRoot = NyxaraStreamersRoot.FindOrCreate();
+        PlanetRockStreamer streamer = streamersRoot.GetComponent<PlanetRockStreamer>();
         bool isNew = streamer == null;
         if (isNew)
-            streamer = Undo.AddComponent<PlanetRockStreamer>(planet.gameObject);
+            streamer = Undo.AddComponent<PlanetRockStreamer>(streamersRoot.gameObject);
 
         var so = new SerializedObject(streamer);
+        so.FindProperty("planet").objectReferenceValue = planet;
         so.FindProperty("rock1Prefab").objectReferenceValue = rock1;
         so.FindProperty("rock2Prefab").objectReferenceValue = rock2;
         so.FindProperty("rock3Prefab").objectReferenceValue = rock3;
@@ -87,7 +89,7 @@ public static class NyxaraRockStreamingSetup
         AssetDatabase.SaveAssets();
 
         string resultMessage = (isNew ? "Added" : "Updated")
-                                + " PlanetRockStreamer (Rock/Rock2/Rock3/Rock4) — rocks now stream in near the player at runtime.";
+                                + " PlanetRockStreamer on 'Streamers' (Rock/Rock2/Rock3/Rock4) — rocks now stream in near the player at runtime.";
         Debug.Log($"[BackHome] {resultMessage}");
         return resultMessage;
     }

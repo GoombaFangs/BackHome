@@ -82,7 +82,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlanetTileMap
   tilesAroundEquator: 72
   tileset: {fileID: 11400000, guid: c8d9e0f1a2b34567890abcdef1234567, type: 2}
-  palette: {fileID: 0}
   overlap: 1
   surfaceLift: 0.08
   hidePlanetBaseMesh: 1

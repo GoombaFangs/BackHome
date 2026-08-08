@@ -9,7 +9,6 @@ using UnityEngine;
 /// Creates URP Lit materials + ready prefabs for every FBX under Nyxara/Models.
 /// Menu: BackHome → Setup All Nyxara Prop Prefabs
 /// </summary>
-/// PROP_COLLIDER_BUILD
 public static class NyxaraPropPrefabSetup
 {
     const string Root = "Assets/Galaxy/Planets/Nyxara";
