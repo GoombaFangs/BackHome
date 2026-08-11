@@ -38,8 +38,6 @@ public class AttackRangeIndicator : MonoBehaviour
     float _forcedRadius = -1f;
 
     /// <summary>Current ring radius in world units.</summary>
-    public float WorldRadius => _worldRadius;
-
     public float GetCombatRadius() => _worldRadius;
 
     /// <summary>Force a radius (skips parent stats). Pass &lt;= 0 to clear.</summary>

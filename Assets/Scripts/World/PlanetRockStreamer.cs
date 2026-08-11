@@ -74,11 +74,6 @@ public class PlanetRockStreamer : MonoBehaviour
     [Tooltip("Set automatically by PlanetEnvironmentManager when present. Per-region rock lists live on the region set asset.")]
     [SerializeField] PlanetEnvironmentRegionSet regionSet;
 
-    bool _useAreaStream;
-    Transform _areaAnchor;
-    float _areaRadius;
-    float _areaActivationRadius;
-    PlanetEnvironmentRegionSet.WeightedPrefab[] _areaPrefabs;
     bool _rootCreated;
 
     SphericalPlanet _planet;
@@ -120,7 +115,7 @@ public class PlanetRockStreamer : MonoBehaviour
         if (_planet == null)
             Debug.LogWarning("[PlanetRockStreamer] No planet assigned and none found in the scene — rock streaming disabled.", this);
 
-        if (regionSet == null && !_useAreaStream)
+        if (regionSet == null)
         {
             WarnIfPrefabMissing(rock1Prefab, "Rock");
             WarnIfPrefabMissing(rock2Prefab, "Rock2");
@@ -151,36 +146,11 @@ public class PlanetRockStreamer : MonoBehaviour
         regionSet = set;
     }
 
-    public void ConfigureAreaStream(
-        SphericalPlanet targetPlanet,
-        Transform anchor,
-        float worldRadius,
-        PlanetEnvironmentRegionSet.WeightedPrefab[] prefabs,
-        float playerActivationRadius)
-    {
-        planet = targetPlanet;
-        _planet = targetPlanet;
-        _tiles = _planet != null ? _planet.GetComponent<PlanetTileMap>() : null;
-        _useAreaStream = anchor != null && worldRadius > 0.01f;
-        _areaAnchor = anchor;
-        _areaRadius = worldRadius;
-        _areaPrefabs = prefabs;
-        _areaActivationRadius = playerActivationRadius;
-        regionSet = null;
-        EnsureRuntimeRoot();
-    }
-
     void EnsureRuntimeRoot()
     {
         if (_rootCreated)
             return;
         _rootCreated = true;
-
-        if (_useAreaStream && _areaAnchor != null)
-        {
-            _root = transform;
-            return;
-        }
 
         var rootGo = new GameObject("RockStream (Runtime)");
         rootGo.hideFlags = HideFlags.DontSave;
@@ -203,18 +173,6 @@ public class PlanetRockStreamer : MonoBehaviour
 
     void OnDestroy()
     {
-        if (_useAreaStream)
-        {
-            foreach (KeyValuePair<int, ActiveRock> pair in _active)
-            {
-                if (pair.Value.Instance != null)
-                    Destroy(pair.Value.Instance);
-            }
-
-            _active.Clear();
-            return;
-        }
-
         if (_root != null)
             Destroy(_root.gameObject);
     }
@@ -257,8 +215,7 @@ public class PlanetRockStreamer : MonoBehaviour
     }
 
     bool HasAnyPrefab() =>
-        (_useAreaStream && PlanetAreaStreamHelper.HasAnyPrefab(_areaPrefabs))
-        || regionSet != null
+        regionSet != null
         || rock1Prefab != null
         || rock2Prefab != null
         || rock3Prefab != null
@@ -308,21 +265,8 @@ public class PlanetRockStreamer : MonoBehaviour
         if (playerAnchor == null)
             return;
 
-        if (_useAreaStream)
-        {
-            if (_areaAnchor == null)
-                return;
-
-            if (!PlanetAreaStreamHelper.IsPlayerNearArea(_planet, playerAnchor.position, _areaAnchor.position, _areaActivationRadius))
-            {
-                DespawnAllActive();
-                return;
-            }
-        }
-
-        Transform scanAnchor = _useAreaStream ? _areaAnchor : playerAnchor;
-        Vector3 anchorPos = scanAnchor.position;
-        float scanRadius = _useAreaStream ? _areaRadius : visibleRadius;
+        Vector3 anchorPos = playerAnchor.position;
+        float scanRadius = visibleRadius;
 
         _longitudeBandsAtSetup = _tiles.LongitudeBands;
         if (!_tiles.WorldToCell(anchorPos, out int centerLat, out int centerLon))
@@ -361,7 +305,7 @@ public class PlanetRockStreamer : MonoBehaviour
                 if (!_tiles.TryGetCellCenter(lat, lon, out Vector3 cellCenter))
                     continue;
 
-                Vector3 up = regionSet != null || _useAreaStream ? (cellCenter - _planet.Center).normalized : default;
+                Vector3 up = regionSet != null ? (cellCenter - _planet.Center).normalized : default;
                 int regionIndex = regionSet != null ? regionSet.GetRegionIndex(up) : -1;
                 float effectiveDensity = regionSet != null
                     ? regionSet.GetEffectiveDensity(density, regionIndex, regionSet.GetRockDensityMultiplier(regionIndex))
@@ -375,9 +319,6 @@ public class PlanetRockStreamer : MonoBehaviour
 
                 float sqrDist = (cellCenter - anchorPos).sqrMagnitude;
                 if (sqrDist > sqrRadius)
-                    continue;
-
-                if (_useAreaStream && !PlanetAreaStreamHelper.IsWithinDisk(_planet, _areaAnchor.position, _areaRadius, cellCenter))
                     continue;
 
                 if (!TryResolveVariant(lat, lon, up, 17, out int prefabIndex, out GameObject regionPrefab))
@@ -425,12 +366,6 @@ public class PlanetRockStreamer : MonoBehaviour
     {
         prefabIndex = -1;
         regionPrefab = null;
-
-        if (_useAreaStream && PlanetAreaStreamHelper.HasAnyPrefab(_areaPrefabs))
-        {
-            regionPrefab = PlanetEnvironmentRegionSet.PickWeighted(_areaPrefabs, Hash01(lat, lon, salt));
-            return regionPrefab != null;
-        }
 
         if (regionSet != null)
         {
@@ -601,19 +536,6 @@ public class PlanetRockStreamer : MonoBehaviour
 
         _loggedMissingPrefab = true;
         Debug.LogWarning($"[PlanetRockStreamer] Missing {NameFor(prefabIndex)} prefab — assign it on the component.", this);
-    }
-
-    void DespawnAllActive()
-    {
-        if (_active.Count == 0)
-            return;
-
-        _toDespawn.Clear();
-        foreach (KeyValuePair<int, ActiveRock> pair in _active)
-            _toDespawn.Add(pair.Key);
-
-        for (int i = 0; i < _toDespawn.Count; i++)
-            Despawn(_toDespawn[i]);
     }
 
     void Despawn(int key)

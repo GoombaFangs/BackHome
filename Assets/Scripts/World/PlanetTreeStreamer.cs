@@ -88,11 +88,6 @@ public class PlanetTreeStreamer : MonoBehaviour
     [Tooltip("Set automatically by PlanetEnvironmentManager when present. Per-region tree lists live on the region set asset.")]
     [SerializeField] PlanetEnvironmentRegionSet regionSet;
 
-    bool _useAreaStream;
-    Transform _areaAnchor;
-    float _areaRadius;
-    float _areaActivationRadius;
-    PlanetEnvironmentRegionSet.WeightedPrefab[] _areaPrefabs;
     bool _rootCreated;
 
     SphericalPlanet _planet;
@@ -134,7 +129,7 @@ public class PlanetTreeStreamer : MonoBehaviour
         if (_planet == null)
             Debug.LogWarning("[PlanetTreeStreamer] No planet assigned and none found in the scene — tree streaming disabled.", this);
 
-        if (regionSet == null && !_useAreaStream)
+        if (regionSet == null)
         {
             WarnIfPrefabMissing(tree1Prefab, "Tree1");
             WarnIfPrefabMissing(tree2Prefab, "Tree2");
@@ -166,36 +161,11 @@ public class PlanetTreeStreamer : MonoBehaviour
         regionSet = set;
     }
 
-    public void ConfigureAreaStream(
-        SphericalPlanet targetPlanet,
-        Transform anchor,
-        float worldRadius,
-        PlanetEnvironmentRegionSet.WeightedPrefab[] prefabs,
-        float playerActivationRadius)
-    {
-        planet = targetPlanet;
-        _planet = targetPlanet;
-        _tiles = _planet != null ? _planet.GetComponent<PlanetTileMap>() : null;
-        _useAreaStream = anchor != null && worldRadius > 0.01f;
-        _areaAnchor = anchor;
-        _areaRadius = worldRadius;
-        _areaPrefabs = prefabs;
-        _areaActivationRadius = playerActivationRadius;
-        regionSet = null;
-        EnsureRuntimeRoot();
-    }
-
     void EnsureRuntimeRoot()
     {
         if (_rootCreated)
             return;
         _rootCreated = true;
-
-        if (_useAreaStream && _areaAnchor != null)
-        {
-            _root = transform;
-            return;
-        }
 
         var rootGo = new GameObject("TreeStream (Runtime)");
         rootGo.hideFlags = HideFlags.DontSave;
@@ -218,18 +188,6 @@ public class PlanetTreeStreamer : MonoBehaviour
 
     void OnDestroy()
     {
-        if (_useAreaStream)
-        {
-            foreach (KeyValuePair<int, ActiveTree> pair in _active)
-            {
-                if (pair.Value.Instance != null)
-                    Destroy(pair.Value.Instance);
-            }
-
-            _active.Clear();
-            return;
-        }
-
         if (_root != null)
             Destroy(_root.gameObject);
     }
@@ -273,8 +231,7 @@ public class PlanetTreeStreamer : MonoBehaviour
     }
 
     bool HasAnyPrefab() =>
-        (_useAreaStream && PlanetAreaStreamHelper.HasAnyPrefab(_areaPrefabs))
-        || regionSet != null
+        regionSet != null
         || tree1Prefab != null
         || tree2Prefab != null
         || tree3Prefab != null
@@ -326,21 +283,8 @@ public class PlanetTreeStreamer : MonoBehaviour
         if (playerAnchor == null)
             return;
 
-        if (_useAreaStream)
-        {
-            if (_areaAnchor == null)
-                return;
-
-            if (!PlanetAreaStreamHelper.IsPlayerNearArea(_planet, playerAnchor.position, _areaAnchor.position, _areaActivationRadius))
-            {
-                DespawnAllActive();
-                return;
-            }
-        }
-
-        Transform scanAnchor = _useAreaStream ? _areaAnchor : playerAnchor;
-        Vector3 anchorPos = scanAnchor.position;
-        float scanRadius = _useAreaStream ? _areaRadius : visibleRadius;
+        Vector3 anchorPos = playerAnchor.position;
+        float scanRadius = visibleRadius;
 
         _longitudeBandsAtSetup = _tiles.LongitudeBands;
         if (!_tiles.WorldToCell(anchorPos, out int centerLat, out int centerLon))
@@ -379,7 +323,7 @@ public class PlanetTreeStreamer : MonoBehaviour
                 if (!_tiles.TryGetCellCenter(lat, lon, out Vector3 cellCenter))
                     continue;
 
-                Vector3 up = regionSet != null || _useAreaStream ? (cellCenter - _planet.Center).normalized : default;
+                Vector3 up = regionSet != null ? (cellCenter - _planet.Center).normalized : default;
                 int regionIndex = regionSet != null ? regionSet.GetRegionIndex(up) : -1;
                 float effectiveDensity = regionSet != null
                     ? regionSet.GetEffectiveDensity(density, regionIndex, regionSet.GetTreeDensityMultiplier(regionIndex))
@@ -392,9 +336,6 @@ public class PlanetTreeStreamer : MonoBehaviour
 
                 float sqrDist = (cellCenter - anchorPos).sqrMagnitude;
                 if (sqrDist > sqrRadius)
-                    continue;
-
-                if (_useAreaStream && !PlanetAreaStreamHelper.IsWithinDisk(_planet, _areaAnchor.position, _areaRadius, cellCenter))
                     continue;
 
                 if (!TryResolveVariant(lat, lon, up, 8, out int prefabIndex, out GameObject regionPrefab))
@@ -442,12 +383,6 @@ public class PlanetTreeStreamer : MonoBehaviour
     {
         prefabIndex = -1;
         regionPrefab = null;
-
-        if (_useAreaStream && PlanetAreaStreamHelper.HasAnyPrefab(_areaPrefabs))
-        {
-            regionPrefab = PlanetEnvironmentRegionSet.PickWeighted(_areaPrefabs, Hash01(lat, lon, salt));
-            return regionPrefab != null;
-        }
 
         if (regionSet != null)
         {
@@ -627,19 +562,6 @@ public class PlanetTreeStreamer : MonoBehaviour
 
         _loggedMissingPrefab = true;
         Debug.LogWarning($"[PlanetTreeStreamer] Missing {NameFor(prefabIndex)} prefab — assign it on the component.", this);
-    }
-
-    void DespawnAllActive()
-    {
-        if (_active.Count == 0)
-            return;
-
-        _toDespawn.Clear();
-        foreach (KeyValuePair<int, ActiveTree> pair in _active)
-            _toDespawn.Add(pair.Key);
-
-        for (int i = 0; i < _toDespawn.Count; i++)
-            Despawn(_toDespawn[i]);
     }
 
     void Despawn(int key)

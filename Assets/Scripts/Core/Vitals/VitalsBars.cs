@@ -17,9 +17,6 @@ public class VitalsBars : MonoBehaviour
     IVitalsReadable _source;
     Camera _camera;
 
-    public float WorldScale => worldScale;
-    public Vector3 LocalOffset => localOffset;
-
     public void SetWorldScale(float scale)
     {
         worldScale = Mathf.Max(0.1f, scale);

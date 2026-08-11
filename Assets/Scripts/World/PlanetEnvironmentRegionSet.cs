@@ -53,9 +53,6 @@ public class PlanetEnvironmentRegionSet : ScriptableObject
     [SerializeField, Min(1)] int blobsPerRegion = 1;
     [SerializeField] Region[] regions = Array.Empty<Region>();
 
-    const float MaxRegionPointJitterDegrees = 25f;
-    const int MaxRegionPointAttempts = 8;
-
     public int RegionCount => regions != null ? regions.Length : 0;
 
     [NonSerialized] Vector3[] _cachedSeedDirs;
@@ -122,53 +119,6 @@ public class PlanetEnvironmentRegionSet : ScriptableObject
         return _cachedSeedRegion[best];
     }
 
-    /// <summary>
-    /// Samples a direction that lies inside <paramref name="regionIndex"/>'s area by jittering
-    /// around one of its cached blob seeds — far cheaper and more reliable than rejection-sampling
-    /// the whole sphere, especially for a small region.
-    /// </summary>
-    public bool TryGetRandomPointInRegion(int regionIndex, System.Random rng, out Vector3 up)
-    {
-        up = Vector3.up;
-        if (rng == null || regionIndex < 0)
-            return false;
-
-        EnsureSeedCache();
-        if (_cachedSeedDirs == null || _cachedSeedDirs.Length == 0)
-            return false;
-
-        Vector3 seedDir = Vector3.zero;
-        int matchCount = 0;
-        for (int i = 0; i < _cachedSeedRegion.Length; i++)
-        {
-            if (_cachedSeedRegion[i] != regionIndex)
-                continue;
-            matchCount++;
-            // Reservoir sampling — picks uniformly among this region's seeds in one pass.
-            if (rng.Next(matchCount) == 0)
-                seedDir = _cachedSeedDirs[i];
-        }
-
-        if (matchCount == 0)
-            return false;
-
-        for (int attempt = 0; attempt < MaxRegionPointAttempts; attempt++)
-        {
-            float angle = (float)rng.NextDouble() * MaxRegionPointJitterDegrees;
-            float spin = (float)rng.NextDouble() * 360f;
-            Vector3 candidate = JitterDirection(seedDir, angle, spin);
-            if (GetRegionIndex(candidate) == regionIndex)
-            {
-                up = candidate;
-                return true;
-            }
-        }
-
-        // Boundary got unlucky every attempt — the seed itself is always safely inside its region.
-        up = seedDir;
-        return true;
-    }
-
     /// <summary>Weighted pick among whichever entries actually have a prefab assigned; returns null
     /// if the array is empty/unassigned so a region can legitimately have none of this category.</summary>
     public static GameObject PickWeighted(WeightedPrefab[] entries, float roll01)
@@ -200,15 +150,6 @@ public class PlanetEnvironmentRegionSet : ScriptableObject
         }
 
         return null;
-    }
-
-    static Vector3 JitterDirection(Vector3 dir, float angleDegrees, float spinDegrees)
-    {
-        Vector3 axis = Vector3.Cross(dir, Vector3.up);
-        if (axis.sqrMagnitude < 0.0001f)
-            axis = Vector3.Cross(dir, Vector3.right);
-        axis = (Quaternion.AngleAxis(spinDegrees, dir) * axis).normalized;
-        return (Quaternion.AngleAxis(angleDegrees, axis) * dir).normalized;
     }
 
     void EnsureSeedCache()

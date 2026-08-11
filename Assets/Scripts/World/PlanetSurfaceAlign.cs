@@ -17,20 +17,6 @@ public class PlanetSurfaceAlign : MonoBehaviour
     PlanetTileMap _tiles;
     bool _snapping;
 
-    public SphericalPlanet Planet => planet;
-
-    public float Hover
-    {
-        get => hover;
-        set => hover = Mathf.Max(0f, value);
-    }
-
-    public float Yaw
-    {
-        get => yaw;
-        set => yaw = value;
-    }
-
     public void Configure(SphericalPlanet targetPlanet, float yawDegrees, float hoverOffset)
     {
         planet = targetPlanet;
@@ -120,7 +106,7 @@ public class PlanetSurfaceAlign : MonoBehaviour
         // Prefer terrain/walk normal when available, but keep radius unchanged.
         if (_tiles != null && _tiles.ProvidesWalkSurface)
             up = _tiles.GetWalkSurfaceNormal(radial);
-        else if (planet != null)
+        else
             up = planet.GetTerrainNormal(radial);
 
         if (Vector3.Dot(up, radial) < 0f)

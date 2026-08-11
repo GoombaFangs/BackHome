@@ -27,9 +27,6 @@ public class PlanetEnvironmentManager : MonoBehaviour
     [SerializeField] PlanetTreeStreamer treeStreamer;
     [SerializeField] PlanetRockStreamer rockStreamer;
 
-    public SphericalPlanet Planet => planet;
-    public PlanetEnvironmentRegionSet RegionSet => regionSet;
-
     void Awake()
     {
         ApplyConfiguration();

@@ -18,9 +18,6 @@ public class CreatureAnimator : MonoBehaviour
     bool _attacking;
     float _attackClipLength = -1f;
 
-    public bool IsMoving => _moving;
-    public bool IsAttacking => _attacking;
-
     void Awake()
     {
         _animator = GetComponent<Animator>();

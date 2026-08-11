@@ -105,7 +105,6 @@ public class CreatureSpawner : MonoBehaviour
     const float MinSeparationDegrees = 12f;
     const int MaxPlacementAttempts = 200;
     const bool OnlyWalkableTiles = true;
-    const bool RandomYaw = true;
     static readonly LayerMask GroundLayer = 1 << 3; // Ground
 
     readonly List<TrackedCreature> _tracked = new();
@@ -114,10 +113,6 @@ public class CreatureSpawner : MonoBehaviour
     readonly List<ResolvedEntry> _allEntries = new();
     System.Random _spawnRng;
     LootDropPool _lootPool;
-
-    public SphericalPlanet Planet => planet;
-    public int SpawnedCount => _tracked.Count;
-    public int PendingRespawnCount => _pendingRespawns.Count;
 
     void OnValidate()
     {
@@ -289,12 +284,6 @@ public class CreatureSpawner : MonoBehaviour
 
         _tracked.Clear();
         _acceptedDirs.Clear();
-    }
-
-    public void SetPlanet(SphericalPlanet target)
-    {
-        planet = target;
-        _tiles = planet != null ? planet.GetComponent<PlanetTileMap>() : null;
     }
 
     void TryRespawn(PendingRespawn pending)
@@ -607,7 +596,7 @@ public class CreatureSpawner : MonoBehaviour
 
     /// <summary>Samples a direction within <paramref name="worldRadius"/> world units of
     /// <paramref name="anchor"/>'s position (projected onto the planet), area-uniformly across the
-    /// disk — the small-radius counterpart to <see cref="PlanetEnvironmentRegionSet.TryGetRandomPointInRegion"/>.</summary>
+    /// disk.</summary>
     bool TryGetRandomPointNearAnchor(Transform anchor, float worldRadius, out Vector3 dir)
     {
         dir = Vector3.up;
@@ -656,7 +645,7 @@ public class CreatureSpawner : MonoBehaviour
         if (Vector3.Dot(up, radial) < 0f)
             up = -up;
 
-        Vector3 forwardHint = RandomYaw ? UnityEngine.Random.onUnitSphere : Vector3.forward;
+        Vector3 forwardHint = UnityEngine.Random.onUnitSphere;
         Vector3 forward = Vector3.ProjectOnPlane(forwardHint, up);
         if (forward.sqrMagnitude < 0.001f)
             forward = Vector3.ProjectOnPlane(Vector3.forward, up);

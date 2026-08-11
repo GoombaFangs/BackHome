@@ -51,8 +51,6 @@ public class VitalsBarsView : MonoBehaviour
     float _oxygenMax = 1f;
     float _hitFlashTimer;
 
-    public bool ShowOxygen => showOxygen;
-
     void Update()
     {
         if (_hitFlashTimer <= 0f)

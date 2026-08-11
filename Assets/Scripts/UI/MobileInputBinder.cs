@@ -82,17 +82,6 @@ public class MobileInputBinder : MonoBehaviour
             floating = padObject.AddComponent<DynamicFloatingJoystick>();
 
         floating.Setup(moveJoystick, canvasInput);
-
-        // Click-to-move fights the floating stick — keep WASD, disable click move.
-        TouchController movement = playerInputs != null
-            ? playerInputs.GetComponent<TouchController>()
-            : null;
-        if (movement == null)
-        {
-            GameObject player = GameObject.FindGameObjectWithTag("Player");
-            if (player != null)
-                movement = player.GetComponent<TouchController>();
-        }
     }
 
     RectTransform FindMoveJoystick()

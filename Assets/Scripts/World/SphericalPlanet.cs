@@ -54,7 +54,6 @@ public class SphericalPlanet : MonoBehaviour
 
     public Vector3 Center => transform.position;
     public float Radius => radius;
-    public float HeightAmplitude => shellHeightAmplitude;
     public bool HasHeightTerrain =>
         useVisualShell
         && shellHeightMap != null

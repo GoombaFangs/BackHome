@@ -233,7 +233,7 @@ public class PlanetTileMap : MonoBehaviour
         }
     }
 
-    public void EnsureGridDimensionsFromEquator()
+    void EnsureGridDimensionsFromEquator()
     {
         longitudeBands = Mathf.Max(16, tilesAroundEquator);
         latitudeBands = Mathf.Max(8, tilesAroundEquator / 2);
@@ -271,12 +271,6 @@ public class PlanetTileMap : MonoBehaviour
         PlanetBlobAutotile.ResolveAll(this);
     }
 
-    /// <summary>Legacy helper — fills base terrain.</summary>
-    public void FillAll(int ignoredTileIndex = 0)
-    {
-        FillTerrain(tileset != null ? tileset.BaseTerrainIndex : 0);
-    }
-
     public int GetTerrain(int lat, int lon)
     {
         if (!HasValidMap())
@@ -303,12 +297,6 @@ public class PlanetTileMap : MonoBehaviour
             return false;
         terrainIds[cell] = terrainIndex;
         return true;
-    }
-
-    public void SetTerrain(int lat, int lon, int terrainIndex)
-    {
-        if (SetTerrainSilent(lat, lon, terrainIndex))
-            PlanetBlobAutotile.ResolveRegion(this, lat, lon, 1);
     }
 
     public bool PaintTerrainBrush(int centerLat, int centerLon, int terrainIndex, int radiusCells, bool rebuild)

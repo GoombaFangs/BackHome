@@ -98,18 +98,6 @@ public class PlanetTileset : ScriptableObject
         return -1;
     }
 
-    public int IndexOfTerrainId(string id)
-    {
-        if (terrains == null || string.IsNullOrEmpty(id))
-            return -1;
-        for (int i = 0; i < terrains.Length; i++)
-        {
-            if (terrains[i] != null && terrains[i].id == id)
-                return i;
-        }
-        return -1;
-    }
-
     public string ResolveAtlasId(int terrainIndex, int neighborMask)
     {
         Terrain t = GetTerrain(terrainIndex);
@@ -126,55 +114,6 @@ public class PlanetTileset : ScriptableObject
             return t.maskToAtlasId[neighborMask];
 
         return string.IsNullOrEmpty(t.fillAtlasId) ? "Fill_ShadowGrass" : t.fillAtlasId;
-    }
-
-    /// <summary>
-    /// UV rect for an atlas entry. Unity texture V=0 is bottom.
-    /// Stored row is image-top-based (row 0 = top of PNG); converted here.
-    /// </summary>
-    public bool TryGetUvRect(int index, out Rect uv)
-    {
-        uv = default;
-        Entry entry = GetEntry(index);
-        if (entry == null || texture == null || tileSize <= 0)
-            return false;
-
-        int cols = Columns;
-        int rows = Rows;
-        if (cols <= 0 || rows <= 0)
-            return false;
-
-        int col = Mathf.Clamp(entry.column, 0, cols - 1);
-        int rowFromTop = Mathf.Clamp(entry.row, 0, rows - 1);
-        int rowFromBottom = rows - 1 - rowFromTop;
-
-        float u0 = col / (float)cols;
-        float v0 = rowFromBottom / (float)rows;
-        float u1 = (col + 1) / (float)cols;
-        float v1 = (rowFromBottom + 1) / (float)rows;
-        float padU = 0.5f / texture.width;
-        float padV = 0.5f / texture.height;
-        u0 += padU;
-        v0 += padV;
-        u1 -= padU;
-        v1 -= padV;
-
-        if (entry.flipU)
-        {
-            float tmp = u0;
-            u0 = u1;
-            u1 = tmp;
-        }
-
-        if (entry.flipV)
-        {
-            float tmp = v0;
-            v0 = v1;
-            v1 = tmp;
-        }
-
-        uv = new Rect(u0, v0, u1 - u0, v1 - v0);
-        return true;
     }
 
     /// <summary>Corner UVs for a cell, honoring flipU/flipV.</summary>
@@ -223,38 +162,5 @@ public class PlanetTileset : ScriptableObject
         v0 = entry.flipV ? d : b;
         v1 = entry.flipV ? b : d;
         return true;
-    }
-
-    /// <summary>Human label for a 4-bit mask (debug / importer).</summary>
-    public static string MaskRoleName(int mask)
-    {
-        mask &= 0xF;
-        int n = (mask & BitN) != 0 ? 1 : 0;
-        int e = (mask & BitE) != 0 ? 1 : 0;
-        int s = (mask & BitS) != 0 ? 1 : 0;
-        int w = (mask & BitW) != 0 ? 1 : 0;
-        int count = n + e + s + w;
-        if (count == 4) return "Fill";
-        if (count == 0) return "Isolated";
-        if (count == 1)
-        {
-            if (n == 1) return "Tip_N";
-            if (e == 1) return "Tip_E";
-            if (s == 1) return "Tip_S";
-            return "Tip_W";
-        }
-        if (count == 3)
-        {
-            if (n == 0) return "Edge_N";
-            if (e == 0) return "Edge_E";
-            if (s == 0) return "Edge_S";
-            return "Edge_W";
-        }
-        if (n == 1 && s == 1) return "Corridor_NS";
-        if (e == 1 && w == 1) return "Corridor_EW";
-        if (n == 1 && e == 1) return "Corner_NE";
-        if (n == 1 && w == 1) return "Corner_NW";
-        if (s == 1 && e == 1) return "Corner_SE";
-        return "Corner_SW";
     }
 }
