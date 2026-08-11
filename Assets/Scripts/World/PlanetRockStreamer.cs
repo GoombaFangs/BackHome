@@ -9,7 +9,9 @@ using UnityEngine;
 ///
 /// Lives on the shared "Streamers" GameObject alongside the grass/tree streamers, not on the planet
 /// itself — keeps the planet hierarchy free of manager components. Assign <see cref="planet"/>
-/// explicitly, or leave it empty to auto-resolve via <see cref="SphericalPlanet.Instance"/>.
+/// explicitly, or leave it empty to auto-resolve via <see cref="SphericalPlanet.Instance"/>. The
+/// spawned instances themselves are parented under the planet's "Environment" child instead (see
+/// <see cref="PlanetEnvironmentRoot"/>), so streamed rocks show up nested under the planet.
 ///
 /// Menu: BackHome → Setup Nyxara Rock Streaming (adds this + wires Rock..Rock4).
 /// </summary>
@@ -68,6 +70,10 @@ public class PlanetRockStreamer : MonoBehaviour
     [Header("Anchor")]
     [SerializeField] Transform anchorOverride;
 
+    [Header("Regions")]
+    [Tooltip("When assigned, rock variants come from this region's weighted list instead of the Rock1..Rock4 slots/weights above (which are then ignored). Leave empty to keep the legacy planet-wide mix.")]
+    [SerializeField] PlanetEnvironmentRegionSet regionSet;
+
     SphericalPlanet _planet;
     PlanetTileMap _tiles;
     Transform _root;
@@ -78,6 +84,7 @@ public class PlanetRockStreamer : MonoBehaviour
     readonly List<int> _toDespawn = new();
     readonly List<CellPick> _toSpawn = new();
     Stack<GameObject>[] _pools;
+    readonly Dictionary<GameObject, Stack<GameObject>> _regionPools = new();
 
     float _refreshTimer;
     int _longitudeBandsAtSetup;
@@ -87,6 +94,7 @@ public class PlanetRockStreamer : MonoBehaviour
     {
         public GameObject Instance;
         public int PrefabIndex;
+        public GameObject RegionPrefab;
     }
 
     struct CellPick
@@ -94,6 +102,7 @@ public class PlanetRockStreamer : MonoBehaviour
         public int Lat;
         public int Lon;
         public int PrefabIndex;
+        public GameObject RegionPrefab;
         public float SqrDistance;
     }
 
@@ -104,15 +113,18 @@ public class PlanetRockStreamer : MonoBehaviour
         if (_planet == null)
             Debug.LogWarning("[PlanetRockStreamer] No planet assigned and none found in the scene — rock streaming disabled.", this);
 
-        WarnIfPrefabMissing(rock1Prefab, "Rock");
-        WarnIfPrefabMissing(rock2Prefab, "Rock2");
-        WarnIfPrefabMissing(rock3Prefab, "Rock3");
-        WarnIfPrefabMissing(rock4Prefab, "Rock4");
+        if (regionSet == null)
+        {
+            WarnIfPrefabMissing(rock1Prefab, "Rock");
+            WarnIfPrefabMissing(rock2Prefab, "Rock2");
+            WarnIfPrefabMissing(rock3Prefab, "Rock3");
+            WarnIfPrefabMissing(rock4Prefab, "Rock4");
+        }
 
         var rootGo = new GameObject("RockStream (Runtime)");
         rootGo.hideFlags = HideFlags.DontSave;
         _root = rootGo.transform;
-        _root.SetParent(transform, false);
+        _root.SetParent(PlanetEnvironmentRoot.FindOrCreate(_planet, transform), false);
 
         _pools = new Stack<GameObject>[PoolCount];
         for (int i = 0; i < PoolCount; i++)
@@ -174,7 +186,7 @@ public class PlanetRockStreamer : MonoBehaviour
         return SphericalPlanet.Instance != null ? SphericalPlanet.Instance : FindAnyObjectByType<SphericalPlanet>();
     }
 
-    bool HasAnyPrefab() => rock1Prefab != null || rock2Prefab != null || rock3Prefab != null || rock4Prefab != null;
+    bool HasAnyPrefab() => regionSet != null || rock1Prefab != null || rock2Prefab != null || rock3Prefab != null || rock4Prefab != null;
 
     GameObject PrefabAt(int index)
     {
@@ -254,8 +266,10 @@ public class PlanetRockStreamer : MonoBehaviour
                 if (!IsRockCell(lat, lon))
                     continue;
 
-                RockPick pick = PickForCell(lat, lon);
-                if (pick == RockPick.Empty)
+                // Master density roll — decides whether this tile grows anything at all, before
+                // spending any work resolving which region/variant it'd be. Salt 15 decorrelates
+                // this roll from grass (6) and trees on the same tile.
+                if (Hash01(lat, lon, 15) >= density)
                     continue;
 
                 if (!_tiles.TryGetCellCenter(lat, lon, out Vector3 cellCenter))
@@ -265,14 +279,14 @@ public class PlanetRockStreamer : MonoBehaviour
                 if (sqrDist > sqrRadius)
                     continue;
 
-                int prefabIndex = PrefabIndexFor(pick);
-                if (PrefabAt(prefabIndex) == null)
+                Vector3 up = regionSet != null ? (cellCenter - _planet.Center).normalized : default;
+                if (!TryResolveVariant(lat, lon, up, 17, out int prefabIndex, out GameObject regionPrefab))
                     continue;
 
                 int key = PackKey(lat, lon);
                 _desired.Add(key);
                 if (!_active.ContainsKey(key))
-                    _toSpawn.Add(new CellPick { Lat = lat, Lon = lon, PrefabIndex = prefabIndex, SqrDistance = sqrDist });
+                    _toSpawn.Add(new CellPick { Lat = lat, Lon = lon, PrefabIndex = prefabIndex, RegionPrefab = regionPrefab, SqrDistance = sqrDist });
             }
         }
 
@@ -296,17 +310,36 @@ public class PlanetRockStreamer : MonoBehaviour
                 break;
 
             CellPick pick = _toSpawn[i];
-            if (TrySpawn(pick.Lat, pick.Lon, pick.PrefabIndex))
+            bool ok = pick.RegionPrefab != null
+                ? TrySpawnRegion(pick.Lat, pick.Lon, pick.RegionPrefab)
+                : TrySpawn(pick.Lat, pick.Lon, pick.PrefabIndex);
+            if (ok)
                 spawned++;
         }
     }
 
-    RockPick PickForCell(int lat, int lon)
+    /// <summary>Resolves the prefab to grow at (lat, lon) — from <see cref="regionSet"/>'s weighted
+    /// rock list when assigned (<paramref name="up"/> must be the cell's surface direction in that
+    /// case), otherwise from this streamer's own Rock1..Rock4 slots/weights.</summary>
+    bool TryResolveVariant(int lat, int lon, Vector3 up, int salt, out int prefabIndex, out GameObject regionPrefab)
     {
-        // Salt 15/17 decorrelates rock rolls from grass (6/8) and trees on the same tile.
-        if (Hash01(lat, lon, 15) >= density)
-            return RockPick.Empty;
-        return PickVariant(lat, lon, 17);
+        prefabIndex = -1;
+        regionPrefab = null;
+
+        if (regionSet != null)
+        {
+            int region = regionSet.GetRegionIndex(up);
+            PlanetEnvironmentRegionSet.Region regionData = regionSet.GetRegion(region);
+            regionPrefab = PlanetEnvironmentRegionSet.PickWeighted(regionData?.rocks, Hash01(lat, lon, salt));
+            return regionPrefab != null;
+        }
+
+        RockPick pick = PickVariant(lat, lon, salt);
+        if (pick == RockPick.Empty)
+            return false;
+
+        prefabIndex = PrefabIndexFor(pick);
+        return true;
     }
 
     RockPick PickVariant(int lat, int lon, int salt)
@@ -352,7 +385,7 @@ public class PlanetRockStreamer : MonoBehaviour
 
         int terrainIndex = _tiles.GetTerrain(lat, lon);
         PlanetTileset.Terrain terrain = tileset.GetTerrain(terrainIndex);
-        if (terrain == null || !terrain.walkable)
+        if (terrain == null || !terrain.walkable || PlanetTileset.IsShadowGrassZone(terrain.zoneId))
             return false;
 
         return !string.IsNullOrEmpty(terrain.id)
@@ -367,6 +400,50 @@ public class PlanetRockStreamer : MonoBehaviour
             LogMissingPrefabOnce(prefabIndex);
             return false;
         }
+
+        if (!TryComputePose(lat, lon, out Vector3 position, out Quaternion rotation))
+            return false;
+
+        GameObject instance = Rent(prefabIndex, prefab);
+        if (instance == null)
+            return false;
+
+        instance.transform.SetPositionAndRotation(position, rotation);
+        instance.transform.localScale = Vector3.one;
+        instance.name = NameFor(prefabIndex);
+        instance.SetActive(true);
+
+        _active[PackKey(lat, lon)] = new ActiveRock { Instance = instance, PrefabIndex = prefabIndex };
+        return true;
+    }
+
+    bool TrySpawnRegion(int lat, int lon, GameObject prefab)
+    {
+        if (prefab == null)
+            return false;
+
+        if (!TryComputePose(lat, lon, out Vector3 position, out Quaternion rotation))
+            return false;
+
+        GameObject instance = RentRegion(prefab);
+        if (instance == null)
+            return false;
+
+        instance.transform.SetPositionAndRotation(position, rotation);
+        instance.transform.localScale = Vector3.one;
+        instance.name = prefab.name;
+        instance.SetActive(true);
+
+        _active[PackKey(lat, lon)] = new ActiveRock { Instance = instance, PrefabIndex = -1, RegionPrefab = prefab };
+        return true;
+    }
+
+    /// <summary>Jittered surface pose for a rock at (lat, lon) — shared by the legacy and
+    /// region-driven spawn paths so both place/orient instances identically.</summary>
+    bool TryComputePose(int lat, int lon, out Vector3 position, out Quaternion rotation)
+    {
+        position = default;
+        rotation = Quaternion.identity;
 
         if (!_tiles.TryGetCellCenter(lat, lon, out Vector3 cellCenter))
             return false;
@@ -386,7 +463,7 @@ public class PlanetRockStreamer : MonoBehaviour
         float surfaceRadius = _tiles.ProvidesWalkSurface
             ? _tiles.GetWalkSurfaceRadius(pointUp)
             : _planet.GetTerrainRadius(pointUp);
-        Vector3 position = _planet.Center + pointUp * (surfaceRadius + hover);
+        position = _planet.Center + pointUp * (surfaceRadius + hover);
 
         Vector3 normal = _tiles.ProvidesWalkSurface
             ? _tiles.GetWalkSurfaceNormal(pointUp)
@@ -395,18 +472,7 @@ public class PlanetRockStreamer : MonoBehaviour
             normal = -normal;
 
         float yaw = Hash01(lat, lon, 52) * 360f;
-        Quaternion rotation = PlanetSurfacePose.RotationFromUp(normal, yaw);
-
-        GameObject instance = Rent(prefabIndex, prefab);
-        if (instance == null)
-            return false;
-
-        instance.transform.SetPositionAndRotation(position, rotation);
-        instance.transform.localScale = Vector3.one;
-        instance.name = NameFor(prefabIndex);
-        instance.SetActive(true);
-
-        _active[PackKey(lat, lon)] = new ActiveRock { Instance = instance, PrefabIndex = prefabIndex };
+        rotation = PlanetSurfacePose.RotationFromUp(normal, yaw);
         return true;
     }
 
@@ -442,7 +508,11 @@ public class PlanetRockStreamer : MonoBehaviour
 
         rock.Instance.SetActive(false);
         rock.Instance.transform.SetParent(_root, false);
-        _pools[rock.PrefabIndex].Push(rock.Instance);
+
+        if (rock.RegionPrefab != null)
+            GetRegionPool(rock.RegionPrefab).Push(rock.Instance);
+        else
+            _pools[rock.PrefabIndex].Push(rock.Instance);
     }
 
     GameObject Rent(int prefabIndex, GameObject prefab)
@@ -458,6 +528,32 @@ public class PlanetRockStreamer : MonoBehaviour
         GameObject instance = Instantiate(prefab, _root);
         PrepareInstance(instance);
         return instance;
+    }
+
+    GameObject RentRegion(GameObject prefab)
+    {
+        Stack<GameObject> pool = GetRegionPool(prefab);
+        while (pool.Count > 0)
+        {
+            GameObject pooled = pool.Pop();
+            if (pooled != null)
+                return pooled;
+        }
+
+        GameObject instance = Instantiate(prefab, _root);
+        PrepareInstance(instance);
+        return instance;
+    }
+
+    Stack<GameObject> GetRegionPool(GameObject prefab)
+    {
+        if (!_regionPools.TryGetValue(prefab, out Stack<GameObject> pool))
+        {
+            pool = new Stack<GameObject>();
+            _regionPools[prefab] = pool;
+        }
+
+        return pool;
     }
 
     void PrepareInstance(GameObject instance)
@@ -517,5 +613,29 @@ public class PlanetRockStreamer : MonoBehaviour
         Vector3 center = anchor != null ? anchor.position : transform.position;
         Gizmos.color = new Color(0.5f, 0.45f, 0.4f, 0.6f);
         Gizmos.DrawWireSphere(center, visibleRadius);
+
+        DrawRegionGizmos();
+    }
+
+    /// <summary>Sketches each region's blob seeds on the planet surface so the layout (tuned via
+    /// regionSet's seed/blobsPerRegion) can be eyeballed in the Scene view.</summary>
+    void DrawRegionGizmos()
+    {
+        if (regionSet == null)
+            return;
+
+        SphericalPlanet planetForGizmo = _planet != null ? _planet : ResolvePlanet();
+        if (planetForGizmo == null)
+            return;
+
+        int regionCount = Mathf.Max(1, regionSet.RegionCount);
+        int seedCount = regionSet.DebugSeedCount;
+        for (int i = 0; i < seedCount; i++)
+        {
+            int region = regionSet.DebugSeedRegion(i);
+            Gizmos.color = Color.HSVToRGB((region % regionCount) / (float)regionCount, 0.75f, 1f);
+            Vector3 point = planetForGizmo.Center + regionSet.DebugSeedDirection(i) * planetForGizmo.Radius;
+            Gizmos.DrawSphere(point, Mathf.Max(0.5f, planetForGizmo.Radius * 0.02f));
+        }
     }
 }

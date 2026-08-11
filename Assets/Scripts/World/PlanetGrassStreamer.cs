@@ -18,7 +18,9 @@ using UnityEngine;
 ///
 /// Lives on the shared "Streamers" GameObject alongside the tree/rock streamers, not on the planet
 /// itself — keeps the planet hierarchy free of manager components. Assign <see cref="planet"/>
-/// explicitly, or leave it empty to auto-resolve via <see cref="SphericalPlanet.Instance"/>.
+/// explicitly, or leave it empty to auto-resolve via <see cref="SphericalPlanet.Instance"/>. The
+/// spawned instances themselves are parented under the planet's "Environment" child instead (see
+/// <see cref="PlanetEnvironmentRoot"/>), so streamed grass shows up nested under the planet.
 ///
 /// Menu: BackHome → Setup Nyxara Grass Streaming (adds this + wires all grass prefabs).
 /// </summary>
@@ -89,6 +91,10 @@ public class PlanetGrassStreamer : MonoBehaviour
     [Tooltip("Optional explicit anchor (defaults to the player, which the follow camera always keeps centered).")]
     [SerializeField] Transform anchorOverride;
 
+    [Header("Regions")]
+    [Tooltip("When assigned, grass variants come from this region's weighted list instead of the Grass1..Grass5 slots/weights above (which are then ignored). Leave empty to keep the legacy planet-wide mix.")]
+    [SerializeField] PlanetEnvironmentRegionSet regionSet;
+
     SphericalPlanet _planet;
     PlanetTileMap _tiles;
     Transform _root;
@@ -99,6 +105,7 @@ public class PlanetGrassStreamer : MonoBehaviour
     readonly List<int> _toDespawn = new();
     readonly List<CellSlot> _toSpawn = new();
     Stack<GameObject>[] _pools;
+    readonly Dictionary<GameObject, Stack<GameObject>> _regionPools = new();
 
     float _refreshTimer;
     int _longitudeBandsAtSetup;
@@ -108,6 +115,7 @@ public class PlanetGrassStreamer : MonoBehaviour
     {
         public GameObject Instance;
         public int PrefabIndex;
+        public GameObject RegionPrefab;
     }
 
     struct CellSlot
@@ -116,6 +124,7 @@ public class PlanetGrassStreamer : MonoBehaviour
         public int Lon;
         public int Slot;
         public int PrefabIndex;
+        public GameObject RegionPrefab;
         public float SqrDistance;
     }
 
@@ -127,16 +136,19 @@ public class PlanetGrassStreamer : MonoBehaviour
             Debug.LogWarning("[PlanetGrassStreamer] No planet assigned and none found in the scene — grass streaming disabled.", this);
         MigrateLegacyPrefabs();
 
-        WarnIfPrefabMissing(grass1Prefab, "Grass1");
-        WarnIfPrefabMissing(grass2Prefab, "Grass2");
-        WarnIfPrefabMissing(grass3Prefab, "Grass3");
-        WarnIfPrefabMissing(grass4Prefab, "Grass_Luminous_Toadstool");
-        WarnIfPrefabMissing(grass5Prefab, "Hollow_Log");
+        if (regionSet == null)
+        {
+            WarnIfPrefabMissing(grass1Prefab, "Grass1");
+            WarnIfPrefabMissing(grass2Prefab, "Grass2");
+            WarnIfPrefabMissing(grass3Prefab, "Grass3");
+            WarnIfPrefabMissing(grass4Prefab, "Grass_Luminous_Toadstool");
+            WarnIfPrefabMissing(grass5Prefab, "Hollow_Log");
+        }
 
         var rootGo = new GameObject("GrassStream (Runtime)");
         rootGo.hideFlags = HideFlags.DontSave;
         _root = rootGo.transform;
-        _root.SetParent(transform, false);
+        _root.SetParent(PlanetEnvironmentRoot.FindOrCreate(_planet, transform), false);
 
         _pools = new Stack<GameObject>[PoolCount];
         for (int i = 0; i < PoolCount; i++)
@@ -217,7 +229,7 @@ public class PlanetGrassStreamer : MonoBehaviour
             Debug.LogWarning($"[PlanetGrassStreamer] {label} Prefab is not assigned — it will be skipped. Assign it in the Inspector or re-run BackHome → Setup Nyxara Grass Streaming.", this);
     }
 
-    bool HasAnyPrefab() => grass1Prefab != null || grass2Prefab != null || grass3Prefab != null || grass4Prefab != null || grass5Prefab != null;
+    bool HasAnyPrefab() => regionSet != null || grass1Prefab != null || grass2Prefab != null || grass3Prefab != null || grass4Prefab != null || grass5Prefab != null;
 
     GameObject PrefabAt(int index)
     {
@@ -298,8 +310,9 @@ public class PlanetGrassStreamer : MonoBehaviour
                 if (!IsGrassCell(lat, lon))
                     continue;
 
-                GrassPick pick = PickForCell(lat, lon);
-                if (pick == GrassPick.Empty)
+                // Master density roll — decides whether this tile grows anything at all, before
+                // spending any work resolving which region/variant it'd be.
+                if (Hash01(lat, lon, 6) >= density)
                     continue;
 
                 if (!_tiles.TryGetCellCenter(lat, lon, out Vector3 cellCenter))
@@ -309,12 +322,15 @@ public class PlanetGrassStreamer : MonoBehaviour
                 if (sqrDist > sqrRadius)
                     continue;
 
-                AddDesiredSlot(lat, lon, 0, PrefabIndexFor(pick), sqrDist);
+                Vector3 up = regionSet != null ? (cellCenter - _planet.Center).normalized : default;
 
-                if (Hash01(lat, lon, 7) < secondClumpChance)
+                if (TryResolveVariant(lat, lon, up, 8, out int prefabIndex, out GameObject regionPrefab))
+                    AddDesiredSlot(lat, lon, 0, prefabIndex, regionPrefab, sqrDist);
+
+                if (Hash01(lat, lon, 7) < secondClumpChance
+                    && TryResolveVariant(lat, lon, up, 9, out int bonusIndex, out GameObject bonusRegionPrefab))
                 {
-                    GrassPick bonusPick = PickVariant(lat, lon, 9);
-                    AddDesiredSlot(lat, lon, 1, PrefabIndexFor(bonusPick), sqrDist);
+                    AddDesiredSlot(lat, lon, 1, bonusIndex, bonusRegionPrefab, sqrDist);
                 }
             }
         }
@@ -339,29 +355,49 @@ public class PlanetGrassStreamer : MonoBehaviour
                 break;
 
             CellSlot slot = _toSpawn[i];
-            if (TrySpawn(slot.Lat, slot.Lon, slot.Slot, slot.PrefabIndex))
+            bool ok = slot.RegionPrefab != null
+                ? TrySpawnRegion(slot.Lat, slot.Lon, slot.Slot, slot.RegionPrefab)
+                : TrySpawn(slot.Lat, slot.Lon, slot.Slot, slot.PrefabIndex);
+            if (ok)
                 spawned++;
         }
     }
 
-    void AddDesiredSlot(int lat, int lon, int slot, int prefabIndex, float sqrDist)
+    void AddDesiredSlot(int lat, int lon, int slot, int prefabIndex, GameObject regionPrefab, float sqrDist)
     {
-        if (PrefabAt(prefabIndex) == null)
+        if (regionPrefab == null && PrefabAt(prefabIndex) == null)
             return;
 
         int key = PackKey(lat, lon, slot);
         _desired.Add(key);
         if (!_active.ContainsKey(key))
         {
-            _toSpawn.Add(new CellSlot { Lat = lat, Lon = lon, Slot = slot, PrefabIndex = prefabIndex, SqrDistance = sqrDist });
+            _toSpawn.Add(new CellSlot { Lat = lat, Lon = lon, Slot = slot, PrefabIndex = prefabIndex, RegionPrefab = regionPrefab, SqrDistance = sqrDist });
         }
     }
 
-    GrassPick PickForCell(int lat, int lon)
+    /// <summary>Resolves the prefab to grow at (lat, lon) — from <see cref="regionSet"/>'s weighted
+    /// grass list when assigned (<paramref name="up"/> must be the cell's surface direction in that
+    /// case), otherwise from this streamer's own Grass1..Grass5 slots/weights.</summary>
+    bool TryResolveVariant(int lat, int lon, Vector3 up, int salt, out int prefabIndex, out GameObject regionPrefab)
     {
-        if (Hash01(lat, lon, 6) >= density)
-            return GrassPick.Empty;
-        return PickVariant(lat, lon, 8);
+        prefabIndex = -1;
+        regionPrefab = null;
+
+        if (regionSet != null)
+        {
+            int region = regionSet.GetRegionIndex(up);
+            PlanetEnvironmentRegionSet.Region regionData = regionSet.GetRegion(region);
+            regionPrefab = PlanetEnvironmentRegionSet.PickWeighted(regionData?.grass, Hash01(lat, lon, salt));
+            return regionPrefab != null;
+        }
+
+        GrassPick pick = PickVariant(lat, lon, salt);
+        if (pick == GrassPick.Empty)
+            return false;
+
+        prefabIndex = PrefabIndexFor(pick);
+        return true;
     }
 
     /// <summary>Weighted pick among whichever grass variants actually have a prefab assigned.
@@ -415,7 +451,7 @@ public class PlanetGrassStreamer : MonoBehaviour
 
         int terrainIndex = _tiles.GetTerrain(lat, lon);
         PlanetTileset.Terrain terrain = tileset.GetTerrain(terrainIndex);
-        if (terrain == null || !terrain.walkable)
+        if (terrain == null || !terrain.walkable || PlanetTileset.IsShadowGrassZone(terrain.zoneId))
             return false;
 
         return !string.IsNullOrEmpty(terrain.id)
@@ -430,6 +466,50 @@ public class PlanetGrassStreamer : MonoBehaviour
             LogMissingPrefabOnce(prefabIndex);
             return false;
         }
+
+        if (!TryComputePose(lat, lon, slot, out Vector3 position, out Quaternion rotation))
+            return false;
+
+        GameObject instance = Rent(prefabIndex, prefab);
+        if (instance == null)
+            return false;
+
+        instance.transform.SetPositionAndRotation(position, rotation);
+        instance.transform.localScale = Vector3.one;
+        instance.name = NameFor(prefabIndex);
+        instance.SetActive(true);
+
+        _active[PackKey(lat, lon, slot)] = new ActiveClump { Instance = instance, PrefabIndex = prefabIndex };
+        return true;
+    }
+
+    bool TrySpawnRegion(int lat, int lon, int slot, GameObject prefab)
+    {
+        if (prefab == null)
+            return false;
+
+        if (!TryComputePose(lat, lon, slot, out Vector3 position, out Quaternion rotation))
+            return false;
+
+        GameObject instance = RentRegion(prefab);
+        if (instance == null)
+            return false;
+
+        instance.transform.SetPositionAndRotation(position, rotation);
+        instance.transform.localScale = Vector3.one;
+        instance.name = prefab.name;
+        instance.SetActive(true);
+
+        _active[PackKey(lat, lon, slot)] = new ActiveClump { Instance = instance, PrefabIndex = -1, RegionPrefab = prefab };
+        return true;
+    }
+
+    /// <summary>Jittered surface pose for a clump at (lat, lon)/slot — shared by the legacy and
+    /// region-driven spawn paths so both place/orient instances identically.</summary>
+    bool TryComputePose(int lat, int lon, int slot, out Vector3 position, out Quaternion rotation)
+    {
+        position = default;
+        rotation = Quaternion.identity;
 
         if (!_tiles.TryGetCellCenter(lat, lon, out Vector3 cellCenter))
             return false;
@@ -449,7 +529,7 @@ public class PlanetGrassStreamer : MonoBehaviour
         float surfaceRadius = _tiles.ProvidesWalkSurface
             ? _tiles.GetWalkSurfaceRadius(pointUp)
             : _planet.GetTerrainRadius(pointUp);
-        Vector3 position = _planet.Center + pointUp * (surfaceRadius + hover);
+        position = _planet.Center + pointUp * (surfaceRadius + hover);
 
         Vector3 normal = _tiles.ProvidesWalkSurface
             ? _tiles.GetWalkSurfaceNormal(pointUp)
@@ -458,18 +538,7 @@ public class PlanetGrassStreamer : MonoBehaviour
             normal = -normal;
 
         float yaw = Hash01(lat, lon, 40 + slot) * 360f;
-        Quaternion rotation = PlanetSurfacePose.RotationFromUp(normal, yaw);
-
-        GameObject instance = Rent(prefabIndex, prefab);
-        if (instance == null)
-            return false;
-
-        instance.transform.SetPositionAndRotation(position, rotation);
-        instance.transform.localScale = Vector3.one;
-        instance.name = NameFor(prefabIndex);
-        instance.SetActive(true);
-
-        _active[PackKey(lat, lon, slot)] = new ActiveClump { Instance = instance, PrefabIndex = prefabIndex };
+        rotation = PlanetSurfacePose.RotationFromUp(normal, yaw);
         return true;
     }
 
@@ -506,7 +575,11 @@ public class PlanetGrassStreamer : MonoBehaviour
 
         clump.Instance.SetActive(false);
         clump.Instance.transform.SetParent(_root, false);
-        _pools[clump.PrefabIndex].Push(clump.Instance);
+
+        if (clump.RegionPrefab != null)
+            GetRegionPool(clump.RegionPrefab).Push(clump.Instance);
+        else
+            _pools[clump.PrefabIndex].Push(clump.Instance);
     }
 
     GameObject Rent(int prefabIndex, GameObject prefab)
@@ -522,6 +595,32 @@ public class PlanetGrassStreamer : MonoBehaviour
         GameObject instance = Instantiate(prefab, _root);
         PrepareInstance(instance);
         return instance;
+    }
+
+    GameObject RentRegion(GameObject prefab)
+    {
+        Stack<GameObject> pool = GetRegionPool(prefab);
+        while (pool.Count > 0)
+        {
+            GameObject pooled = pool.Pop();
+            if (pooled != null)
+                return pooled;
+        }
+
+        GameObject instance = Instantiate(prefab, _root);
+        PrepareInstance(instance);
+        return instance;
+    }
+
+    Stack<GameObject> GetRegionPool(GameObject prefab)
+    {
+        if (!_regionPools.TryGetValue(prefab, out Stack<GameObject> pool))
+        {
+            pool = new Stack<GameObject>();
+            _regionPools[prefab] = pool;
+        }
+
+        return pool;
     }
 
     void PrepareInstance(GameObject instance)
@@ -582,5 +681,29 @@ public class PlanetGrassStreamer : MonoBehaviour
         Vector3 center = anchor != null ? anchor.position : transform.position;
         Gizmos.color = new Color(0.3f, 0.9f, 0.4f, 0.6f);
         Gizmos.DrawWireSphere(center, visibleRadius);
+
+        DrawRegionGizmos();
+    }
+
+    /// <summary>Sketches each region's blob seeds on the planet surface so the layout (tuned via
+    /// regionSet's seed/blobsPerRegion) can be eyeballed in the Scene view.</summary>
+    void DrawRegionGizmos()
+    {
+        if (regionSet == null)
+            return;
+
+        SphericalPlanet planetForGizmo = _planet != null ? _planet : ResolvePlanet();
+        if (planetForGizmo == null)
+            return;
+
+        int regionCount = Mathf.Max(1, regionSet.RegionCount);
+        int seedCount = regionSet.DebugSeedCount;
+        for (int i = 0; i < seedCount; i++)
+        {
+            int region = regionSet.DebugSeedRegion(i);
+            Gizmos.color = Color.HSVToRGB((region % regionCount) / (float)regionCount, 0.75f, 1f);
+            Vector3 point = planetForGizmo.Center + regionSet.DebugSeedDirection(i) * planetForGizmo.Radius;
+            Gizmos.DrawSphere(point, Mathf.Max(0.5f, planetForGizmo.Radius * 0.02f));
+        }
     }
 }

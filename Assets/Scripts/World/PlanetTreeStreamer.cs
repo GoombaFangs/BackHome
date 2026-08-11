@@ -14,7 +14,9 @@ using UnityEngine;
 ///
 /// Lives on the shared "Streamers" GameObject alongside the grass/rock streamers, not on the planet
 /// itself — keeps the planet hierarchy free of manager components. Assign <see cref="planet"/>
-/// explicitly, or leave it empty to auto-resolve via <see cref="SphericalPlanet.Instance"/>.
+/// explicitly, or leave it empty to auto-resolve via <see cref="SphericalPlanet.Instance"/>. The
+/// spawned instances themselves are parented under the planet's "Environment" child instead (see
+/// <see cref="PlanetEnvironmentRoot"/>), so streamed trees show up nested under the planet.
 ///
 /// Menu: BackHome → Setup Nyxara Tree Streaming (adds this + wires Tree1..Tree5).
 /// </summary>
@@ -82,6 +84,10 @@ public class PlanetTreeStreamer : MonoBehaviour
     [Tooltip("Optional explicit anchor (defaults to the player, which the follow camera always keeps centered).")]
     [SerializeField] Transform anchorOverride;
 
+    [Header("Regions")]
+    [Tooltip("When assigned, tree variants come from this region's weighted list instead of the Tree1..Tree5 slots/weights above (which are then ignored). Leave empty to keep the legacy planet-wide mix.")]
+    [SerializeField] PlanetEnvironmentRegionSet regionSet;
+
     SphericalPlanet _planet;
     PlanetTileMap _tiles;
     Transform _root;
@@ -92,6 +98,7 @@ public class PlanetTreeStreamer : MonoBehaviour
     readonly List<int> _toDespawn = new();
     readonly List<CellPick> _toSpawn = new();
     Stack<GameObject>[] _pools;
+    readonly Dictionary<GameObject, Stack<GameObject>> _regionPools = new();
 
     float _refreshTimer;
     int _longitudeBandsAtSetup;
@@ -101,6 +108,7 @@ public class PlanetTreeStreamer : MonoBehaviour
     {
         public GameObject Instance;
         public int PrefabIndex;
+        public GameObject RegionPrefab;
     }
 
     struct CellPick
@@ -108,6 +116,7 @@ public class PlanetTreeStreamer : MonoBehaviour
         public int Lat;
         public int Lon;
         public int PrefabIndex;
+        public GameObject RegionPrefab;
         public float SqrDistance;
     }
 
@@ -118,16 +127,19 @@ public class PlanetTreeStreamer : MonoBehaviour
         if (_planet == null)
             Debug.LogWarning("[PlanetTreeStreamer] No planet assigned and none found in the scene — tree streaming disabled.", this);
 
-        WarnIfPrefabMissing(tree1Prefab, "Tree1");
-        WarnIfPrefabMissing(tree2Prefab, "Tree2");
-        WarnIfPrefabMissing(tree3Prefab, "Tree3");
-        WarnIfPrefabMissing(tree4Prefab, "Tree4");
-        WarnIfPrefabMissing(tree5Prefab, "Tree5");
+        if (regionSet == null)
+        {
+            WarnIfPrefabMissing(tree1Prefab, "Tree1");
+            WarnIfPrefabMissing(tree2Prefab, "Tree2");
+            WarnIfPrefabMissing(tree3Prefab, "Tree3");
+            WarnIfPrefabMissing(tree4Prefab, "Tree4");
+            WarnIfPrefabMissing(tree5Prefab, "Tree5");
+        }
 
         var rootGo = new GameObject("TreeStream (Runtime)");
         rootGo.hideFlags = HideFlags.DontSave;
         _root = rootGo.transform;
-        _root.SetParent(transform, false);
+        _root.SetParent(PlanetEnvironmentRoot.FindOrCreate(_planet, transform), false);
 
         _pools = new Stack<GameObject>[PoolCount];
         for (int i = 0; i < PoolCount; i++)
@@ -190,7 +202,7 @@ public class PlanetTreeStreamer : MonoBehaviour
         return SphericalPlanet.Instance != null ? SphericalPlanet.Instance : FindAnyObjectByType<SphericalPlanet>();
     }
 
-    bool HasAnyPrefab() => tree1Prefab != null || tree2Prefab != null || tree3Prefab != null || tree4Prefab != null || tree5Prefab != null;
+    bool HasAnyPrefab() => regionSet != null || tree1Prefab != null || tree2Prefab != null || tree3Prefab != null || tree4Prefab != null || tree5Prefab != null;
 
     GameObject PrefabAt(int index)
     {
@@ -271,8 +283,9 @@ public class PlanetTreeStreamer : MonoBehaviour
                 if (!IsTreeCell(lat, lon))
                     continue;
 
-                TreePick pick = PickForCell(lat, lon);
-                if (pick == TreePick.Empty)
+                // Master density roll — decides whether this tile grows anything at all, before
+                // spending any work resolving which region/variant it'd be.
+                if (Hash01(lat, lon, 6) >= density)
                     continue;
 
                 if (!_tiles.TryGetCellCenter(lat, lon, out Vector3 cellCenter))
@@ -282,14 +295,14 @@ public class PlanetTreeStreamer : MonoBehaviour
                 if (sqrDist > sqrRadius)
                     continue;
 
-                int prefabIndex = PrefabIndexFor(pick);
-                if (PrefabAt(prefabIndex) == null)
+                Vector3 up = regionSet != null ? (cellCenter - _planet.Center).normalized : default;
+                if (!TryResolveVariant(lat, lon, up, 8, out int prefabIndex, out GameObject regionPrefab))
                     continue;
 
                 int key = PackKey(lat, lon);
                 _desired.Add(key);
                 if (!_active.ContainsKey(key))
-                    _toSpawn.Add(new CellPick { Lat = lat, Lon = lon, PrefabIndex = prefabIndex, SqrDistance = sqrDist });
+                    _toSpawn.Add(new CellPick { Lat = lat, Lon = lon, PrefabIndex = prefabIndex, RegionPrefab = regionPrefab, SqrDistance = sqrDist });
             }
         }
 
@@ -313,16 +326,36 @@ public class PlanetTreeStreamer : MonoBehaviour
                 break;
 
             CellPick pick = _toSpawn[i];
-            if (TrySpawn(pick.Lat, pick.Lon, pick.PrefabIndex))
+            bool ok = pick.RegionPrefab != null
+                ? TrySpawnRegion(pick.Lat, pick.Lon, pick.RegionPrefab)
+                : TrySpawn(pick.Lat, pick.Lon, pick.PrefabIndex);
+            if (ok)
                 spawned++;
         }
     }
 
-    TreePick PickForCell(int lat, int lon)
+    /// <summary>Resolves the prefab to grow at (lat, lon) — from <see cref="regionSet"/>'s weighted
+    /// tree list when assigned (<paramref name="up"/> must be the cell's surface direction in that
+    /// case), otherwise from this streamer's own Tree1..Tree5 slots/weights.</summary>
+    bool TryResolveVariant(int lat, int lon, Vector3 up, int salt, out int prefabIndex, out GameObject regionPrefab)
     {
-        if (Hash01(lat, lon, 6) >= density)
-            return TreePick.Empty;
-        return PickVariant(lat, lon, 8);
+        prefabIndex = -1;
+        regionPrefab = null;
+
+        if (regionSet != null)
+        {
+            int region = regionSet.GetRegionIndex(up);
+            PlanetEnvironmentRegionSet.Region regionData = regionSet.GetRegion(region);
+            regionPrefab = PlanetEnvironmentRegionSet.PickWeighted(regionData?.trees, Hash01(lat, lon, salt));
+            return regionPrefab != null;
+        }
+
+        TreePick pick = PickVariant(lat, lon, salt);
+        if (pick == TreePick.Empty)
+            return false;
+
+        prefabIndex = PrefabIndexFor(pick);
+        return true;
     }
 
     /// <summary>Weighted pick among whichever tree variants actually have a prefab assigned.
@@ -376,7 +409,7 @@ public class PlanetTreeStreamer : MonoBehaviour
 
         int terrainIndex = _tiles.GetTerrain(lat, lon);
         PlanetTileset.Terrain terrain = tileset.GetTerrain(terrainIndex);
-        if (terrain == null || !terrain.walkable)
+        if (terrain == null || !terrain.walkable || PlanetTileset.IsShadowGrassZone(terrain.zoneId))
             return false;
 
         return !string.IsNullOrEmpty(terrain.id)
@@ -391,6 +424,50 @@ public class PlanetTreeStreamer : MonoBehaviour
             LogMissingPrefabOnce(prefabIndex);
             return false;
         }
+
+        if (!TryComputePose(lat, lon, out Vector3 position, out Quaternion rotation))
+            return false;
+
+        GameObject instance = Rent(prefabIndex, prefab);
+        if (instance == null)
+            return false;
+
+        instance.transform.SetPositionAndRotation(position, rotation);
+        instance.transform.localScale = Vector3.one;
+        instance.name = NameFor(prefabIndex);
+        instance.SetActive(true);
+
+        _active[PackKey(lat, lon)] = new ActiveTree { Instance = instance, PrefabIndex = prefabIndex };
+        return true;
+    }
+
+    bool TrySpawnRegion(int lat, int lon, GameObject prefab)
+    {
+        if (prefab == null)
+            return false;
+
+        if (!TryComputePose(lat, lon, out Vector3 position, out Quaternion rotation))
+            return false;
+
+        GameObject instance = RentRegion(prefab);
+        if (instance == null)
+            return false;
+
+        instance.transform.SetPositionAndRotation(position, rotation);
+        instance.transform.localScale = Vector3.one;
+        instance.name = prefab.name;
+        instance.SetActive(true);
+
+        _active[PackKey(lat, lon)] = new ActiveTree { Instance = instance, PrefabIndex = -1, RegionPrefab = prefab };
+        return true;
+    }
+
+    /// <summary>Jittered surface pose for a tree at (lat, lon) — shared by the legacy and
+    /// region-driven spawn paths so both place/orient instances identically.</summary>
+    bool TryComputePose(int lat, int lon, out Vector3 position, out Quaternion rotation)
+    {
+        position = default;
+        rotation = Quaternion.identity;
 
         if (!_tiles.TryGetCellCenter(lat, lon, out Vector3 cellCenter))
             return false;
@@ -410,7 +487,7 @@ public class PlanetTreeStreamer : MonoBehaviour
         float surfaceRadius = _tiles.ProvidesWalkSurface
             ? _tiles.GetWalkSurfaceRadius(pointUp)
             : _planet.GetTerrainRadius(pointUp);
-        Vector3 position = _planet.Center + pointUp * (surfaceRadius + hover);
+        position = _planet.Center + pointUp * (surfaceRadius + hover);
 
         Vector3 normal = _tiles.ProvidesWalkSurface
             ? _tiles.GetWalkSurfaceNormal(pointUp)
@@ -419,18 +496,7 @@ public class PlanetTreeStreamer : MonoBehaviour
             normal = -normal;
 
         float yaw = Hash01(lat, lon, 40) * 360f;
-        Quaternion rotation = PlanetSurfacePose.RotationFromUp(normal, yaw);
-
-        GameObject instance = Rent(prefabIndex, prefab);
-        if (instance == null)
-            return false;
-
-        instance.transform.SetPositionAndRotation(position, rotation);
-        instance.transform.localScale = Vector3.one;
-        instance.name = NameFor(prefabIndex);
-        instance.SetActive(true);
-
-        _active[PackKey(lat, lon)] = new ActiveTree { Instance = instance, PrefabIndex = prefabIndex };
+        rotation = PlanetSurfacePose.RotationFromUp(normal, yaw);
         return true;
     }
 
@@ -467,7 +533,11 @@ public class PlanetTreeStreamer : MonoBehaviour
 
         tree.Instance.SetActive(false);
         tree.Instance.transform.SetParent(_root, false);
-        _pools[tree.PrefabIndex].Push(tree.Instance);
+
+        if (tree.RegionPrefab != null)
+            GetRegionPool(tree.RegionPrefab).Push(tree.Instance);
+        else
+            _pools[tree.PrefabIndex].Push(tree.Instance);
     }
 
     GameObject Rent(int prefabIndex, GameObject prefab)
@@ -483,6 +553,32 @@ public class PlanetTreeStreamer : MonoBehaviour
         GameObject instance = Instantiate(prefab, _root);
         PrepareInstance(instance);
         return instance;
+    }
+
+    GameObject RentRegion(GameObject prefab)
+    {
+        Stack<GameObject> pool = GetRegionPool(prefab);
+        while (pool.Count > 0)
+        {
+            GameObject pooled = pool.Pop();
+            if (pooled != null)
+                return pooled;
+        }
+
+        GameObject instance = Instantiate(prefab, _root);
+        PrepareInstance(instance);
+        return instance;
+    }
+
+    Stack<GameObject> GetRegionPool(GameObject prefab)
+    {
+        if (!_regionPools.TryGetValue(prefab, out Stack<GameObject> pool))
+        {
+            pool = new Stack<GameObject>();
+            _regionPools[prefab] = pool;
+        }
+
+        return pool;
     }
 
     void PrepareInstance(GameObject instance)
@@ -545,5 +641,29 @@ public class PlanetTreeStreamer : MonoBehaviour
         Vector3 center = anchor != null ? anchor.position : transform.position;
         Gizmos.color = new Color(0.35f, 0.55f, 0.25f, 0.6f);
         Gizmos.DrawWireSphere(center, visibleRadius);
+
+        DrawRegionGizmos();
+    }
+
+    /// <summary>Sketches each region's blob seeds on the planet surface so the layout (tuned via
+    /// regionSet's seed/blobsPerRegion) can be eyeballed in the Scene view.</summary>
+    void DrawRegionGizmos()
+    {
+        if (regionSet == null)
+            return;
+
+        SphericalPlanet planetForGizmo = _planet != null ? _planet : ResolvePlanet();
+        if (planetForGizmo == null)
+            return;
+
+        int regionCount = Mathf.Max(1, regionSet.RegionCount);
+        int seedCount = regionSet.DebugSeedCount;
+        for (int i = 0; i < seedCount; i++)
+        {
+            int region = regionSet.DebugSeedRegion(i);
+            Gizmos.color = Color.HSVToRGB((region % regionCount) / (float)regionCount, 0.75f, 1f);
+            Vector3 point = planetForGizmo.Center + regionSet.DebugSeedDirection(i) * planetForGizmo.Radius;
+            Gizmos.DrawSphere(point, Mathf.Max(0.5f, planetForGizmo.Radius * 0.02f));
+        }
     }
 }

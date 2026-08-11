@@ -11,7 +11,7 @@ using UnityEngine.SceneManagement;
 /// </summary>
 public static class NyxaraRockStreamingSetup
 {
-    const string ScenePath = "Assets/Scenes/Galaxy/PlanetNyxara.unity";
+    const string ScenePath = "Assets/Scenes/PlanetNyxara.unity";
     const string RocksFolder = "Assets/Galaxy/Planets/Nyxara/Environment/Rock";
     const string Rock1PrefabPath = RocksFolder + "/Rock.prefab";
     const string Rock2PrefabPath = RocksFolder + "/Rock2.prefab";

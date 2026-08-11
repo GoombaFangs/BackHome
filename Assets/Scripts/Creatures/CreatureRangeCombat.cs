@@ -12,6 +12,9 @@ public class CreatureRangeCombat : MonoBehaviour
     [Tooltip("Ranger prefab (AttackRangeIndicator). Instantiated if none is already a child.")]
     [SerializeField] GameObject rangerPrefab;
     [SerializeField] Color rangeColor = new Color(1f, 0.35f, 0.22f, 0.55f);
+    [Tooltip("Show the ground ring for this creature's attack range. Off by default — combat still " +
+        "uses the same radius, it's just not drawn.")]
+    [SerializeField] bool showRangeIndicator = false;
 
     Creature _creature;
     CreatureAnimator _anim;
@@ -44,8 +47,8 @@ public class CreatureRangeCombat : MonoBehaviour
             return;
         }
 
-        if (rangeIndicator != null && !rangeIndicator.gameObject.activeSelf)
-            rangeIndicator.gameObject.SetActive(true);
+        if (rangeIndicator != null && rangeIndicator.gameObject.activeSelf != showRangeIndicator)
+            rangeIndicator.gameObject.SetActive(showRangeIndicator);
 
         // No damage / attack anim while idle or returning home.
         if (_chase != null && !_chase.IsAggroed)

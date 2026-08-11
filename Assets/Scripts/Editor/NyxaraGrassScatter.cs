@@ -15,7 +15,7 @@ using UnityEngine.SceneManagement;
 /// </summary>
 public static class NyxaraGrassScatter
 {
-    const string ScenePath = "Assets/Scenes/Galaxy/PlanetNyxara.unity";
+    const string ScenePath = "Assets/Scenes/PlanetNyxara.unity";
     const string GrassFolder = "Assets/Galaxy/Planets/Nyxara/Environment/Grass";
     const string GrassPrefabPath = GrassFolder + "/Grass.prefab";
     const string Grass2PrefabPath = GrassFolder + "/Grass2.prefab";
@@ -320,7 +320,7 @@ public static class NyxaraGrassScatter
             return true;
 
         PlanetTileset.Terrain terrain = tileset.GetTerrain(terrainIndex);
-        if (terrain == null || !terrain.walkable)
+        if (terrain == null || !terrain.walkable || PlanetTileset.IsShadowGrassZone(terrain.zoneId))
             return false;
 
         if (string.IsNullOrEmpty(terrain.id))

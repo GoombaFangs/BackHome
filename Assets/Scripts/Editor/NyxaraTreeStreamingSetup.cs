@@ -13,7 +13,7 @@ using UnityEngine.SceneManagement;
 /// </summary>
 public static class NyxaraTreeStreamingSetup
 {
-    const string ScenePath = "Assets/Scenes/Galaxy/PlanetNyxara.unity";
+    const string ScenePath = "Assets/Scenes/PlanetNyxara.unity";
     const string TreesFolder = "Assets/Galaxy/Planets/Nyxara/Environment/Trees";
     const string Tree1PrefabPath = TreesFolder + "/Tree1.prefab";
     const string Tree2PrefabPath = TreesFolder + "/Tree2.prefab";
