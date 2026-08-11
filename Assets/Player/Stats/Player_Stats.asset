@@ -13,8 +13,8 @@ MonoBehaviour:
   m_Name: Player_Stats
   m_EditorClassIdentifier: Assembly-CSharp::PlayerStats
   displayName: Player
-  attackDamage: 30
+  attackDamage: 300
   attackSpeed: 3
   attackRange: 5.7
-  maxHealth: 800
+  maxHealth: 80000
   oxygenTank: 90

@@ -9,13 +9,11 @@ public class PlanetTileset : ScriptableObject
 {
     public const int MaskCount = 16;
 
-    /// <summary>Zone id used for "Shadow Grass" path tiles — walkable, but intentionally kept free
-    /// of grass/tree/rock props and creatures so it reads as a clear, professional-looking trail.
+    /// <summary>Zone id used for "Shadow Grass" path tiles — walkable terrain variant.
     /// See <see cref="IsShadowGrassZone"/>.</summary>
     public const string ShadowGrassZoneId = "shadow_grass";
 
-    /// <summary>True when <paramref name="zoneId"/> is the Shadow Grass path zone — used by the
-    /// environment streamers and <see cref="CreatureSpawner"/> to keep it free of elements.</summary>
+    /// <summary>True when <paramref name="zoneId"/> is the Shadow Grass path zone.</summary>
     public static bool IsShadowGrassZone(string zoneId) =>
         string.Equals(zoneId, ShadowGrassZoneId, StringComparison.OrdinalIgnoreCase);
 

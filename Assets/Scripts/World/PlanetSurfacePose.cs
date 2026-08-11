@@ -112,6 +112,29 @@ public static class PlanetSurfacePose
         return true;
     }
 
+    /// <summary>
+    /// True walking distance between two points on (or near) a sphere centered at <paramref name="center"/> —
+    /// the great-circle arc length, not a flat-plane projection.
+    /// Plain <c>Vector3.ProjectOnPlane(b - a, up)</c> silently collapses toward 0 for points on opposite
+    /// sides of the planet whose connecting line happens to be nearly parallel to <paramref name="up"/>
+    /// (e.g. two points that share the same axis through the center), which makes far-away creatures
+    /// register as "in range". This is safe to use for any pair of points, near or far.
+    /// </summary>
+    public static float GetSurfaceDistance(Vector3 center, Vector3 a, Vector3 b)
+    {
+        Vector3 dirA = a - center;
+        Vector3 dirB = b - center;
+        float radiusA = dirA.magnitude;
+        float radiusB = dirB.magnitude;
+        if (radiusA < 0.0001f || radiusB < 0.0001f)
+            return Vector3.Distance(a, b);
+
+        float cosAngle = Mathf.Clamp(Vector3.Dot(dirA, dirB) / (radiusA * radiusB), -1f, 1f);
+        float angle = Mathf.Acos(cosAngle);
+        float averageRadius = (radiusA + radiusB) * 0.5f;
+        return angle * averageRadius;
+    }
+
     public static Quaternion RotationFromUp(Vector3 up, float yawDegrees)
     {
         if (up.sqrMagnitude < 0.0001f)

@@ -27,7 +27,6 @@ MonoBehaviour:
     rocks:
     - prefab: {fileID: 2229266666281105650, guid: 6d39e132f666e5a4d83d29acda0de4cb, type: 3}
       weight: 1
-    creatures: []
   - name: Region B
     trees:
     - prefab: {fileID: 6529401389816808732, guid: 44685c5272c7458fbb703abab2c1507a, type: 3}
@@ -40,4 +39,23 @@ MonoBehaviour:
     rocks:
     - prefab: {fileID: 315047371028311681, guid: 541a6dab2ced86a40898cddecc823e29, type: 3}
       weight: 1
-    creatures: []
+  - name: Region C
+    trees:
+    - prefab: {fileID: 8396167407362669768, guid: c8ce36c3c84c7fb4e9432e31efc49ba1, type: 3}
+      weight: 1
+    grass:
+    - prefab: {fileID: 6586595388452404679, guid: 53ac6e18221123c4ba320a04966bc7fa, type: 3}
+      weight: 1
+    rocks:
+    - prefab: {fileID: 3099762285173911039, guid: 8d455d2a1ab89944898b82e2afdf1a15, type: 3}
+      weight: 1
+  - name: Region D
+    trees:
+    - prefab: {fileID: 4027186653557920374, guid: 7d2e5a0c6f3b8499e1c2d4a5b6f7e809, type: 3}
+      weight: 1
+    grass:
+    - prefab: {fileID: 6685107302268268320, guid: 6c1d4f9b5e2a7388d0b1c3f4a5e6d708, type: 3}
+      weight: 1
+    rocks:
+    - prefab: {fileID: 8260635690674299407, guid: ca4265244da0c7d459f66473349c54a8, type: 3}
+      weight: 1

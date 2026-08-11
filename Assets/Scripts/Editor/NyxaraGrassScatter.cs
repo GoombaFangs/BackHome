@@ -320,7 +320,7 @@ public static class NyxaraGrassScatter
             return true;
 
         PlanetTileset.Terrain terrain = tileset.GetTerrain(terrainIndex);
-        if (terrain == null || !terrain.walkable || PlanetTileset.IsShadowGrassZone(terrain.zoneId))
+        if (terrain == null || !terrain.walkable)
             return false;
 
         if (string.IsNullOrEmpty(terrain.id))

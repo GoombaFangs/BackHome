@@ -63,11 +63,10 @@ public class PlayerRangeCombat : MonoBehaviour
 
     void UpdateOccupancy(float radius, float damage)
     {
-        float radiusSq = radius * radius;
         Vector3 origin = transform.position;
-        Vector3 up = SphericalPlanet.Instance != null
-            ? SphericalPlanet.Instance.GetUpAt(origin)
-            : transform.up;
+        Vector3? planetCenter = SphericalPlanet.Instance != null
+            ? SphericalPlanet.Instance.Center
+            : (Vector3?)null;
 
         Creature[] creatures = FindObjectsByType<Creature>();
         _currentlyInside.Clear();
@@ -78,7 +77,7 @@ public class PlayerRangeCombat : MonoBehaviour
             if (creature == null || !creature.IsAlive)
                 continue;
 
-            if (!IsInsideRange(creature.transform.position, origin, up, radiusSq))
+            if (!IsInsideRange(creature.transform.position, origin, planetCenter, transform.up, radius))
                 continue;
 
             _currentlyInside.Add(creature);
@@ -124,9 +123,12 @@ public class PlayerRangeCombat : MonoBehaviour
             _inside.Remove(_removeBuffer[i]);
     }
 
-    static bool IsInsideRange(Vector3 target, Vector3 origin, Vector3 up, float radiusSq)
+    static bool IsInsideRange(Vector3 target, Vector3 origin, Vector3? planetCenter, Vector3 fallbackUp, float radius)
     {
-        Vector3 planar = Vector3.ProjectOnPlane(target - origin, up);
-        return planar.sqrMagnitude <= radiusSq;
+        if (planetCenter.HasValue)
+            return PlanetSurfacePose.GetSurfaceDistance(planetCenter.Value, origin, target) <= radius;
+
+        Vector3 planar = Vector3.ProjectOnPlane(target - origin, fallbackUp);
+        return planar.sqrMagnitude <= radius * radius;
     }
 }

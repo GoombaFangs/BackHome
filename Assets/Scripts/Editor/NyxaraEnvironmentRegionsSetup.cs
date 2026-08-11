@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
 using UnityEditor;
@@ -9,18 +8,21 @@ using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Editor tooling for Nyxara's region-based environment: creates/updates the example
-/// <see cref="PlanetEnvironmentRegionSet"/> asset (the two starter regions from the original
-/// request) and wires it into the Grass/Tree/Rock streamers — and <see cref="CreatureSpawner"/>,
-/// if one exists in the scene — on the "Streamers" root.
+/// <see cref="PlanetEnvironmentRegionSet"/> asset (four procedural regions) and wires it into the
+/// global Grass/Tree/Rock streamers on "EnvironmentManager" (via <see cref="PlanetEnvironmentManager"/>).
 ///
-/// Region A: Tree1 / Grass3 + Grass_Luminous_Toadstool / Rock3 — plus a dense Grimling pocket
-/// (<see cref="DenseRegionCreatureCount"/>). Every scene marker whose name starts with
-/// <see cref="SpawnPointNamePrefix"/> (e.g. "Spawn Point", "Spawn Point (1)") gets its own tight
-/// cluster (<see cref="CreatureSpawner.SpawnPoint"/>, <see cref="DenseSpawnPointRadius"/>); if none
-/// exist, it falls back to spawning anywhere within Region A's procedural area.
-/// Region B: Tree3 + Tree5 / Grass2 / Rock — no region-specific creatures.
-/// The CreatureSpawner's old flat, planet-wide spawnEntries row is cleared — Grimlings now spawn
-/// exclusively from the region/spawn-point pocket above, not planet-wide too.
+/// Does NOT touch <see cref="CreatureSpawner"/> — creatures are configured separately in the
+/// Inspector. Environment and creatures are fully decoupled.
+///
+/// Flora streams across the whole planet via noise-seeded region blobs
+/// (<see cref="PlanetEnvironmentRegionSet.GetRegionIndex"/>). No hand-placed Area markers needed.
+///
+/// Region A: Tree1 / Grass3 + Grass_Luminous_Toadstool / Rock3.
+/// Region B: Tree3 + Tree5 / Grass2 / Rock.
+/// Region C: Tree2 / Grass / Rock2.
+/// Region D: Tree4 / Hollow_Log / Rock4.
+///
+/// Tree_Emerald_Canopy and Rock_Blue_Ridge_Formation are scene props only — not streamed via regions.
 ///
 /// Menu: BackHome → Setup Nyxara Environment Regions (Recommended)
 /// </summary>
@@ -33,31 +35,24 @@ public static class NyxaraEnvironmentRegionsSetup
     const string TreesFolder = EnvironmentFolder + "/Trees";
     const string GrassFolder = EnvironmentFolder + "/Grass";
     const string RocksFolder = EnvironmentFolder + "/Rock";
-    const string CreaturesFolder = "Assets/Galaxy/Planets/Nyxara/Creatures";
 
     const string Tree1PrefabPath = TreesFolder + "/Tree1.prefab";
+    const string Tree2PrefabPath = TreesFolder + "/Tree2.prefab";
     const string Tree3PrefabPath = TreesFolder + "/Tree3.prefab";
+    const string Tree4PrefabPath = TreesFolder + "/Tree4.prefab";
     const string Tree5PrefabPath = TreesFolder + "/Tree5.prefab";
+    const string Grass1PrefabPath = GrassFolder + "/Grass.prefab";
     const string Grass2PrefabPath = GrassFolder + "/Grass2.prefab";
     const string Grass3PrefabPath = GrassFolder + "/Grass3.prefab";
     const string GrassLuminousToadstoolPrefabPath = GrassFolder + "/Grass_Luminous_Toadstool.prefab";
+    const string HollowLogPrefabPath = GrassFolder + "/Hollow_Log.prefab";
     const string Rock1PrefabPath = RocksFolder + "/Rock.prefab";
+    const string Rock2PrefabPath = RocksFolder + "/Rock2.prefab";
     const string Rock3PrefabPath = RocksFolder + "/Rock3.prefab";
-    const string GrimlingPrefabPath = CreaturesFolder + "/Grimling/Prefabs/Grimling.prefab";
-    const string GrimlingLootDropPrefabPath = CreaturesFolder + "/Grimling/Loot/GrimlingLootDrop.prefab";
+    const string Rock4PrefabPath = RocksFolder + "/Rock4.prefab";
 
-    /// <summary>Grimlings confined to the region/spawn-point pocket (the CreatureSpawner's old
-    /// flat, planet-wide spawnEntries row is cleared) — makes it read as a single, distinctly dense
-    /// "Grimling Den" (packed shoulder-to-shoulder, reference: mobile-game mob clusters) instead of
-    /// scattered thinly across the whole planet.</summary>
-    const int DenseRegionCreatureCount = 220;
-    const float DenseRegionRespawnSeconds = 4f;
-    const float DenseRegionMinSeparationDegrees = 1.5f;
-
-    /// <summary>Scene markers whose Transform name starts with this prefix each receive their own
-    /// dense Grimling cluster (e.g. "Spawn Point", "Spawn Point (1)", "Spawn Point (2)").</summary>
-    const string SpawnPointNamePrefix = "Spawn Point";
-    const float DenseSpawnPointRadius = 12f;
+    /// <summary>Retired hierarchy root from an old per-Area streaming experiment — removed on setup.</summary>
+    const string EnvironmentRegionsRootName = "EnvironmentRegions";
 
     [MenuItem("BackHome/Setup Nyxara Environment Regions (Recommended)")]
     public static void SetupRegionsMenu()
@@ -89,37 +84,43 @@ public static class NyxaraEnvironmentRegionsSetup
         OpenSceneIfNeeded();
 
         GameObject tree1 = AssetDatabase.LoadAssetAtPath<GameObject>(Tree1PrefabPath);
+        GameObject tree2 = AssetDatabase.LoadAssetAtPath<GameObject>(Tree2PrefabPath);
         GameObject tree3 = AssetDatabase.LoadAssetAtPath<GameObject>(Tree3PrefabPath);
+        GameObject tree4 = AssetDatabase.LoadAssetAtPath<GameObject>(Tree4PrefabPath);
         GameObject tree5 = AssetDatabase.LoadAssetAtPath<GameObject>(Tree5PrefabPath);
+        GameObject grass1 = AssetDatabase.LoadAssetAtPath<GameObject>(Grass1PrefabPath);
         GameObject grass2 = AssetDatabase.LoadAssetAtPath<GameObject>(Grass2PrefabPath);
         GameObject grass3 = AssetDatabase.LoadAssetAtPath<GameObject>(Grass3PrefabPath);
         GameObject grassToadstool = AssetDatabase.LoadAssetAtPath<GameObject>(GrassLuminousToadstoolPrefabPath);
+        GameObject hollowLog = AssetDatabase.LoadAssetAtPath<GameObject>(HollowLogPrefabPath);
         GameObject rock1 = AssetDatabase.LoadAssetAtPath<GameObject>(Rock1PrefabPath);
+        GameObject rock2 = AssetDatabase.LoadAssetAtPath<GameObject>(Rock2PrefabPath);
         GameObject rock3 = AssetDatabase.LoadAssetAtPath<GameObject>(Rock3PrefabPath);
-        GameObject grimling = AssetDatabase.LoadAssetAtPath<GameObject>(GrimlingPrefabPath);
-        GameObject grimlingLoot = AssetDatabase.LoadAssetAtPath<GameObject>(GrimlingLootDropPrefabPath);
+        GameObject rock4 = AssetDatabase.LoadAssetAtPath<GameObject>(Rock4PrefabPath);
 
-        if (tree1 == null || tree3 == null || tree5 == null
-            || grass2 == null || grass3 == null || grassToadstool == null
-            || rock1 == null || rock3 == null || grimling == null)
+        if (tree1 == null || tree2 == null || tree3 == null || tree4 == null || tree5 == null
+            || grass1 == null || grass2 == null || grass3 == null || grassToadstool == null || hollowLog == null
+            || rock1 == null || rock2 == null || rock3 == null || rock4 == null)
         {
             string missingMessage =
                 "Missing prefab(s).\n"
                 + $"Tree1: {(tree1 != null ? "OK" : "MISSING")}\n"
+                + $"Tree2: {(tree2 != null ? "OK" : "MISSING")}\n"
                 + $"Tree3: {(tree3 != null ? "OK" : "MISSING")}\n"
+                + $"Tree4: {(tree4 != null ? "OK" : "MISSING")}\n"
                 + $"Tree5: {(tree5 != null ? "OK" : "MISSING")}\n"
+                + $"Grass: {(grass1 != null ? "OK" : "MISSING")}\n"
                 + $"Grass2: {(grass2 != null ? "OK" : "MISSING")}\n"
                 + $"Grass3: {(grass3 != null ? "OK" : "MISSING")}\n"
                 + $"Grass_Luminous_Toadstool: {(grassToadstool != null ? "OK" : "MISSING")}\n"
+                + $"Hollow_Log: {(hollowLog != null ? "OK" : "MISSING")}\n"
                 + $"Rock: {(rock1 != null ? "OK" : "MISSING")}\n"
+                + $"Rock2: {(rock2 != null ? "OK" : "MISSING")}\n"
                 + $"Rock3: {(rock3 != null ? "OK" : "MISSING")}\n"
-                + $"Grimling: {(grimling != null ? "OK" : "MISSING")}";
+                + $"Rock4: {(rock4 != null ? "OK" : "MISSING")}";
             Debug.LogError($"[BackHome] Environment Regions: {missingMessage}");
             return missingMessage;
         }
-
-        if (grimlingLoot == null)
-            Debug.LogWarning($"[BackHome] Environment Regions: GrimlingLootDrop prefab not found at {GrimlingLootDropPrefabPath} — the dense Region A pocket will spawn without a loot drop.");
 
         PlanetEnvironmentRegionSet regionSet = AssetDatabase.LoadAssetAtPath<PlanetEnvironmentRegionSet>(RegionSetAssetPath);
         bool isNewAsset = regionSet == null;
@@ -128,18 +129,6 @@ public static class NyxaraEnvironmentRegionsSetup
             regionSet = ScriptableObject.CreateInstance<PlanetEnvironmentRegionSet>();
             AssetDatabase.CreateAsset(regionSet, RegionSetAssetPath);
         }
-
-        List<Transform> spawnPointAnchors = FindSpawnPointAnchors();
-        bool useSpawnPoints = spawnPointAnchors.Count > 0;
-
-        var denseGrimlingEntry = new CreatureSpawner.SpawnEntry
-        {
-            prefab = grimling,
-            count = DenseRegionCreatureCount,
-            respawnTime = DenseRegionRespawnSeconds,
-            lootDropPrefab = grimlingLoot,
-            minSeparationDegrees = DenseRegionMinSeparationDegrees,
-        };
 
         var regionA = new PlanetEnvironmentRegionSet.Region
         {
@@ -151,9 +140,6 @@ public static class NyxaraEnvironmentRegionsSetup
                 new PlanetEnvironmentRegionSet.WeightedPrefab { prefab = grassToadstool, weight = 1f },
             },
             rocks = new[] { new PlanetEnvironmentRegionSet.WeightedPrefab { prefab = rock3, weight = 1f } },
-            // Prefer hand-placed spawn-point anchors when any exist — falls back to spawning
-            // anywhere within Region A's (much larger) procedural area otherwise.
-            creatures = useSpawnPoints ? Array.Empty<CreatureSpawner.SpawnEntry>() : new[] { denseGrimlingEntry },
         };
 
         var regionB = new PlanetEnvironmentRegionSet.Region
@@ -166,73 +152,46 @@ public static class NyxaraEnvironmentRegionsSetup
             },
             grass = new[] { new PlanetEnvironmentRegionSet.WeightedPrefab { prefab = grass2, weight = 1f } },
             rocks = new[] { new PlanetEnvironmentRegionSet.WeightedPrefab { prefab = rock1, weight = 1f } },
-            creatures = Array.Empty<CreatureSpawner.SpawnEntry>(),
         };
 
-        SetRegions(regionSet, new[] { regionA, regionB });
+        var regionC = new PlanetEnvironmentRegionSet.Region
+        {
+            name = "Region C",
+            trees = new[] { new PlanetEnvironmentRegionSet.WeightedPrefab { prefab = tree2, weight = 1f } },
+            grass = new[] { new PlanetEnvironmentRegionSet.WeightedPrefab { prefab = grass1, weight = 1f } },
+            rocks = new[] { new PlanetEnvironmentRegionSet.WeightedPrefab { prefab = rock2, weight = 1f } },
+        };
+
+        var regionD = new PlanetEnvironmentRegionSet.Region
+        {
+            name = "Region D",
+            trees = new[] { new PlanetEnvironmentRegionSet.WeightedPrefab { prefab = tree4, weight = 1f } },
+            grass = new[] { new PlanetEnvironmentRegionSet.WeightedPrefab { prefab = hollowLog, weight = 1f } },
+            rocks = new[] { new PlanetEnvironmentRegionSet.WeightedPrefab { prefab = rock4, weight = 1f } },
+        };
+
+        PlanetEnvironmentRegionSet.Region[] regionTemplates = { regionA, regionB, regionC, regionD };
+        SetRegions(regionSet, regionTemplates);
         EditorUtility.SetDirty(regionSet);
 
         var report = new StringBuilder();
         Transform streamersRoot = NyxaraStreamersRoot.FindOrCreate();
+        SphericalPlanet planet = UnityEngine.Object.FindAnyObjectByType<SphericalPlanet>();
 
-        int wired = 0;
+        if (RemoveEnvironmentRegionsHierarchy())
+            report.AppendLine($"Removed retired '{EnvironmentRegionsRootName}' hierarchy (Area markers are no longer used).");
+
+        int wired = WireEnvironmentManager(streamersRoot, planet, regionSet, report);
         wired += TryAssignRegionSet<PlanetGrassStreamer>(streamersRoot, regionSet, "Grass", report);
         wired += TryAssignRegionSet<PlanetTreeStreamer>(streamersRoot, regionSet, "Tree", report);
         wired += TryAssignRegionSet<PlanetRockStreamer>(streamersRoot, regionSet, "Rock", report);
-
-        CreatureSpawner creatureSpawner = UnityEngine.Object.FindAnyObjectByType<CreatureSpawner>();
-        if (creatureSpawner != null)
-        {
-            var so = new SerializedObject(creatureSpawner);
-            so.FindProperty("regionSet").objectReferenceValue = regionSet;
-
-            // Grimlings now come exclusively from the region/spawn-point pocket below — clear the
-            // old flat, planet-wide spawnEntries row so it's not spawning an extra, undesired batch.
-            SerializedProperty spawnEntriesProp = so.FindProperty("spawnEntries");
-            int clearedSpawnEntries = spawnEntriesProp.arraySize;
-            spawnEntriesProp.ClearArray();
-
-            so.ApplyModifiedPropertiesWithoutUndo();
-
-            if (useSpawnPoints)
-            {
-                var points = new CreatureSpawner.SpawnPoint[spawnPointAnchors.Count];
-                for (int i = 0; i < spawnPointAnchors.Count; i++)
-                {
-                    points[i] = new CreatureSpawner.SpawnPoint
-                    {
-                        anchor = spawnPointAnchors[i],
-                        radius = DenseSpawnPointRadius,
-                        creatures = new[] { denseGrimlingEntry },
-                    };
-                }
-
-                SetSpawnPoints(creatureSpawner, points);
-                report.AppendLine(
-                    $"Found {spawnPointAnchors.Count} '{SpawnPointNamePrefix}*' marker(s) — "
-                    + $"{DenseRegionCreatureCount} dense Grimlings each @ {DenseSpawnPointRadius:0}-unit radius "
-                    + $"({DenseRegionMinSeparationDegrees}° spacing).");
-            }
-
-            if (clearedSpawnEntries > 0)
-                report.AppendLine($"Cleared {clearedSpawnEntries} planet-wide spawnEntries row(s) — Grimlings now only come from the region/spawn-point pocket.");
-
-            EditorUtility.SetDirty(creatureSpawner);
-            wired++;
-        }
-        else
-        {
-            report.AppendLine("No CreatureSpawner found in the scene — skipped (both example regions start with an empty creature list anyway).");
-        }
+        SetGlobalStreamersEnabled(streamersRoot, enabled: true, report);
 
         EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
         AssetDatabase.SaveAssets();
 
-        string denseDescription = useSpawnPoints
-            ? $"{spawnPointAnchors.Count}×{DenseRegionCreatureCount} Grimlings packed @ {DenseRegionMinSeparationDegrees}° spacing (one cluster per '{SpawnPointNamePrefix}*' marker)"
-            : $"+{DenseRegionCreatureCount} tightly-packed Grimlings @ {DenseRegionMinSeparationDegrees}° spacing in Region A";
         string resultMessage = (isNewAsset ? "Created" : "Updated")
-            + $" {RegionSetAssetPath} (Region A: Tree1 / Grass3+Grass_Luminous_Toadstool / Rock3 / {denseDescription} — Region B: Tree3+Tree5 / Grass2 / Rock) and wired it into {wired} component(s).";
+            + $" {RegionSetAssetPath} (flora streams across the whole planet via EnvironmentManager — Region A: Tree1 / Grass3+Grass_Luminous_Toadstool / Rock3 — Region B: Tree3+Tree5 / Grass2 / Rock — Region C: Tree2 / Grass / Rock2 — Region D: Tree4 / Hollow_Log / Rock4) and wired {wired} component(s). CreatureSpawner was NOT modified.";
         if (report.Length > 0)
             resultMessage += "\n\n" + report.ToString().TrimEnd();
 
@@ -240,18 +199,65 @@ public static class NyxaraEnvironmentRegionsSetup
         return resultMessage;
     }
 
+    static void SetGlobalStreamersEnabled(Transform streamersRoot, bool enabled, StringBuilder report)
+    {
+        SetStreamerEnabled<PlanetGrassStreamer>(streamersRoot, enabled);
+        SetStreamerEnabled<PlanetTreeStreamer>(streamersRoot, enabled);
+        SetStreamerEnabled<PlanetRockStreamer>(streamersRoot, enabled);
+
+        if (enabled)
+            report.AppendLine("Enabled global Grass/Tree/Rock streamers on 'EnvironmentManager'.");
+        else
+            report.AppendLine("Disabled global Grass/Tree/Rock streamers on 'EnvironmentManager'.");
+    }
+
+    static void SetStreamerEnabled<T>(Transform streamersRoot, bool enabled) where T : Behaviour
+    {
+        T streamer = streamersRoot.GetComponent<T>();
+        if (streamer == null)
+            return;
+
+        streamer.enabled = enabled;
+        EditorUtility.SetDirty(streamer);
+    }
+
+    static int WireEnvironmentManager(Transform streamersRoot, SphericalPlanet planet, PlanetEnvironmentRegionSet regionSet, StringBuilder report)
+    {
+        PlanetEnvironmentManager manager = streamersRoot.GetComponent<PlanetEnvironmentManager>();
+        if (manager == null)
+            manager = Undo.AddComponent<PlanetEnvironmentManager>(streamersRoot.gameObject);
+
+        var so = new SerializedObject(manager);
+        so.FindProperty("regionSet").objectReferenceValue = regionSet;
+        if (planet != null)
+            so.FindProperty("planet").objectReferenceValue = planet;
+        so.ApplyModifiedPropertiesWithoutUndo();
+
+        manager.ApplyConfiguration();
+        EditorUtility.SetDirty(manager);
+        MarkStreamerDirty<PlanetGrassStreamer>(streamersRoot);
+        MarkStreamerDirty<PlanetTreeStreamer>(streamersRoot);
+        MarkStreamerDirty<PlanetRockStreamer>(streamersRoot);
+        report.AppendLine("Wired NyxaraEnvironmentRegions into PlanetEnvironmentManager (single regionSet reference for all streamers).");
+        return 1;
+    }
+
+    static void MarkStreamerDirty<T>(Transform streamersRoot) where T : Component
+    {
+        T streamer = streamersRoot.GetComponent<T>();
+        if (streamer != null)
+            EditorUtility.SetDirty(streamer);
+    }
+
     static int TryAssignRegionSet<T>(Transform streamersRoot, PlanetEnvironmentRegionSet regionSet, string label, StringBuilder report) where T : Component
     {
         T streamer = streamersRoot.GetComponent<T>();
         if (streamer == null)
         {
-            report.AppendLine($"No {typeof(T).Name} found on 'Streamers' — run BackHome → Setup Nyxara {label} Streaming first.");
+            report.AppendLine($"No {typeof(T).Name} found on 'EnvironmentManager' — run BackHome → Setup Nyxara {label} Streaming first.");
             return 0;
         }
 
-        var so = new SerializedObject(streamer);
-        so.FindProperty("regionSet").objectReferenceValue = regionSet;
-        so.ApplyModifiedPropertiesWithoutUndo();
         EditorUtility.SetDirty(streamer);
         return 1;
     }
@@ -262,33 +268,22 @@ public static class NyxaraEnvironmentRegionsSetup
         field.SetValue(regionSet, regions);
     }
 
-    static void SetSpawnPoints(CreatureSpawner spawner, CreatureSpawner.SpawnPoint[] spawnPoints)
+    /// <summary>Deletes the retired <see cref="EnvironmentRegionsRootName"/> root and all its children
+    /// (hand-placed Area markers from an old streaming experiment).</summary>
+    static bool RemoveEnvironmentRegionsHierarchy()
     {
-        FieldInfo field = typeof(CreatureSpawner).GetField("spawnPoints", BindingFlags.NonPublic | BindingFlags.Instance);
-        field.SetValue(spawner, spawnPoints);
-    }
-
-    /// <summary>Collects every Transform in the active scene whose name starts with
-    /// <see cref="SpawnPointNamePrefix"/> (depth-first, stable name sort).</summary>
-    static List<Transform> FindSpawnPointAnchors()
-    {
-        var results = new List<Transform>();
         Scene scene = SceneManager.GetActiveScene();
         GameObject[] roots = scene.GetRootGameObjects();
         for (int i = 0; i < roots.Length; i++)
-            CollectSpawnPointAnchors(roots[i].transform, results);
+        {
+            if (!string.Equals(roots[i].name, EnvironmentRegionsRootName, StringComparison.Ordinal))
+                continue;
 
-        results.Sort((a, b) => string.Compare(a.name, b.name, StringComparison.Ordinal));
-        return results;
-    }
+            Undo.DestroyObjectImmediate(roots[i]);
+            return true;
+        }
 
-    static void CollectSpawnPointAnchors(Transform t, List<Transform> results)
-    {
-        if (t.name.StartsWith(SpawnPointNamePrefix, StringComparison.Ordinal))
-            results.Add(t);
-
-        for (int i = 0; i < t.childCount; i++)
-            CollectSpawnPointAnchors(t.GetChild(i), results);
+        return false;
     }
 
     static void OpenSceneIfNeeded()

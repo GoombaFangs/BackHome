@@ -101,7 +101,7 @@ public class CreatureChase : MonoBehaviour
         if (vision <= 0f)
             return;
 
-        if (GetPlanarDistance(player.transform.position) <= vision)
+        if (GetSurfaceDistanceTo(player.transform.position) <= vision)
             EnterAggro();
     }
 
@@ -114,7 +114,7 @@ public class CreatureChase : MonoBehaviour
         PlayerVitals player = null;
 
         if (TryGetLivingPlayer(out player) && vision > 0f)
-            playerVisible = GetPlanarDistance(player.transform.position) <= vision;
+            playerVisible = GetSurfaceDistanceTo(player.transform.position) <= vision;
 
         if (playerVisible)
         {
@@ -137,9 +137,9 @@ public class CreatureChase : MonoBehaviour
             return;
         }
 
-        float planarDist = GetPlanarDistance(player.transform.position);
+        float distToPlayer = GetSurfaceDistanceTo(player.transform.position);
 
-        if (attack > 0f && planarDist <= attack)
+        if (attack > 0f && distToPlayer <= attack)
         {
             FaceToward(player.transform.position);
             _anim?.SetMoving(false);
@@ -156,14 +156,14 @@ public class CreatureChase : MonoBehaviour
         if (TryGetLivingPlayer(out PlayerVitals player))
         {
             float vision = _creature.VisionRange;
-            if (vision > 0f && GetPlanarDistance(player.transform.position) <= vision)
+            if (vision > 0f && GetSurfaceDistanceTo(player.transform.position) <= vision)
             {
                 EnterAggro();
                 return;
             }
         }
 
-        float homeDist = GetPlanarDistance(_homePosition);
+        float homeDist = GetSurfaceDistanceTo(_homePosition);
         if (homeDist <= homeArriveDistance)
         {
             ArriveHome();
@@ -283,14 +283,14 @@ public class CreatureChase : MonoBehaviour
         transform.SetPositionAndRotation(next, nextRot);
     }
 
-    float GetPlanarDistance(Vector3 targetPosition)
+    float GetSurfaceDistanceTo(Vector3 targetPosition)
     {
         Vector3 origin = transform.position;
-        Vector3 up = _planet != null
-            ? _planet.GetUpAt(origin)
-            : transform.up;
 
-        return Vector3.ProjectOnPlane(targetPosition - origin, up).magnitude;
+        if (_planet != null)
+            return PlanetSurfacePose.GetSurfaceDistance(_planet.Center, origin, targetPosition);
+
+        return Vector3.ProjectOnPlane(targetPosition - origin, transform.up).magnitude;
     }
 
     bool TryResolvePlayer(out PlayerVitals player)

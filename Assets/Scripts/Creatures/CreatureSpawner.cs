@@ -29,7 +29,7 @@ public class CreatureSpawner : MonoBehaviour
 
         [Tooltip("Minimum spacing (degrees) enforced between spawned creatures of this entry. " +
             "0 (default) = use the spawner-wide default (12°). Lower values (e.g. 2-3°) allow a " +
-            "tightly packed, much denser cluster — handy for a region-confined \"den\" of many creatures.")]
+            "tightly packed, much denser cluster — handy for a spawn-point \"den\" of many creatures.")]
         [Min(0f)]
         public float minSeparationDegrees;
     }
@@ -61,18 +61,16 @@ public class CreatureSpawner : MonoBehaviour
         [Min(0.1f)]
         public float radius;
 
-        [Tooltip("Creatures confined to this spawn point, additive to spawnEntries/regionSet.")]
+        [Tooltip("Creatures confined to this spawn point, additive to spawnEntries.")]
         public SpawnEntry[] creatures;
     }
 
     /// <summary>One combined-list entry: a global row from <see cref="spawnEntries"/> (unrestricted,
-    /// regionIndex/spawnPointIndex both -1, today's exact behavior), a row from a specific region's
-    /// creature list (spawn/respawn confined to that region's area), or a row from a specific
-    /// <see cref="SpawnPoint"/> (confined to a small radius around a hand-placed anchor).</summary>
+    /// spawnPointIndex -1) or a row from a specific <see cref="SpawnPoint"/> (confined to a small
+    /// radius around a hand-placed anchor).</summary>
     struct ResolvedEntry
     {
         public SpawnEntry entry;
-        public int regionIndex;
         public int spawnPointIndex;
     }
 
@@ -84,12 +82,8 @@ public class CreatureSpawner : MonoBehaviour
     [Tooltip("One row per creature type. Same spawner can mix multiple prefabs. Spawned/respawned anywhere on the planet (no region restriction).")]
     [SerializeField] SpawnEntry[] spawnEntries = Array.Empty<SpawnEntry>();
 
-    [Header("Regions")]
-    [Tooltip("Optional — when assigned, each region's own creature list (see PlanetEnvironmentRegionSet) is spawned additionally, confined to spawn/respawn only within that region's area. Leave empty to ignore regions entirely.")]
-    [SerializeField] PlanetEnvironmentRegionSet regionSet;
-
     [Header("Spawn Points")]
-    [Tooltip("Optional — hand-placed anchor markers where a specific creature list spawns confined to a small radius (a precise, dense \"den\"), additive to spawnEntries/regionSet.")]
+    [Tooltip("Optional — hand-placed anchor markers where a specific creature list spawns confined to a small radius (a precise, dense \"den\"), additive to spawnEntries.")]
     [SerializeField] SpawnPoint[] spawnPoints = Array.Empty<SpawnPoint>();
 
     [Header("Timing")]
@@ -100,6 +94,10 @@ public class CreatureSpawner : MonoBehaviour
     [SerializeField] string initialAnimatorState = "idle";
     [Tooltip("Parent for spawned instances. Leave empty to create a child named Creatures.")]
     [SerializeField] Transform spawnRoot;
+
+    [Header("Loot")]
+    [Tooltip("Pooled world drops on creature death. Defaults to LootDropPool on spawnRoot (Creatures).")]
+    [SerializeField] LootDropPool lootPool;
 
     // Internal placement defaults — not exposed in the Inspector.
     const float FootOffset = 0.05f;
@@ -114,7 +112,7 @@ public class CreatureSpawner : MonoBehaviour
     readonly List<Vector3> _acceptedDirs = new();
     readonly List<PendingRespawn> _pendingRespawns = new();
     readonly List<ResolvedEntry> _allEntries = new();
-    System.Random _regionRng;
+    System.Random _spawnRng;
     LootDropPool _lootPool;
 
     public SphericalPlanet Planet => planet;
@@ -144,6 +142,9 @@ public class CreatureSpawner : MonoBehaviour
 
             spawnPoints[p] = point;
         }
+
+        if (lootPool == null && spawnRoot != null)
+            lootPool = spawnRoot.GetComponent<LootDropPool>();
     }
 
     static SpawnEntry ClampEntry(SpawnEntry entry)
@@ -207,7 +208,6 @@ public class CreatureSpawner : MonoBehaviour
         for (int e = 0; e < _allEntries.Count; e++)
         {
             SpawnEntry entry = _allEntries[e].entry;
-            int regionIndex = _allEntries[e].regionIndex;
             int spawnPointIndex = _allEntries[e].spawnPointIndex;
             if (entry.prefab == null || entry.count <= 0)
                 continue;
@@ -217,7 +217,7 @@ public class CreatureSpawner : MonoBehaviour
             int placed = 0;
             for (int i = 0; i < entry.count; i++)
             {
-                if (!TryPickSpawnDirection(minDot, regionIndex, spawnPointIndex, out Vector3 dir))
+                if (!TryPickSpawnDirection(minDot, spawnPointIndex, out Vector3 dir))
                 {
                     Debug.LogWarning(
                         $"{name}: placed {placed}/{entry.count} of '{entry.prefab.name}' " +
@@ -235,9 +235,7 @@ public class CreatureSpawner : MonoBehaviour
     }
 
     /// <summary>Rebuilds the combined spawn-entry list: global <see cref="spawnEntries"/> rows
-    /// (unrestricted), every region's own creature rows from <see cref="regionSet"/> (if assigned),
-    /// and every <see cref="spawnPoints"/> row (if any). All additive — never removes/replaces
-    /// each other.</summary>
+    /// (unrestricted) and every <see cref="spawnPoints"/> row (if any). All additive.</summary>
     void BuildAllEntries()
     {
         _allEntries.Clear();
@@ -245,21 +243,7 @@ public class CreatureSpawner : MonoBehaviour
         if (spawnEntries != null)
         {
             for (int i = 0; i < spawnEntries.Length; i++)
-                _allEntries.Add(new ResolvedEntry { entry = spawnEntries[i], regionIndex = -1, spawnPointIndex = -1 });
-        }
-
-        if (regionSet != null)
-        {
-            int regionCount = regionSet.RegionCount;
-            for (int r = 0; r < regionCount; r++)
-            {
-                PlanetEnvironmentRegionSet.Region region = regionSet.GetRegion(r);
-                if (region?.creatures == null)
-                    continue;
-
-                for (int i = 0; i < region.creatures.Length; i++)
-                    _allEntries.Add(new ResolvedEntry { entry = region.creatures[i], regionIndex = r, spawnPointIndex = -1 });
-            }
+                _allEntries.Add(new ResolvedEntry { entry = spawnEntries[i], spawnPointIndex = -1 });
         }
 
         if (spawnPoints != null)
@@ -271,7 +255,7 @@ public class CreatureSpawner : MonoBehaviour
                     continue;
 
                 for (int i = 0; i < creatures.Length; i++)
-                    _allEntries.Add(new ResolvedEntry { entry = creatures[i], regionIndex = -1, spawnPointIndex = p });
+                    _allEntries.Add(new ResolvedEntry { entry = creatures[i], spawnPointIndex = p });
             }
         }
     }
@@ -281,7 +265,7 @@ public class CreatureSpawner : MonoBehaviour
         : -1f;
 
     /// <summary>0 (unset) falls back to the spawner-wide default; a positive override lets a
-    /// specific entry (e.g. a dense region "den") pack much tighter than everything else.</summary>
+    /// specific entry (e.g. a dense spawn-point cluster) pack much tighter than everything else.</summary>
     static float ResolveMinSeparationDegrees(SpawnEntry entry) =>
         entry.minSeparationDegrees > 0.01f ? entry.minSeparationDegrees : MinSeparationDegrees;
 
@@ -334,19 +318,7 @@ public class CreatureSpawner : MonoBehaviour
             // Spawn-point-confined creature — re-roll a fresh point around the anchor rather than
             // reusing the exact death position, still respecting spacing/walkability below.
             float minDot = ComputeMinDot(ResolveMinSeparationDegrees(resolved.entry));
-            if (!TryPickSpawnDirection(minDot, -1, resolved.spawnPointIndex, out dir))
-            {
-                pending.readyAt = Time.time + 0.5f;
-                _pendingRespawns.Insert(0, pending);
-                return;
-            }
-        }
-        else if (resolved.regionIndex >= 0)
-        {
-            // Region-confined creature — re-roll a fresh point inside its region rather than
-            // reusing the exact death position, still respecting spacing/walkability below.
-            float minDot = ComputeMinDot(ResolveMinSeparationDegrees(resolved.entry));
-            if (!TryPickSpawnDirection(minDot, resolved.regionIndex, -1, out dir))
+            if (!TryPickSpawnDirection(minDot, resolved.spawnPointIndex, out dir))
             {
                 pending.readyAt = Time.time + 0.5f;
                 _pendingRespawns.Insert(0, pending);
@@ -460,6 +432,22 @@ public class CreatureSpawner : MonoBehaviour
         if (_lootPool != null)
             return;
 
+        if (lootPool != null)
+        {
+            _lootPool = lootPool;
+            return;
+        }
+
+        EnsureSpawnRoot();
+        if (spawnRoot != null)
+        {
+            _lootPool = spawnRoot.GetComponent<LootDropPool>();
+            if (_lootPool == null)
+                _lootPool = spawnRoot.gameObject.AddComponent<LootDropPool>();
+            lootPool = _lootPool;
+            return;
+        }
+
         _lootPool = GetComponent<LootDropPool>();
         if (_lootPool == null)
             _lootPool = gameObject.AddComponent<LootDropPool>();
@@ -552,18 +540,15 @@ public class CreatureSpawner : MonoBehaviour
     }
 
     /// <summary>Picks a spawn direction satisfying spacing/walkability, optionally confined to a
-    /// region's area or a hand-placed spawn point. <paramref name="spawnPointIndex"/> &gt;= 0 takes
-    /// priority and samples only within that <see cref="spawnPoints"/> entry's radius around its
-    /// anchor. Otherwise <paramref name="regionIndex"/> &lt; 0 samples the whole sphere (today's
-    /// exact behavior); &gt;= 0 samples only within that <see cref="regionSet"/> region.</summary>
-    bool TryPickSpawnDirection(float minDot, int regionIndex, int spawnPointIndex, out Vector3 dir)
+    /// hand-placed spawn point. <paramref name="spawnPointIndex"/> &gt;= 0 samples only within that
+    /// <see cref="spawnPoints"/> entry's radius around its anchor; &lt; 0 samples the whole sphere.</summary>
+    bool TryPickSpawnDirection(float minDot, int spawnPointIndex, out Vector3 dir)
     {
         dir = Vector3.up;
 
         bool useSpawnPoint = spawnPointIndex >= 0 && spawnPoints != null && spawnPointIndex < spawnPoints.Length;
-        bool useRegion = !useSpawnPoint && regionIndex >= 0 && regionSet != null;
-        if (useSpawnPoint || useRegion)
-            _regionRng ??= new System.Random();
+        if (useSpawnPoint)
+            _spawnRng ??= new System.Random();
 
         SpawnPoint spawnPoint = useSpawnPoint ? spawnPoints[spawnPointIndex] : default;
         if (useSpawnPoint && spawnPoint.anchor == null)
@@ -575,11 +560,6 @@ public class CreatureSpawner : MonoBehaviour
             if (useSpawnPoint)
             {
                 if (!TryGetRandomPointNearAnchor(spawnPoint.anchor, spawnPoint.radius, out candidate))
-                    continue;
-            }
-            else if (useRegion)
-            {
-                if (!regionSet.TryGetRandomPointInRegion(regionIndex, _regionRng, out candidate))
                     continue;
             }
             else
@@ -639,10 +619,10 @@ public class CreatureSpawner : MonoBehaviour
             return false;
         anchorUp.Normalize();
 
-        _regionRng ??= new System.Random();
+        _spawnRng ??= new System.Random();
         float maxAngleDeg = Mathf.Asin(Mathf.Clamp01(worldRadius / Mathf.Max(0.01f, planet.Radius))) * Mathf.Rad2Deg;
-        float angle = Mathf.Sqrt((float)_regionRng.NextDouble()) * maxAngleDeg; // sqrt => uniform density across the disk area.
-        float spin = (float)_regionRng.NextDouble() * 360f;
+        float angle = Mathf.Sqrt((float)_spawnRng.NextDouble()) * maxAngleDeg; // sqrt => uniform density across the disk area.
+        float spin = (float)_spawnRng.NextDouble() * 360f;
         dir = JitterDirection(anchorUp, angle, spin);
         return true;
     }

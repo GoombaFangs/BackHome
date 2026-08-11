@@ -12,7 +12,7 @@ using UnityEngine;
 /// (Tree1 / Tree2 / Tree3 / Tree4 / Tree5), weighted by their respective sliders. A variant
 /// with no prefab assigned is skipped automatically rather than distorting the others' odds.
 ///
-/// Lives on the shared "Streamers" GameObject alongside the grass/rock streamers, not on the planet
+/// Lives on the shared "EnvironmentManager" GameObject alongside the grass/rock streamers, not on the planet
 /// itself — keeps the planet hierarchy free of manager components. Assign <see cref="planet"/>
 /// explicitly, or leave it empty to auto-resolve via <see cref="SphericalPlanet.Instance"/>. The
 /// spawned instances themselves are parented under the planet's "Environment" child instead (see
@@ -59,7 +59,7 @@ public class PlanetTreeStreamer : MonoBehaviour
 
     [Header("Density")]
     [Tooltip("Master tree amount. 0 = no trees, 1 = a tree on every walkable tile. Trees are large — keep this far lower than grass density.")]
-    [SerializeField, Range(0f, 1f)] float density = 0.03f;
+    [SerializeField, Range(0f, 1f)] float density = 0.075f;
     [Tooltip("Relative mix between the five tree variants on tiles that do get a tree (does not affect overall density). A variant with no prefab assigned is skipped automatically.")]
     [SerializeField, Min(0f)] float tree1Weight = 1f;
     [SerializeField, Min(0f)] float tree2Weight = 1f;
@@ -72,9 +72,9 @@ public class PlanetTreeStreamer : MonoBehaviour
 
     [Header("Mobile Safety Cap")]
     [Tooltip("Hard ceiling on concurrently active trees, regardless of density/radius. Protects low-end phones even if the player stands in a dense forest.")]
-    [SerializeField, Min(1)] int maxActiveTrees = 60;
+    [SerializeField, Min(1)] int maxActiveTrees = 110;
     [Tooltip("Max new instances spawned per rescan, spreading instantiation cost across frames.")]
-    [SerializeField, Min(1)] int maxSpawnsPerRefresh = 6;
+    [SerializeField, Min(1)] int maxSpawnsPerRefresh = 10;
     [Tooltip("Trees are large and prominent — shadows stay on by default, unlike grass.")]
     [SerializeField] bool disableShadows = false;
     [Tooltip("Trees should block movement — colliders stay enabled by default, unlike grass.")]
@@ -85,8 +85,15 @@ public class PlanetTreeStreamer : MonoBehaviour
     [SerializeField] Transform anchorOverride;
 
     [Header("Regions")]
-    [Tooltip("When assigned, tree variants come from this region's weighted list instead of the Tree1..Tree5 slots/weights above (which are then ignored). Leave empty to keep the legacy planet-wide mix.")]
+    [Tooltip("Set automatically by PlanetEnvironmentManager when present. Per-region tree lists live on the region set asset.")]
     [SerializeField] PlanetEnvironmentRegionSet regionSet;
+
+    bool _useAreaStream;
+    Transform _areaAnchor;
+    float _areaRadius;
+    float _areaActivationRadius;
+    PlanetEnvironmentRegionSet.WeightedPrefab[] _areaPrefabs;
+    bool _rootCreated;
 
     SphericalPlanet _planet;
     PlanetTileMap _tiles;
@@ -127,7 +134,7 @@ public class PlanetTreeStreamer : MonoBehaviour
         if (_planet == null)
             Debug.LogWarning("[PlanetTreeStreamer] No planet assigned and none found in the scene — tree streaming disabled.", this);
 
-        if (regionSet == null)
+        if (regionSet == null && !_useAreaStream)
         {
             WarnIfPrefabMissing(tree1Prefab, "Tree1");
             WarnIfPrefabMissing(tree2Prefab, "Tree2");
@@ -136,37 +143,100 @@ public class PlanetTreeStreamer : MonoBehaviour
             WarnIfPrefabMissing(tree5Prefab, "Tree5");
         }
 
-        var rootGo = new GameObject("TreeStream (Runtime)");
-        rootGo.hideFlags = HideFlags.DontSave;
-        _root = rootGo.transform;
-        _root.SetParent(PlanetEnvironmentRoot.FindOrCreate(_planet, transform), false);
-
         _pools = new Stack<GameObject>[PoolCount];
         for (int i = 0; i < PoolCount; i++)
             _pools[i] = new Stack<GameObject>();
     }
 
+    void Start()
+    {
+        EnsureRuntimeRoot();
+    }
+
+    /// <summary>Called by <see cref="PlanetEnvironmentManager"/> — single source for planet + regionSet.</summary>
+    public void ConfigureFromManager(SphericalPlanet targetPlanet, PlanetEnvironmentRegionSet set)
+    {
+        if (targetPlanet != null)
+        {
+            planet = targetPlanet;
+            _planet = targetPlanet;
+            _tiles = _planet.GetComponent<PlanetTileMap>();
+        }
+
+        regionSet = set;
+    }
+
+    public void ConfigureAreaStream(
+        SphericalPlanet targetPlanet,
+        Transform anchor,
+        float worldRadius,
+        PlanetEnvironmentRegionSet.WeightedPrefab[] prefabs,
+        float playerActivationRadius)
+    {
+        planet = targetPlanet;
+        _planet = targetPlanet;
+        _tiles = _planet != null ? _planet.GetComponent<PlanetTileMap>() : null;
+        _useAreaStream = anchor != null && worldRadius > 0.01f;
+        _areaAnchor = anchor;
+        _areaRadius = worldRadius;
+        _areaPrefabs = prefabs;
+        _areaActivationRadius = playerActivationRadius;
+        regionSet = null;
+        EnsureRuntimeRoot();
+    }
+
+    void EnsureRuntimeRoot()
+    {
+        if (_rootCreated)
+            return;
+        _rootCreated = true;
+
+        if (_useAreaStream && _areaAnchor != null)
+        {
+            _root = transform;
+            return;
+        }
+
+        var rootGo = new GameObject("TreeStream (Runtime)");
+        rootGo.hideFlags = HideFlags.DontSave;
+        _root = rootGo.transform;
+        _root.SetParent(PlanetEnvironmentRoot.FindOrCreate(_planet != null ? _planet : ResolvePlanet(), transform), false);
+    }
+
     void OnEnable()
     {
         _refreshTimer = 0f;
-        if (_root != null)
+        if (_root != null && _root != transform)
             _root.gameObject.SetActive(true);
     }
 
     void OnDisable()
     {
-        if (_root != null)
+        if (_root != null && _root != transform)
             _root.gameObject.SetActive(false);
     }
 
     void OnDestroy()
     {
+        if (_useAreaStream)
+        {
+            foreach (KeyValuePair<int, ActiveTree> pair in _active)
+            {
+                if (pair.Value.Instance != null)
+                    Destroy(pair.Value.Instance);
+            }
+
+            _active.Clear();
+            return;
+        }
+
         if (_root != null)
             Destroy(_root.gameObject);
     }
 
     void Update()
     {
+        EnsureRuntimeRoot();
         if (!HasAnyPrefab())
             return;
         if (_tiles == null || !_tiles.HasValidMap() || _tiles.Tileset == null)
@@ -202,7 +272,14 @@ public class PlanetTreeStreamer : MonoBehaviour
         return SphericalPlanet.Instance != null ? SphericalPlanet.Instance : FindAnyObjectByType<SphericalPlanet>();
     }
 
-    bool HasAnyPrefab() => regionSet != null || tree1Prefab != null || tree2Prefab != null || tree3Prefab != null || tree4Prefab != null || tree5Prefab != null;
+    bool HasAnyPrefab() =>
+        (_useAreaStream && PlanetAreaStreamHelper.HasAnyPrefab(_areaPrefabs))
+        || regionSet != null
+        || tree1Prefab != null
+        || tree2Prefab != null
+        || tree3Prefab != null
+        || tree4Prefab != null
+        || tree5Prefab != null;
 
     GameObject PrefabAt(int index)
     {
@@ -243,19 +320,35 @@ public class PlanetTreeStreamer : MonoBehaviour
 
     void Refresh()
     {
-        Transform anchor = ResolveAnchor();
-        if (anchor == null)
+        EnsureRuntimeRoot();
+
+        Transform playerAnchor = ResolveAnchor();
+        if (playerAnchor == null)
             return;
 
-        _longitudeBandsAtSetup = _tiles.LongitudeBands;
-        Vector3 anchorPos = anchor.position;
+        if (_useAreaStream)
+        {
+            if (_areaAnchor == null)
+                return;
 
+            if (!PlanetAreaStreamHelper.IsPlayerNearArea(_planet, playerAnchor.position, _areaAnchor.position, _areaActivationRadius))
+            {
+                DespawnAllActive();
+                return;
+            }
+        }
+
+        Transform scanAnchor = _useAreaStream ? _areaAnchor : playerAnchor;
+        Vector3 anchorPos = scanAnchor.position;
+        float scanRadius = _useAreaStream ? _areaRadius : visibleRadius;
+
+        _longitudeBandsAtSetup = _tiles.LongitudeBands;
         if (!_tiles.WorldToCell(anchorPos, out int centerLat, out int centerLon))
             return;
 
         float tileSize = Mathf.Max(0.5f, _tiles.ApproximateTileWorldSize);
         int latWindow = Mathf.Clamp(
-            Mathf.CeilToInt(visibleRadius / tileSize) + 1,
+            Mathf.CeilToInt(scanRadius / tileSize) + 1,
             1,
             Mathf.Max(1, _tiles.LatitudeBands / 2));
 
@@ -263,11 +356,11 @@ public class PlanetTreeStreamer : MonoBehaviour
         float midLatDeg = -90f + (centerLat + 0.5f) * latStep;
         float cosLat = Mathf.Max(0.15f, Mathf.Abs(Mathf.Cos(midLatDeg * Mathf.Deg2Rad)));
         int lonWindow = Mathf.Clamp(
-            Mathf.CeilToInt(visibleRadius / (tileSize * cosLat)) + 1,
+            Mathf.CeilToInt(scanRadius / (tileSize * cosLat)) + 1,
             1,
             Mathf.Max(1, _tiles.LongitudeBands / 2));
 
-        float sqrRadius = visibleRadius * visibleRadius;
+        float sqrRadius = scanRadius * scanRadius;
 
         _desired.Clear();
         _toSpawn.Clear();
@@ -283,19 +376,27 @@ public class PlanetTreeStreamer : MonoBehaviour
                 if (!IsTreeCell(lat, lon))
                     continue;
 
-                // Master density roll — decides whether this tile grows anything at all, before
-                // spending any work resolving which region/variant it'd be.
-                if (Hash01(lat, lon, 6) >= density)
+                if (!_tiles.TryGetCellCenter(lat, lon, out Vector3 cellCenter))
                     continue;
 
-                if (!_tiles.TryGetCellCenter(lat, lon, out Vector3 cellCenter))
+                Vector3 up = regionSet != null || _useAreaStream ? (cellCenter - _planet.Center).normalized : default;
+                int regionIndex = regionSet != null ? regionSet.GetRegionIndex(up) : -1;
+                float effectiveDensity = regionSet != null
+                    ? regionSet.GetEffectiveDensity(density, regionIndex, regionSet.GetTreeDensityMultiplier(regionIndex))
+                    : density;
+
+                // Master density roll — decides whether this tile grows anything at all, before
+                // spending any work resolving which region/variant it'd be.
+                if (Hash01(lat, lon, 6) >= effectiveDensity)
                     continue;
 
                 float sqrDist = (cellCenter - anchorPos).sqrMagnitude;
                 if (sqrDist > sqrRadius)
                     continue;
 
-                Vector3 up = regionSet != null ? (cellCenter - _planet.Center).normalized : default;
+                if (_useAreaStream && !PlanetAreaStreamHelper.IsWithinDisk(_planet, _areaAnchor.position, _areaRadius, cellCenter))
+                    continue;
+
                 if (!TryResolveVariant(lat, lon, up, 8, out int prefabIndex, out GameObject regionPrefab))
                     continue;
 
@@ -341,6 +442,12 @@ public class PlanetTreeStreamer : MonoBehaviour
     {
         prefabIndex = -1;
         regionPrefab = null;
+
+        if (_useAreaStream && PlanetAreaStreamHelper.HasAnyPrefab(_areaPrefabs))
+        {
+            regionPrefab = PlanetEnvironmentRegionSet.PickWeighted(_areaPrefabs, Hash01(lat, lon, salt));
+            return regionPrefab != null;
+        }
 
         if (regionSet != null)
         {
@@ -409,7 +516,7 @@ public class PlanetTreeStreamer : MonoBehaviour
 
         int terrainIndex = _tiles.GetTerrain(lat, lon);
         PlanetTileset.Terrain terrain = tileset.GetTerrain(terrainIndex);
-        if (terrain == null || !terrain.walkable || PlanetTileset.IsShadowGrassZone(terrain.zoneId))
+        if (terrain == null || !terrain.walkable)
             return false;
 
         return !string.IsNullOrEmpty(terrain.id)
@@ -520,6 +627,19 @@ public class PlanetTreeStreamer : MonoBehaviour
 
         _loggedMissingPrefab = true;
         Debug.LogWarning($"[PlanetTreeStreamer] Missing {NameFor(prefabIndex)} prefab — assign it on the component.", this);
+    }
+
+    void DespawnAllActive()
+    {
+        if (_active.Count == 0)
+            return;
+
+        _toDespawn.Clear();
+        foreach (KeyValuePair<int, ActiveTree> pair in _active)
+            _toDespawn.Add(pair.Key);
+
+        for (int i = 0; i < _toDespawn.Count; i++)
+            Despawn(_toDespawn[i]);
     }
 
     void Despawn(int key)

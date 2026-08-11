@@ -160,11 +160,14 @@ public class CreatureRangeCombat : MonoBehaviour
     bool IsTargetInRange(Vector3 targetPosition, float radius)
     {
         Vector3 origin = transform.position;
-        Vector3 up = SphericalPlanet.Instance != null
-            ? SphericalPlanet.Instance.GetUpAt(origin)
-            : transform.up;
 
-        Vector3 planar = Vector3.ProjectOnPlane(targetPosition - origin, up);
+        if (SphericalPlanet.Instance != null)
+        {
+            float distance = PlanetSurfacePose.GetSurfaceDistance(SphericalPlanet.Instance.Center, origin, targetPosition);
+            return distance <= radius;
+        }
+
+        Vector3 planar = Vector3.ProjectOnPlane(targetPosition - origin, transform.up);
         return planar.sqrMagnitude <= radius * radius;
     }
 }

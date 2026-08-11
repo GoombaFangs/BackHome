@@ -4,13 +4,15 @@ using UnityEngine;
 /// <summary>
 /// Shared, seed-driven biome layout for a planet: partitions the sphere into a handful of
 /// organic blob-shaped regions (nearest-seed / Voronoi-style, same deterministic-noise spirit as
-/// <see cref="PlanetBlobAutotile.GenerateContinents"/>), and lists which tree/grass/rock/creature
-/// prefabs are allowed to spawn in each one.
+/// <see cref="PlanetBlobAutotile.GenerateContinents"/>), and lists which tree/grass/rock prefabs
+/// are allowed to spawn in each one.
 ///
-/// <see cref="PlanetGrassStreamer"/>, <see cref="PlanetTreeStreamer"/>, <see cref="PlanetRockStreamer"/>
-/// and <see cref="CreatureSpawner"/> all reference the same asset instance so their region
-/// boundaries line up spatially — a tile that's "Region A" for grass is also "Region A" for
-/// trees/rocks/creatures.
+/// <see cref="PlanetGrassStreamer"/>, <see cref="PlanetTreeStreamer"/> and <see cref="PlanetRockStreamer"/>
+/// reference the same asset instance so their region boundaries line up spatially — a tile that's
+/// "Region A" for grass is also "Region A" for trees/rocks.
+///
+/// Creatures are configured separately via <see cref="CreatureSpawner"/> (spawnEntries / spawnPoints)
+/// — this asset is environment-only.
 ///
 /// Menu: BackHome → Setup Nyxara Environment Regions (creates + wires an example asset).
 /// </summary>
@@ -21,6 +23,7 @@ public class PlanetEnvironmentRegionSet : ScriptableObject
     public class WeightedPrefab
     {
         public GameObject prefab;
+        [Tooltip("Relative mix between variants in the same category (does not control overall amount — use the region's tree/grass/rock Density fields for that).")]
         [Min(0f)] public float weight = 1f;
     }
 
@@ -34,8 +37,14 @@ public class PlanetEnvironmentRegionSet : ScriptableObject
         public WeightedPrefab[] grass = Array.Empty<WeightedPrefab>();
         [Tooltip("Rock variants allowed in this region (streamed by PlanetRockStreamer).")]
         public WeightedPrefab[] rocks = Array.Empty<WeightedPrefab>();
-        [Tooltip("Creatures confined to this region's area (spawned by CreatureSpawner, additive to its global spawnEntries). Fine to leave empty — that region just has no creatures.")]
-        public CreatureSpawner.SpawnEntry[] creatures = Array.Empty<CreatureSpawner.SpawnEntry>();
+
+        [Header("Amount (per region)")]
+        [Tooltip("Multiplier on PlanetTreeStreamer's global density in this region. 0 = no trees, 1 = same as streamer, 2 = twice as many.")]
+        [Min(0f)] public float treeDensity = 1f;
+        [Tooltip("Multiplier on PlanetGrassStreamer's global density in this region. Also scales bonus clump chance.")]
+        [Min(0f)] public float grassDensity = 1f;
+        [Tooltip("Multiplier on PlanetRockStreamer's global density in this region.")]
+        [Min(0f)] public float rockDensity = 1f;
     }
 
     [Tooltip("Seed for the random blob layout. Same seed + same region count/blobs-per-region always reproduces the same boundaries.")]
@@ -76,6 +85,19 @@ public class PlanetEnvironmentRegionSet : ScriptableObject
             return null;
         return regions[index];
     }
+
+    /// <summary>Effective spawn density for a category: streamer global density × this region's multiplier (clamped 0–1).</summary>
+    public float GetEffectiveDensity(float streamerDensity, int regionIndex, float regionMultiplier)
+    {
+        if (regionIndex < 0)
+            return streamerDensity;
+
+        return Mathf.Clamp01(streamerDensity * Mathf.Max(0f, regionMultiplier));
+    }
+
+    public float GetTreeDensityMultiplier(int regionIndex) => GetRegion(regionIndex)?.treeDensity ?? 1f;
+    public float GetGrassDensityMultiplier(int regionIndex) => GetRegion(regionIndex)?.grassDensity ?? 1f;
+    public float GetRockDensityMultiplier(int regionIndex) => GetRegion(regionIndex)?.rockDensity ?? 1f;
 
     /// <summary>Region index owning the nearest seed point to <paramref name="up"/>, or -1 if no regions are configured.</summary>
     public int GetRegionIndex(Vector3 up)
@@ -244,6 +266,19 @@ public class PlanetEnvironmentRegionSet : ScriptableObject
     void OnValidate()
     {
         blobsPerRegion = Mathf.Max(1, blobsPerRegion);
+        if (regions != null)
+        {
+            for (int i = 0; i < regions.Length; i++)
+            {
+                if (regions[i] == null)
+                    continue;
+
+                regions[i].treeDensity = Mathf.Max(0f, regions[i].treeDensity);
+                regions[i].grassDensity = Mathf.Max(0f, regions[i].grassDensity);
+                regions[i].rockDensity = Mathf.Max(0f, regions[i].rockDensity);
+            }
+        }
+
         _cacheBuilt = false;
     }
 }
