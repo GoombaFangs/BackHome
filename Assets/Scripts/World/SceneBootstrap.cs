@@ -1,3 +1,4 @@
+using StarterAssets;
 using UnityEngine;
 
 /// <summary>
@@ -19,14 +20,6 @@ public class SceneBootstrap : MonoBehaviour
 
     void Awake()
     {
-        Transform player = FindExistingPlayer();
-        if (player == null && playerPrefab != null)
-        {
-            GameObject playerObject = Instantiate(playerPrefab, spawnPosition, Quaternion.identity);
-            playerObject.name = playerPrefab.name;
-            player = playerObject.transform;
-        }
-
         if (uiPrefab != null && GameObject.Find("UI") == null)
         {
             GameObject uiObject = Instantiate(uiPrefab);
@@ -35,11 +28,40 @@ public class SceneBootstrap : MonoBehaviour
 
         PlayerInventory.EnsureExists();
 
+        // If a crash-landing cinematic is present in the scene, wait for it to finish
+        // (camera follows the capsule) before spawning the player and taking the camera back.
+        ShipCrashIntro crashIntro = FindAnyObjectByType<ShipCrashIntro>();
+        if (crashIntro != null)
+            crashIntro.OnLanded += SpawnPlayerAndBindCamera;
+        else
+            SpawnPlayerAndBindCamera();
+    }
+
+    void SpawnPlayerAndBindCamera()
+    {
+        Transform player = FindExistingPlayer();
+        if (player == null && playerPrefab != null)
+        {
+            GameObject playerObject = Instantiate(playerPrefab, spawnPosition, Quaternion.identity);
+            playerObject.name = playerPrefab.name;
+            player = playerObject.transform;
+        }
+
         if (player == null)
             return;
 
         BindCameraTarget(player);
         ApplyVitalsBarsSettings(player);
+        BindMobileInput(player);
+    }
+
+    static void BindMobileInput(Transform player)
+    {
+        MobileInputBinder binder = FindAnyObjectByType<MobileInputBinder>();
+        if (binder == null)
+            return;
+
+        binder.BindPlayer(player.GetComponent<StarterAssetsInputs>());
     }
 
     static Transform FindExistingPlayer()

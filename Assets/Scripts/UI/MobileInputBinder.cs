@@ -15,15 +15,29 @@ public class MobileInputBinder : MonoBehaviour
         if (canvasInput == null)
             canvasInput = GetComponent<UICanvasControllerInput>();
 
-        if (playerInputs == null)
+        HideUnusedControls();
+        SetupFloatingJoystick();
+
+        // If the player already exists (e.g. no crash-landing intro in this scene), wire it now.
+        // Otherwise SceneBootstrap calls BindPlayer once the player actually spawns.
+        BindPlayer(playerInputs);
+    }
+
+    /// <summary>
+    /// Wires (or re-wires) the joystick/canvas input to a player's StarterAssetsInputs.
+    /// Safe to call again later, e.g. once a deferred crash-landing intro finishes and the
+    /// player finally spawns (the player doesn't exist yet at Awake time in that case).
+    /// </summary>
+    public void BindPlayer(StarterAssetsInputs inputs)
+    {
+        if (inputs == null)
         {
             GameObject player = GameObject.FindGameObjectWithTag("Player");
             if (player != null)
-                playerInputs = player.GetComponent<StarterAssetsInputs>();
+                inputs = player.GetComponent<StarterAssetsInputs>();
         }
 
-        HideUnusedControls();
-        SetupFloatingJoystick();
+        playerInputs = inputs;
 
         if (canvasInput == null || playerInputs == null)
         {

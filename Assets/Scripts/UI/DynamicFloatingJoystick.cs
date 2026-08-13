@@ -73,7 +73,7 @@ public class DynamicFloatingJoystick : MonoBehaviour, IPointerDownHandler, IDrag
 
     public void OnPointerDown(PointerEventData eventData)
     {
-        if (joystickRoot == null || canvasInput == null)
+        if (joystickRoot == null || !HasValidCanvasInput())
             return;
 
         _dragging = true;
@@ -96,7 +96,9 @@ public class DynamicFloatingJoystick : MonoBehaviour, IPointerDownHandler, IDrag
             return;
 
         _dragging = false;
-        canvasInput.VirtualMoveInput(Vector2.zero);
+
+        if (HasValidCanvasInput())
+            canvasInput.VirtualMoveInput(Vector2.zero);
 
         if (handleRect != null)
             handleRect.anchoredPosition = Vector2.zero;
@@ -122,6 +124,9 @@ public class DynamicFloatingJoystick : MonoBehaviour, IPointerDownHandler, IDrag
 
     void UpdateJoystick(PointerEventData eventData)
     {
+        if (!HasValidCanvasInput())
+            return;
+
         Camera cam = GetEventCamera();
         if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(
                 joystickRoot,
@@ -139,6 +144,15 @@ public class DynamicFloatingJoystick : MonoBehaviour, IPointerDownHandler, IDrag
             output.y = -output.y;
 
         canvasInput.VirtualMoveInput(output);
+    }
+
+    /// <summary>
+    /// True once MobileInputBinder has wired both the canvas input and its target player
+    /// (the player may not exist yet during a scene's crash-landing intro).
+    /// </summary>
+    bool HasValidCanvasInput()
+    {
+        return canvasInput != null && canvasInput.starterAssetsInputs != null;
     }
 
     Camera GetEventCamera()

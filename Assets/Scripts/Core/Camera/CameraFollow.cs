@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 /// <summary>
@@ -82,6 +83,59 @@ public class CameraFollow : MonoBehaviour
     Vector3 _lastTargetPos;
     bool _hasLastTargetPos;
 
+    bool _snapToTarget;
+
+    public float OffsetHeight => offsetHeight;
+    public float OffsetBack => offsetBack;
+
+    /// <summary>Overrides the follow distance/height (e.g. for a cinematic wide shot). Restore afterwards.</summary>
+    public void SetOffsets(float height, float back)
+    {
+        offsetHeight = height;
+        offsetBack = back;
+    }
+
+    /// <summary>
+    /// While true, the camera tracks the target with zero smoothing/motion-framing lag - always
+    /// dead-centered. Use for fast scripted moves (e.g. a crash-landing cinematic) where the
+    /// normal casual-follow damping can't keep up and the target visibly drifts off-frame.
+    /// </summary>
+    public void SetSnapToTarget(bool snap)
+    {
+        _snapToTarget = snap;
+    }
+
+    Coroutine _shakeRoutine;
+    Vector3 _shakeOffset;
+
+    /// <summary>Brief positional shake (e.g. on crash impact). Decays smoothly to zero over duration.</summary>
+    public void Shake(float duration, float magnitude)
+    {
+        if (duration <= 0f || magnitude <= 0f)
+            return;
+        if (_shakeRoutine != null)
+            StopCoroutine(_shakeRoutine);
+        _shakeRoutine = StartCoroutine(ShakeRoutine(duration, magnitude));
+    }
+
+    IEnumerator ShakeRoutine(float duration, float magnitude)
+    {
+        float t = 0f;
+        float seedX = Random.value * 100f;
+        float seedY = Random.value * 100f;
+        while (t < duration)
+        {
+            t += Time.deltaTime;
+            float damper = 1f - Mathf.Clamp01(t / duration);
+            float x = (Mathf.PerlinNoise(seedX + Time.time * 28f, 0f) - 0.5f) * 2f;
+            float y = (Mathf.PerlinNoise(0f, seedY + Time.time * 28f) - 0.5f) * 2f;
+            _shakeOffset = new Vector3(x, y, 0f) * magnitude * damper;
+            yield return null;
+        }
+        _shakeOffset = Vector3.zero;
+        _shakeRoutine = null;
+    }
+
     public void SetTarget(Transform newTarget)
     {
         target = newTarget;
@@ -119,12 +173,15 @@ public class CameraFollow : MonoBehaviour
         desiredUp.Normalize();
 
         Vector3 previousUp = _smoothedUp;
-        if (upSmoothSpeed <= 0f)
+        if (_snapToTarget || upSmoothSpeed <= 0f)
             _smoothedUp = desiredUp;
         else
             _smoothedUp = Vector3.Slerp(_smoothedUp, desiredUp, 1f - Mathf.Exp(-upSmoothSpeed * Time.deltaTime)).normalized;
 
-        SampleMotion(_smoothedUp);
+        if (_snapToTarget)
+            _smoothedMotion = 0f;
+        else
+            SampleMotion(_smoothedUp);
         UpdateSmoothedFocus(_smoothedUp);
 
         Vector3 back = ResolveBackDirection(_smoothedUp, previousUp);
@@ -137,7 +194,7 @@ public class CameraFollow : MonoBehaviour
                           - back * backDist
                           + right * offsetSide;
 
-        if (smoothSpeed <= 0f)
+        if (_snapToTarget || smoothSpeed <= 0f)
             transform.position = desired;
         else
             transform.position = Vector3.Lerp(transform.position, desired, 1f - Mathf.Exp(-smoothSpeed * Time.deltaTime));
@@ -148,6 +205,9 @@ public class CameraFollow : MonoBehaviour
             if (toTarget.sqrMagnitude > 0.001f)
                 transform.rotation = Quaternion.LookRotation(toTarget.normalized, _smoothedUp);
         }
+
+        if (_shakeOffset.sqrMagnitude > 0.0000001f)
+            transform.position += transform.right * _shakeOffset.x + transform.up * _shakeOffset.y;
 
         if (_hasBaseFov && _camera != null && enableMotionFraming && moveExtraFov > 0.01f)
         {
@@ -235,7 +295,7 @@ public class CameraFollow : MonoBehaviour
         backDist = offsetBack;
         fov = _hasBaseFov ? _baseFov : 60f;
 
-        if (!enableMotionFraming)
+        if (_snapToTarget || !enableMotionFraming)
             return;
 
         float zoom = _smoothedMotion * _onsetBoost;
@@ -264,6 +324,13 @@ public class CameraFollow : MonoBehaviour
 
     void UpdateSmoothedFocus(Vector3 up)
     {
+        if (_snapToTarget)
+        {
+            _smoothedFocus = target.position;
+            _hasFocus = true;
+            return;
+        }
+
         Vector3 targetPos = target.position + _smoothedLookAhead;
         if (!_hasFocus)
         {
