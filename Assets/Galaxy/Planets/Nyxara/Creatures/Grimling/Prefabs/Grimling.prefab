@@ -136,6 +136,9 @@ MonoBehaviour:
   localOffset: {x: 0, y: 2.2, z: 0}
   worldScale: 1.6
   hideWhenDead: 1
+  hideUntilDamaged: 1
+  visibleAfterDamage: 2.5
+  fadeDuration: 0.2
 --- !u!114 &8361180514612207393
 MonoBehaviour:
   m_ObjectHideFlags: 0

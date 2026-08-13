@@ -50,6 +50,7 @@ public class VitalsBarsView : MonoBehaviour
     float _oxygenCurrent = 1f;
     float _oxygenMax = 1f;
     float _hitFlashTimer;
+    float _alpha = 1f;
 
     void Update()
     {
@@ -107,6 +108,20 @@ public class VitalsBarsView : MonoBehaviour
 
         if (_hitFlashTimer <= 0f)
             ApplyHealthFillColor(normalized);
+    }
+
+    /// <summary>0 = fully transparent, 1 = fully visible.</summary>
+    public void SetAlpha(float alpha)
+    {
+        _alpha = Mathf.Clamp01(alpha);
+        if (_hitFlashTimer > 0f)
+            SetRendererColor(healthFillRenderer, healthHitFlashColor);
+        else
+            ApplyHealthFillColor(_previewHealth);
+        SetRendererColor(oxygenFillRenderer, oxygenFillColor);
+        SetRendererColor(healthBgRenderer, backgroundColor);
+        SetRendererColor(oxygenBgRenderer, backgroundColor);
+        ApplyLabelAlpha();
     }
 
     /// <summary>Brief white flash on the health fill when taking a hit.</summary>
@@ -220,7 +235,7 @@ public class VitalsBarsView : MonoBehaviour
         if (healthLabel != null)
         {
             healthLabel.characterSize = labelCharacterSize;
-            healthLabel.color = labelColor;
+            ApplyLabelColor(healthLabel);
             healthLabel.transform.localPosition = new Vector3(x, 0f, -0.03f);
             healthLabel.transform.localRotation = Quaternion.identity;
             healthLabel.gameObject.SetActive(showValueLabels);
@@ -229,7 +244,7 @@ public class VitalsBarsView : MonoBehaviour
         if (oxygenLabel != null)
         {
             oxygenLabel.characterSize = labelCharacterSize;
-            oxygenLabel.color = labelColor;
+            ApplyLabelColor(oxygenLabel);
             oxygenLabel.transform.localPosition = new Vector3(x, 0f, -0.03f);
             oxygenLabel.transform.localRotation = Quaternion.identity;
             oxygenLabel.gameObject.SetActive(showValueLabels && showOxygen);
@@ -309,7 +324,24 @@ public class VitalsBarsView : MonoBehaviour
             _block = new MaterialPropertyBlock();
 
         renderer.GetPropertyBlock(_block);
+        color.a *= _alpha;
         _block.SetColor(ColorId, color);
         renderer.SetPropertyBlock(_block);
+    }
+
+    void ApplyLabelAlpha()
+    {
+        ApplyLabelColor(healthLabel);
+        ApplyLabelColor(oxygenLabel);
+    }
+
+    void ApplyLabelColor(TextMesh label)
+    {
+        if (label == null)
+            return;
+
+        Color color = labelColor;
+        color.a *= _alpha;
+        label.color = color;
     }
 }

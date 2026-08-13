@@ -13,9 +13,15 @@ public class VitalsBars : MonoBehaviour
     [Tooltip("Extra world size multiplier. SceneBootstrap can override this per scene.")]
     [SerializeField, Min(0.1f)] float worldScale = 1f;
     [SerializeField] bool hideWhenDead;
+    [Tooltip("Keep bars hidden until the host takes a hit. Always on for creatures.")]
+    [SerializeField] bool hideUntilDamaged;
+    [SerializeField, Min(0.05f)] float visibleAfterDamage = 2.5f;
+    [SerializeField, Min(0f)] float fadeDuration = 0.2f;
 
     IVitalsReadable _source;
     Camera _camera;
+    float _revealTimer;
+    float _alpha = 1f;
 
     public void SetWorldScale(float scale)
     {
@@ -27,11 +33,15 @@ public class VitalsBars : MonoBehaviour
         localOffset = offset;
     }
 
+    bool HideUntilDamaged => hideUntilDamaged || _source is Creature;
+
     void Awake()
     {
         _source = GetComponent<IVitalsReadable>();
         EnsureBars();
         ApplyOxygenVisibility();
+        if (HideUntilDamaged)
+            HideBarsImmediate();
     }
 
     void OnEnable()
@@ -81,6 +91,8 @@ public class VitalsBars : MonoBehaviour
         Camera cam = ResolveCamera();
         if (cam != null)
             root.rotation = cam.transform.rotation;
+
+        UpdateDamageReveal();
     }
 
     void EnsureBars()
@@ -124,15 +136,79 @@ public class VitalsBars : MonoBehaviour
         if (_source.HasOxygen)
             bars.SetOxygenValues(_source.CurrentOxygen, _source.MaxOxygen);
 
-        bool show = !hideWhenDead || _source.IsAlive;
-        if (bars.gameObject.activeSelf != show)
-            bars.gameObject.SetActive(show);
+        bool alive = !hideWhenDead || _source.IsAlive;
+        if (!alive)
+        {
+            HideBarsImmediate();
+            return;
+        }
+
+        if (HideUntilDamaged)
+            return;
+
+        if (!bars.gameObject.activeSelf)
+            bars.gameObject.SetActive(true);
     }
 
     void OnDamaged(float _)
     {
-        if (bars != null)
-            bars.FlashHealthHit();
+        if (bars == null)
+            return;
+
+        if (HideUntilDamaged)
+            RevealBars();
+
+        bars.FlashHealthHit();
+    }
+
+    void UpdateDamageReveal()
+    {
+        if (!HideUntilDamaged || bars == null)
+            return;
+
+        bool alive = _source == null || !hideWhenDead || _source.IsAlive;
+        if (!alive)
+        {
+            HideBarsImmediate();
+            return;
+        }
+
+        if (_revealTimer > 0f)
+            _revealTimer -= Time.deltaTime;
+
+        float target = _revealTimer > 0f ? 1f : 0f;
+        if (fadeDuration <= 0f)
+            _alpha = target;
+        else
+            _alpha = Mathf.MoveTowards(_alpha, target, Time.deltaTime / fadeDuration);
+
+        bool show = _alpha > 0.001f || target > 0f;
+        if (bars.gameObject.activeSelf != show)
+            bars.gameObject.SetActive(show);
+
+        if (show)
+            bars.SetAlpha(_alpha);
+    }
+
+    void RevealBars()
+    {
+        _revealTimer = visibleAfterDamage > 0.05f ? visibleAfterDamage : 2.5f;
+        _alpha = 1f;
+        if (!bars.gameObject.activeSelf)
+            bars.gameObject.SetActive(true);
+        bars.SetAlpha(1f);
+    }
+
+    void HideBarsImmediate()
+    {
+        _revealTimer = 0f;
+        _alpha = 0f;
+        if (bars == null)
+            return;
+
+        bars.SetAlpha(0f);
+        if (bars.gameObject.activeSelf)
+            bars.gameObject.SetActive(false);
     }
 
     static float ApproxInverse(float value)
