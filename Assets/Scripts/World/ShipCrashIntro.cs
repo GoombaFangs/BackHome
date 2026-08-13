@@ -4,11 +4,11 @@ using UnityEngine;
 
 /// <summary>
 /// Crash-landing cinematic for a planet's ShipCapsule (the escape-pod / return-portal object):
-/// the capsule holds still alone in space, then drops in a fast, straight line at a fixed angle
-/// (never rotates) into whatever position it was placed at in the scene - a hard crash, not a
-/// graceful landing. Camera follows the capsule for the whole sequence; other systems (see
-/// SceneBootstrap) listen for OnLanded to know when it's safe to spawn the player and hand the
-/// camera back.
+/// the capsule appears alone in space and immediately drops, trembling, in a fast, straight line
+/// at a fixed angle (never rotates) into whatever position it was placed at in the scene - a hard
+/// crash, not a graceful landing. Camera follows the capsule for the whole sequence; other systems
+/// (see SceneBootstrap) listen for OnLanded to know when it's safe to spawn the player and hand
+/// the camera back.
 ///
 /// One reusable prefab: every planet scene drops this in and wires only <see cref="shipCapsule"/>
 /// to its own ShipCapsule instance. Start pose and fall distance are derived from the planet
@@ -23,8 +23,6 @@ public class ShipCrashIntro : MonoBehaviour
     [SerializeField] GameObject reentryEffectPrefab;
 
     [Header("Timing")]
-    [Tooltip("Seconds the capsule holds alone in space before falling.")]
-    [SerializeField, Min(0f)] float spaceHoldTime = 1f;
     [Tooltip("Seconds for the crash fall itself. Keep this short - it's a hard crash, not a slow glide.")]
     [SerializeField, Min(0.05f)] float fallDuration = 1.1f;
     [Tooltip("Straight-line speed profile. Linear (or ease-in) reads as a hard crash; ease-in-out reads as a soft landing.")]
@@ -33,10 +31,12 @@ public class ShipCrashIntro : MonoBehaviour
     [Header("Space Start Pose")]
     [Tooltip("How far out (along the planet's radial up at the landing site) the capsule starts, alone in space.")]
     [SerializeField, Min(1f)] float startDistance = 70f;
-    [Tooltip("Subtle tremble while holding in space, in world units.")]
-    [SerializeField, Min(0f)] float holdShakeAmplitude = 0.12f;
+
+    [Header("Crash Tremble")]
+    [Tooltip("Tremble amplitude applied throughout the fall itself, in world units - sells a rough, out-of-control crash rather than a smooth glide.")]
+    [SerializeField, Min(0f)] float fallTrembleAmplitude = 0.12f;
     [Tooltip("How fast the tremble oscillates.")]
-    [SerializeField, Min(0.01f)] float holdShakeFrequency = 18f;
+    [SerializeField, Min(0.01f)] float fallTrembleFrequency = 18f;
 
     [Header("Cinematic Camera")]
     [SerializeField] float cinematicOffsetHeight = 16f;
@@ -99,26 +99,18 @@ public class ShipCrashIntro : MonoBehaviour
             cameraFollow.SetSnapToTarget(true);
         }
 
-        // Holds at the same angle it will land at, with a subtle tremble - dead calm looks lifeless.
-        float holdTimer = 0f;
-        while (holdTimer < spaceHoldTime)
-        {
-            holdTimer += Time.deltaTime;
-            shipCapsule.position = spacePosition + GetHoldShakeOffset(holdTimer);
-            yield return null;
-        }
-        shipCapsule.position = spacePosition;
-
         ShipFireTrail fireTrail = ResolveFireTrail();
         fireTrail?.Play(-up); // falling inward (toward the planet), i.e. opposite of radial "up"
 
-        // Straight line, fixed angle, fast - a hard crash, no tumbling or easing into place.
+        // Straight line, fixed angle, fast - a hard crash, no tumbling or easing into place. A
+        // tremble rides on top the whole way down so it reads as a rough, out-of-control fall.
         float fallTimer = 0f;
         while (fallTimer < fallDuration)
         {
             fallTimer += Time.deltaTime;
             float t = fallEase.Evaluate(Mathf.Clamp01(fallTimer / fallDuration));
-            shipCapsule.position = Vector3.LerpUnclamped(spacePosition, _restPosition, t);
+            Vector3 basePosition = Vector3.LerpUnclamped(spacePosition, _restPosition, t);
+            shipCapsule.position = basePosition + GetFallTrembleOffset(fallTimer);
             yield return null;
         }
 
@@ -138,16 +130,16 @@ public class ShipCrashIntro : MonoBehaviour
         OnLanded?.Invoke();
     }
 
-    Vector3 GetHoldShakeOffset(float time)
+    Vector3 GetFallTrembleOffset(float time)
     {
-        if (holdShakeAmplitude <= 0f)
+        if (fallTrembleAmplitude <= 0f)
             return Vector3.zero;
 
-        float t = time * holdShakeFrequency;
+        float t = time * fallTrembleFrequency;
         float x = Mathf.PerlinNoise(t, 0.17f) - 0.5f;
         float y = Mathf.PerlinNoise(0.42f, t) - 0.5f;
         float z = Mathf.PerlinNoise(t, 0.83f) - 0.5f;
-        return new Vector3(x, y, z) * (2f * holdShakeAmplitude);
+        return new Vector3(x, y, z) * (2f * fallTrembleAmplitude);
     }
 
     static CameraFollow ResolveCameraFollow()
