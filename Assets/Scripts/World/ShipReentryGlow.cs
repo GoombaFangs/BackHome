@@ -32,6 +32,13 @@ public class ShipReentryGlow : MonoBehaviour
     Coroutine _flickerRoutine;
     bool _built;
 
+    /// <summary>The instantiated effect prefab's transform (e.g. "CapsuleParticalSystem"), once
+    /// built - lets other VFX components (see ShipFireTrail.SetEffectParent) nest under the same
+    /// visible root instead of scattering loose particle objects directly under the capsule.
+    /// Null until <see cref="Play"/> (or <see cref="Awake"/>, if the prefab was already assigned)
+    /// has actually built it.</summary>
+    public Transform EffectRoot => _instance != null ? _instance.transform : null;
+
     void Awake()
     {
         Build();

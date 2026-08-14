@@ -12,7 +12,8 @@ using UnityEngine;
 ///
 /// One reusable prefab: every planet scene drops this in and wires only <see cref="shipCapsule"/>
 /// to its own ShipCapsule instance. Start pose and fall distance are derived from the planet
-/// (via SphericalPlanet.GetUpAt), so no other per-scene setup is required.
+/// (via SphericalPlanet.GetUpAt/GetSurfacePoint), so no other per-scene setup is required - even
+/// if ShipCapsule's authored position isn't already sitting exactly on the ground.
 /// </summary>
 public class ShipCrashIntro : MonoBehaviour
 {
@@ -31,6 +32,13 @@ public class ShipCrashIntro : MonoBehaviour
     [Header("Space Start Pose")]
     [Tooltip("How far out (along the planet's radial up at the landing site) the capsule starts, alone in space.")]
     [SerializeField, Min(1f)] float startDistance = 70f;
+    [Tooltip("Snap the landing spot onto the planet's actual terrain surface (offset by the " +
+        "capsule's own half-height so it rests on top of the ground) instead of trusting wherever " +
+        "the object happened to be authored in the scene - needed because ShipCapsule is often a " +
+        "repurposed/floating placeholder, not already sitting on the ground.")]
+    [SerializeField] bool snapLandingToGround = true;
+    [Tooltip("Extra clearance added on top of the auto-measured half-height, in world units.")]
+    [SerializeField] float extraGroundClearance = 0f;
 
     [Header("Crash Tremble")]
     [Tooltip("Tremble amplitude applied throughout the fall itself, in world units - sells a rough, out-of-control crash rather than a smooth glide.")]
@@ -77,6 +85,12 @@ public class ShipCrashIntro : MonoBehaviour
             ? SphericalPlanet.Instance.GetUpAt(_restPosition)
             : Vector3.up;
 
+        if (snapLandingToGround && SphericalPlanet.Instance != null)
+        {
+            float clearance = GetGroundClearance(up) + extraGroundClearance;
+            _restPosition = SphericalPlanet.Instance.GetSurfacePoint(up, clearance);
+        }
+
         Vector3 spacePosition = _restPosition + up * startDistance;
         // Fixed angle for the entire sequence - never rotates, this is a crash, not a landing.
         shipCapsule.SetPositionAndRotation(spacePosition, _restRotation);
@@ -99,7 +113,7 @@ public class ShipCrashIntro : MonoBehaviour
             cameraFollow.SetSnapToTarget(true);
         }
 
-        ShipFireTrail fireTrail = ResolveFireTrail();
+        ShipFireTrail fireTrail = ResolveFireTrail(reentryGlow);
         fireTrail?.Play(-up); // falling inward (toward the planet), i.e. opposite of radial "up"
 
         // Straight line, fixed angle, fast - a hard crash, no tumbling or easing into place. A
@@ -117,7 +131,7 @@ public class ShipCrashIntro : MonoBehaviour
         shipCapsule.SetPositionAndRotation(_restPosition, _restRotation);
         fireTrail?.Stop();
         reentryGlow?.Stop();
-        ResolveImpactEffect()?.Trigger();
+        ResolveImpactEffect(reentryGlow)?.Trigger();
         cameraFollow?.Shake(impactShakeDuration, impactShakeMagnitude);
 
         if (cameraFollow != null)
@@ -128,6 +142,37 @@ public class ShipCrashIntro : MonoBehaviour
         }
 
         OnLanded?.Invoke();
+    }
+
+    /// <summary>Half the capsule's extent along the surface normal, so GetSurfacePoint() lands it
+    /// resting on top of the ground instead of embedded in it or hovering above it.</summary>
+    float GetGroundClearance(Vector3 up)
+    {
+        MeshFilter filter = shipCapsule.GetComponentInChildren<MeshFilter>();
+        if (filter != null && filter.sharedMesh != null)
+        {
+            // Project through the mesh's own (unrotated) local bounds rather than the world-space
+            // AABB - the world AABB is only a tight fit along axes it happens to be aligned with,
+            // so for anything tilted (like this capsule) it overstates the true extent along an
+            // arbitrary direction, making it hover higher than it actually needs to.
+            Vector3 localUp = filter.transform.InverseTransformDirection(up);
+            Vector3 localExtents = filter.sharedMesh.bounds.extents;
+            Vector3 scale = filter.transform.lossyScale;
+            Vector3 scaledExtents = new Vector3(
+                localExtents.x * Mathf.Abs(scale.x),
+                localExtents.y * Mathf.Abs(scale.y),
+                localExtents.z * Mathf.Abs(scale.z));
+            Vector3 absLocalUp = new Vector3(Mathf.Abs(localUp.x), Mathf.Abs(localUp.y), Mathf.Abs(localUp.z));
+            return Vector3.Dot(scaledExtents, absLocalUp);
+        }
+
+        if (ShipVfxUtility.TryGetRendererBounds(shipCapsule, out Bounds bounds))
+        {
+            Vector3 absUp = new Vector3(Mathf.Abs(up.x), Mathf.Abs(up.y), Mathf.Abs(up.z));
+            return Vector3.Dot(bounds.extents, absUp);
+        }
+
+        return 0f;
     }
 
     Vector3 GetFallTrembleOffset(float time)
@@ -150,17 +195,36 @@ public class ShipCrashIntro : MonoBehaviour
         return follow;
     }
 
-    ShipFireTrail ResolveFireTrail()
+    // Both resolvers below prefer whatever's already authored inside the reentry glow's effect
+    // prefab (e.g. "FireTrail"/"ImpactEffects" baked into CapsuleParticalSystem) so the whole VFX
+    // stack lives in one editable place. Only falls back to bolting a fresh component straight
+    // onto the capsule if that prefab doesn't have one - keeps this working with no setup at all
+    // on a capsule that doesn't use CapsuleParticalSystem.
+
+    ShipFireTrail ResolveFireTrail(ShipReentryGlow reentryGlow)
     {
-        ShipFireTrail trail = shipCapsule.GetComponent<ShipFireTrail>();
+        Transform effectRoot = reentryGlow != null ? reentryGlow.EffectRoot : null;
+        ShipFireTrail trail = effectRoot != null ? effectRoot.GetComponentInChildren<ShipFireTrail>(true) : null;
         if (trail == null)
+            trail = shipCapsule.GetComponent<ShipFireTrail>();
+        if (trail == null)
+        {
             trail = shipCapsule.gameObject.AddComponent<ShipFireTrail>();
+            // No authored "FireTrail" child found anywhere - the sub-emitters above were just
+            // built procedurally straight onto the capsule, so tidy them under the same visible
+            // root as the reentry glow instead of leaving them loose. Purely cosmetic: everything
+            // simulates in world space regardless of where it sits in the hierarchy.
+            trail.SetEffectParent(effectRoot);
+        }
         return trail;
     }
 
-    ShipCrashImpact ResolveImpactEffect()
+    ShipCrashImpact ResolveImpactEffect(ShipReentryGlow reentryGlow)
     {
-        ShipCrashImpact impact = shipCapsule.GetComponent<ShipCrashImpact>();
+        Transform effectRoot = reentryGlow != null ? reentryGlow.EffectRoot : null;
+        ShipCrashImpact impact = effectRoot != null ? effectRoot.GetComponentInChildren<ShipCrashImpact>(true) : null;
+        if (impact == null)
+            impact = shipCapsule.GetComponent<ShipCrashImpact>();
         if (impact == null)
             impact = shipCapsule.gameObject.AddComponent<ShipCrashImpact>();
         return impact;

@@ -10,6 +10,36 @@ public static class ShipVfxUtility
 {
     static Texture2D _softDotTexture;
     static Mesh _cubeMesh;
+    static Texture2D _fireGlowTexture;
+    static Texture2D _fireSmokeTexture;
+    static bool _fireGlowLoaded;
+    static bool _fireSmokeLoaded;
+
+    /// <summary>Authored soft radial flame/glow sprite (Assets/Resources/VFX/FireGlow.png) - a much
+    /// richer look than the procedural dot for anything meant to read as "fire" rather than a plain
+    /// glow point. Falls back to the procedural dot if the resource is missing.</summary>
+    public static Texture2D GetFireGlowTexture()
+    {
+        if (!_fireGlowLoaded)
+        {
+            _fireGlowTexture = Resources.Load<Texture2D>("VFX/FireGlow");
+            _fireGlowLoaded = true;
+        }
+        return _fireGlowTexture != null ? _fireGlowTexture : GetSoftDotTexture();
+    }
+
+    /// <summary>Authored wispy smoke puff sprite (Assets/Resources/VFX/FireSmoke.png), used to give
+    /// the fire trail a heavier, sootier fringe instead of pure clean flame. Falls back to the
+    /// procedural dot if the resource is missing.</summary>
+    public static Texture2D GetFireSmokeTexture()
+    {
+        if (!_fireSmokeLoaded)
+        {
+            _fireSmokeTexture = Resources.Load<Texture2D>("VFX/FireSmoke");
+            _fireSmokeLoaded = true;
+        }
+        return _fireSmokeTexture != null ? _fireSmokeTexture : GetSoftDotTexture();
+    }
 
     /// <summary>Small procedural soft-edged circle. Falloff is baked into both RGB and alpha so
     /// it reads as a round glow whether the shader blends additively or via normal alpha.</summary>
@@ -53,7 +83,12 @@ public static class ShipVfxUtility
     /// with vertex-color-driven tint. Blend state (additive vs normal alpha) is forced directly
     /// via Src/DstBlend so it's correct regardless of which shader variant was found.
     /// </summary>
-    public static Material BuildParticleMaterial(Texture2D texture, bool additive, string name)
+    /// <param name="hdrBoost">Multiplies the base color/tint above 1 so the rendered pixel pushes
+    /// past the Bloom threshold and blooms strongly on its own - the shader multiplies base color
+    /// by per-particle vertex color, so this "over-brightens" every particle using this material
+    /// without needing them to overlap to look bright. Leave at 1 for materials that shouldn't
+    /// glow (e.g. dust, soot).</param>
+    public static Material BuildParticleMaterial(Texture2D texture, bool additive, string name, float hdrBoost = 1f)
     {
         Shader shader = Shader.Find("Universal Render Pipeline/Particles/Unlit");
         if (shader == null)
@@ -68,10 +103,11 @@ public static class ShipVfxUtility
         else if (mat.HasProperty("_MainTex"))
             mat.SetTexture("_MainTex", texture);
 
+        Color tint = new Color(hdrBoost, hdrBoost, hdrBoost, 1f);
         if (mat.HasProperty("_BaseColor"))
-            mat.SetColor("_BaseColor", Color.white);
+            mat.SetColor("_BaseColor", tint);
         else if (mat.HasProperty("_Color"))
-            mat.SetColor("_Color", Color.white);
+            mat.SetColor("_Color", tint);
 
         if (mat.HasProperty("_ColorMode"))
             mat.SetFloat("_ColorMode", 0f); // multiply base map by vertex color
@@ -80,7 +116,12 @@ public static class ShipVfxUtility
         if (mat.HasProperty("_ZWrite"))
             mat.SetFloat("_ZWrite", 0f);
 
-        int srcBlend = additive ? (int)BlendMode.One : (int)BlendMode.SrcAlpha;
+        // Both modes read SrcAlpha - "hard" additive (SrcBlend = One) ignores the texture's alpha
+        // channel entirely, so any authored sprite whose edges fade via alpha but not RGB (the
+        // normal way to paint a glow sprite) shows its square canvas bounds once blended. Using
+        // SrcAlpha for both keeps the additive "glow" behavior (dst stays fully lit, src adds on
+        // top) while correctly respecting alpha for the edge fade regardless of the source texture.
+        int srcBlend = (int)BlendMode.SrcAlpha;
         int dstBlend = additive ? (int)BlendMode.One : (int)BlendMode.OneMinusSrcAlpha;
         if (mat.HasProperty("_SrcBlend"))
             mat.SetInt("_SrcBlend", srcBlend);

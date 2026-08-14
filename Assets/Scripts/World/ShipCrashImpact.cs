@@ -4,8 +4,13 @@ using UnityEngine.Rendering;
 /// <summary>
 /// One-shot impact burst for the ShipCapsule crash cinematic (see <see cref="ShipCrashIntro"/>):
 /// dust cloud + fiery sparks + tumbling rock debris, all firing the instant the capsule hits the
-/// ground. Fully procedural (materials, debris mesh, particle sprite all built in code) so, like
-/// <see cref="ShipFireTrail"/>, it's a single drop-in component with nothing to wire up per scene.
+/// ground.
+///
+/// Authored as a normal child ("ImpactEffects", with ImpactDust/ImpactSparks/ImpactDebris
+/// underneath it) inside the CapsuleParticalSystem prefab, so it's directly editable in the
+/// Inspector like any hand-authored effect. Falls back to building everything procedurally in
+/// code (materials, debris mesh, particle sprite included) if those children are missing, so it
+/// still works as a single drop-in component with nothing to wire up.
 ///
 /// Usage: call <see cref="Trigger"/> exactly once, at the moment of impact. If the GameObject
 /// doesn't already have this component, <see cref="ShipCrashIntro"/> adds it automatically.
@@ -87,6 +92,16 @@ public class ShipCrashImpact : MonoBehaviour
         float gravity, Material material, bool fadeToBlack, float drag, Mesh mesh = null, bool tumble = false,
         bool fade = true)
     {
+        // Already authored in the prefab (e.g. baked into CapsuleParticalSystem) - reuse as-is
+        // instead of overwriting hand-tuned values with the procedural defaults below.
+        Transform existing = transform.Find(childName);
+        if (existing != null)
+        {
+            ParticleSystem existingPs = existing.GetComponent<ParticleSystem>();
+            if (existingPs != null)
+                return existingPs;
+        }
+
         GameObject go = new GameObject(childName);
         go.transform.SetParent(transform, false);
 
@@ -166,8 +181,10 @@ public class ShipCrashImpact : MonoBehaviour
 
     static Material GetSoftAdditiveMaterial()
     {
+        // Over-brightened so the spark burst blooms into a punchy flash right on impact instead
+        // of a dim scatter of dots.
         if (_softAdditiveMaterial == null)
-            _softAdditiveMaterial = ShipVfxUtility.BuildParticleMaterial(ShipVfxUtility.GetSoftDotTexture(), true, "ShipCrashImpact_Additive (Generated)");
+            _softAdditiveMaterial = ShipVfxUtility.BuildParticleMaterial(ShipVfxUtility.GetSoftDotTexture(), true, "ShipCrashImpact_Additive (Generated)", 2.8f);
         return _softAdditiveMaterial;
     }
 
