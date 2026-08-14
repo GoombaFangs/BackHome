@@ -54,7 +54,11 @@ public static class ShipVfxUtility
             name = "ShipVfx_SoftDot (Generated)",
             wrapMode = TextureWrapMode.Clamp,
             filterMode = FilterMode.Bilinear,
-            hideFlags = HideFlags.DontSave,
+            // No HideFlags.DontSave: Editor bake tools (e.g. ShipCapsuleVfxBaker) embed whatever
+            // material/texture is live at the time straight into a saved prefab asset - DontSave
+            // makes Unity silently drop this texture (and with it, the whole material reference)
+            // the moment that asset gets serialized to disk, which is exactly what caused baked
+            // particle systems to lose their material (rendering hot pink).
         };
 
         Vector2 center = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);

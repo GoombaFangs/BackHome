@@ -22,6 +22,10 @@ public class ShipCrashIntro : MonoBehaviour
     [Tooltip("Authored re-entry fire effect (flame shell + embers + flicker light). Passed to " +
         "ShipReentryGlow so the look is edited as a normal prefab instead of generated in code.")]
     [SerializeField] GameObject reentryEffectPrefab;
+    [Tooltip("Authored impact burst effect (flash + dust + sparks + debris, e.g. CapsuleImpact). " +
+        "Passed to ShipCrashImpact so the look is edited as a normal prefab instead of generated " +
+        "in code.")]
+    [SerializeField] GameObject impactEffectPrefab;
 
     [Header("Timing")]
     [Tooltip("Seconds for the crash fall itself. Keep this short - it's a hard crash, not a slow glide.")]
@@ -131,7 +135,7 @@ public class ShipCrashIntro : MonoBehaviour
         shipCapsule.SetPositionAndRotation(_restPosition, _restRotation);
         fireTrail?.Stop();
         reentryGlow?.Stop();
-        ResolveImpactEffect(reentryGlow)?.Trigger();
+        ResolveImpactEffect()?.Trigger();
         cameraFollow?.Shake(impactShakeDuration, impactShakeMagnitude);
 
         if (cameraFollow != null)
@@ -195,12 +199,11 @@ public class ShipCrashIntro : MonoBehaviour
         return follow;
     }
 
-    // Both resolvers below prefer whatever's already authored inside the reentry glow's effect
-    // prefab (e.g. "FireTrail"/"ImpactEffects" baked into CapsuleParticalSystem) so the whole VFX
-    // stack lives in one editable place. Only falls back to bolting a fresh component straight
-    // onto the capsule if that prefab doesn't have one - keeps this working with no setup at all
-    // on a capsule that doesn't use CapsuleParticalSystem.
-
+    // Prefers whatever's already authored inside the reentry glow's effect prefab (e.g.
+    // "FireTrail" baked into CapsuleParticalSystem) so the trail's sub-emitters live in the same
+    // editable place. Only falls back to bolting a fresh component straight onto the capsule if
+    // that prefab doesn't have one - keeps this working with no setup at all on a capsule that
+    // doesn't use CapsuleParticalSystem.
     ShipFireTrail ResolveFireTrail(ShipReentryGlow reentryGlow)
     {
         Transform effectRoot = reentryGlow != null ? reentryGlow.EffectRoot : null;
@@ -219,14 +222,15 @@ public class ShipCrashIntro : MonoBehaviour
         return trail;
     }
 
-    ShipCrashImpact ResolveImpactEffect(ShipReentryGlow reentryGlow)
+    ShipCrashImpact ResolveImpactEffect()
     {
-        Transform effectRoot = reentryGlow != null ? reentryGlow.EffectRoot : null;
-        ShipCrashImpact impact = effectRoot != null ? effectRoot.GetComponentInChildren<ShipCrashImpact>(true) : null;
-        if (impact == null)
-            impact = shipCapsule.GetComponent<ShipCrashImpact>();
+        ShipCrashImpact impact = shipCapsule.GetComponent<ShipCrashImpact>();
         if (impact == null)
             impact = shipCapsule.gameObject.AddComponent<ShipCrashImpact>();
+        // Only override if wired here - lets ShipCrashImpact keep its own prefab if it was added
+        // and configured by hand directly on the ShipCapsule instead.
+        if (impactEffectPrefab != null)
+            impact.SetEffectPrefab(impactEffectPrefab);
         return impact;
     }
 
