@@ -19,8 +19,10 @@ public class MobileInputBinder : MonoBehaviour
         SetupFloatingJoystick();
 
         // If the player already exists (e.g. no crash-landing intro in this scene), wire it now.
-        // Otherwise SceneBootstrap calls BindPlayer once the player actually spawns.
-        BindPlayer(playerInputs);
+        // Otherwise SceneBootstrap calls BindPlayer once the player actually spawns - the player
+        // simply not existing yet here is the expected/normal case (not an error), so don't warn
+        // about it.
+        BindPlayer(playerInputs, warnIfMissing: false);
     }
 
     /// <summary>
@@ -29,6 +31,11 @@ public class MobileInputBinder : MonoBehaviour
     /// player finally spawns (the player doesn't exist yet at Awake time in that case).
     /// </summary>
     public void BindPlayer(StarterAssetsInputs inputs)
+    {
+        BindPlayer(inputs, warnIfMissing: true);
+    }
+
+    void BindPlayer(StarterAssetsInputs inputs, bool warnIfMissing)
     {
         if (inputs == null)
         {
@@ -41,7 +48,8 @@ public class MobileInputBinder : MonoBehaviour
 
         if (canvasInput == null || playerInputs == null)
         {
-            Debug.LogWarning("MobileInputBinder: missing canvas input or player StarterAssetsInputs.");
+            if (warnIfMissing)
+                Debug.LogWarning("MobileInputBinder: missing canvas input or player StarterAssetsInputs.");
             return;
         }
 

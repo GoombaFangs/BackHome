@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -58,10 +59,7 @@ public class ShipCrashImpact : MonoBehaviour
     [SerializeField, Min(0f)] float debrisGravity = 3.4f;
 
     GameObject _instance;
-    ParticleSystem _flash;
-    ParticleSystem _dust;
-    ParticleSystem _sparks;
-    ParticleSystem _debris;
+    ParticleSystem[] _systems;
     bool _built;
 
     static Material _flashMaterial;
@@ -86,49 +84,89 @@ public class ShipCrashImpact : MonoBehaviour
             return;
         _built = true;
 
-        // Prefer the authored look: instantiate it and just find its named children, same
-        // pattern as ShipReentryGlow. Only build procedurally if no prefab is assigned.
-        Transform root = transform;
+        // Prefer the authored look: instantiate the prefab as-is and play every particle system
+        // in it. Do not also spawn the old procedural ImpactDebris/Flash/etc. — the prefab is
+        // allowed to rename/replace those (ImpactDirt, ImpactGrass, ...) and those children
+        // would otherwise never be Play()'d.
         if (effectPrefab != null)
         {
             _instance = Instantiate(effectPrefab, transform);
             _instance.name = effectPrefab.name;
             _instance.transform.localPosition = Vector3.zero;
-            _instance.transform.localRotation = Quaternion.identity;
-            root = _instance.transform;
+            AlignEmitterToPlanetUp(_instance.transform);
+            _systems = _instance.GetComponentsInChildren<ParticleSystem>(true);
+            PrepareSystems(_systems);
+            return;
         }
 
+        var built = new List<ParticleSystem>(4);
         if (enableFlash)
-            _flash = BuildFlashSystem(root, "ImpactFlash");
+            built.Add(BuildFlashSystem(transform, "ImpactFlash"));
 
         // randomDirectionAmount blends in fully-random directions on top of the Hemisphere's
         // outward spread - sells a chaotic "blast" scatter (including to the sides) instead of a
         // neat, uniform sprinkler pattern.
-        _dust = BuildBurstSystem(root, "ImpactDust", ParticleSystemRenderMode.Billboard,
+        built.Add(BuildBurstSystem(transform, "ImpactDust", ParticleSystemRenderMode.Billboard,
             dustCount, dustSpeed, dustSize, dustLifetime,
             new ParticleSystem.MinMaxGradient(dustColor), gravity: 0.4f,
-            GetSoftAlphaMaterial(), fadeToBlack: false, drag: 1.4f, randomDirectionAmount: 0.3f);
+            GetSoftAlphaMaterial(), fadeToBlack: false, drag: 1.4f, randomDirectionAmount: 0.3f));
 
-        _sparks = BuildBurstSystem(root, "ImpactSparks", ParticleSystemRenderMode.Billboard,
+        built.Add(BuildBurstSystem(transform, "ImpactSparks", ParticleSystemRenderMode.Billboard,
             sparkCount, sparkSpeed, sparkSize, sparkLifetime,
             new ParticleSystem.MinMaxGradient(sparkHotColor, sparkCoolColor), gravity: sparkGravity,
-            GetSoftAdditiveMaterial(), fadeToBlack: true, drag: 0f, randomDirectionAmount: 0.5f);
+            GetSoftAdditiveMaterial(), fadeToBlack: true, drag: 0f, randomDirectionAmount: 0.5f));
 
-        _debris = BuildBurstSystem(root, "ImpactDebris", ParticleSystemRenderMode.Mesh,
+        built.Add(BuildBurstSystem(transform, "ImpactDebris", ParticleSystemRenderMode.Mesh,
             debrisCount, debrisSpeed, debrisSize, debrisLifetime,
             new ParticleSystem.MinMaxGradient(Color.white), gravity: debrisGravity,
             GetDebrisMaterial(), fadeToBlack: false, drag: 0f,
-            mesh: ShipVfxUtility.GetCubeMesh(), tumble: true, fade: false, randomDirectionAmount: 0.5f);
+            mesh: ShipVfxUtility.GetCubeMesh(), tumble: true, fade: false, randomDirectionAmount: 0.5f));
+
+        _systems = built.ToArray();
+        PrepareSystems(_systems);
     }
 
-    /// <summary>Fires the flash/dust/spark/debris burst once. Safe to call multiple times.</summary>
+    /// <summary>Fires every authored (or procedurally built) burst once. Safe to call multiple times.</summary>
     public void Trigger()
     {
         Build();
-        _flash?.Play(true);
-        _dust?.Play(true);
-        _sparks?.Play(true);
-        _debris?.Play(true);
+        if (_systems == null)
+            return;
+
+        for (int i = 0; i < _systems.Length; i++)
+        {
+            ParticleSystem ps = _systems[i];
+            if (ps == null)
+                continue;
+
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            ps.Play(false);
+        }
+    }
+
+    static void AlignEmitterToPlanetUp(Transform emitter)
+    {
+        Vector3 up = SphericalPlanet.Instance != null
+            ? SphericalPlanet.Instance.GetUpAt(emitter.position)
+            : Vector3.up;
+        emitter.rotation = Quaternion.FromToRotation(Vector3.up, up);
+    }
+
+    static void PrepareSystems(ParticleSystem[] systems)
+    {
+        if (systems == null)
+            return;
+
+        for (int i = 0; i < systems.Length; i++)
+        {
+            ParticleSystem ps = systems[i];
+            if (ps == null)
+                continue;
+
+            ParticleSystem.MainModule main = ps.main;
+            main.playOnAwake = false;
+            main.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
+        }
     }
 
     ParticleSystem BuildBurstSystem(Transform parent, string childName, ParticleSystemRenderMode renderMode,

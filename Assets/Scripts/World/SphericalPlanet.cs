@@ -76,7 +76,11 @@ public class SphericalPlanet : MonoBehaviour
     void OnEnable()
     {
         if (Application.isPlaying)
+        {
             Instance = this;
+            if (GetComponent<PlanetParticleGravity>() == null)
+                gameObject.AddComponent<PlanetParticleGravity>();
+        }
 
         BuildPlanet();
     }
