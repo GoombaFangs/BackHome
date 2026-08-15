@@ -26,6 +26,12 @@ public class ShipCrashIntro : MonoBehaviour
         "Passed to ShipCrashImpact so the look is edited as a normal prefab instead of generated " +
         "in code.")]
     [SerializeField] GameObject impactEffectPrefab;
+    [Tooltip("Impact crater mesh stamped onto the planet at the landing site. Leave empty to " +
+        "load the Crater model from Resources/Ship/Capsule.")]
+    [SerializeField] GameObject craterPrefab;
+    [SerializeField, Min(0.01f)] float craterScale = 6f;
+    [Tooltip("How far to sink the crater into the ground, in world units.")]
+    [SerializeField] float craterEmbed = 0.2f;
 
     [Header("Timing")]
     [Tooltip("Seconds for the crash fall itself. Keep this short - it's a hard crash, not a slow glide.")]
@@ -231,6 +237,7 @@ public class ShipCrashIntro : MonoBehaviour
         // and configured by hand directly on the ShipCapsule instead.
         if (impactEffectPrefab != null)
             impact.SetEffectPrefab(impactEffectPrefab);
+        impact.SetCrater(craterPrefab, craterScale, craterEmbed);
         return impact;
     }
 
