@@ -190,6 +190,8 @@ MonoBehaviour:
     m_Bits: 8
   loseVisionDelay: 3
   homeArriveDistance: 0.35
+  knockbackDistance: 0.4
+  knockbackDuration: 0.16
 --- !u!114 &8361180514612207396
 MonoBehaviour:
   m_ObjectHideFlags: 0

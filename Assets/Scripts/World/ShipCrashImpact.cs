@@ -20,9 +20,10 @@ using UnityEngine.Rendering;
 public class ShipCrashImpact : MonoBehaviour
 {
     [Header("Effect Prefab")]
-    [Tooltip("Authored impact burst prefab (flash + dust + sparks + debris, e.g. CapsuleImpact). " +
+    [Tooltip("Authored impact burst prefab (flash + dust + sparks + debris, e.g. CapsuleImpactVFX). " +
         "Edit this prefab directly in the Editor to tune the look - it's instantiated as-is at " +
-        "runtime. Leave empty to fall back to the procedural builder below.")]
+        "runtime. Leave empty to load Ship/Capsule/CapsuleImpactVFX from Resources, then fall " +
+        "back to the procedural builder below.")]
     [SerializeField] GameObject effectPrefab;
 
     [Header("Impact Flash (explosive pop, procedural fallback)")]
@@ -67,6 +68,7 @@ public class ShipCrashImpact : MonoBehaviour
         "surface and the bowl clipping into the planet instead of sitting on top like a hat.")]
     [SerializeField] float craterEmbed = 0.2f;
 
+    const string DefaultEffectResource = "Ship/Capsule/CapsuleImpactVFX";
     const string DefaultCraterResource = "Ship/Capsule/Crater";
     const string DefaultCraterMaterialResource = "Ship/Capsule/Materials/Crater";
 
@@ -108,6 +110,9 @@ public class ShipCrashImpact : MonoBehaviour
         // in it. Do not also spawn the old procedural ImpactDebris/Flash/etc. — the prefab is
         // allowed to rename/replace those (ImpactDirt, ImpactGrass, ...) and those children
         // would otherwise never be Play()'d.
+        if (effectPrefab == null)
+            effectPrefab = Resources.Load<GameObject>(DefaultEffectResource);
+
         if (effectPrefab != null)
         {
             _instance = Instantiate(effectPrefab, transform);
@@ -261,6 +266,8 @@ public class ShipCrashImpact : MonoBehaviour
 
             ParticleSystem.MainModule main = ps.main;
             main.playOnAwake = false;
+            // Hovl Studio demo prefabs loop in the catalog; a crash impact must be one-shot.
+            main.loop = false;
             main.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
         }
     }

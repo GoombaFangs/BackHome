@@ -6,7 +6,8 @@ using UnityEditor;
 
 /// <summary>
 /// Builds a walkable spherical planet (Outer Wilds style).
-/// Optional heightmap-driven VisualShell for mountains/valleys.
+/// Optional heightmap-driven VisualShell for mountains/valleys,
+/// or an authored FBX/prefab assigned as Custom Visual Model.
 /// Also builds in the Scene view (Edit Mode) so you can see it without Play.
 /// </summary>
 [ExecuteAlways]
@@ -39,6 +40,14 @@ public class SphericalPlanet : MonoBehaviour
     [SerializeField] int shellLongitudeSegments = 32;
     [SerializeField] bool castShellShadows = true;
 
+    [Header("Custom Visual Model")]
+    [Tooltip("Optional authored planet mesh (FBX/prefab). Replaces the procedural visual shell.")]
+    [SerializeField] GameObject customVisualModel;
+    [Tooltip("Uniform-scale the custom model so its bounds match the gameplay radius.")]
+    [SerializeField] bool fitCustomVisualToRadius = true;
+
+    const string CustomVisualName = "CustomVisual";
+
     MeshFilter _filter;
     MeshRenderer _renderer;
     SphereCollider _collider;
@@ -47,6 +56,7 @@ public class SphericalPlanet : MonoBehaviour
     Transform _shellRoot;
     MeshFilter _shellFilter;
     MeshRenderer _shellRenderer;
+    Transform _customVisualInstance;
     Material _runtimeShellMaterial;
     Mesh _runtimeShellMesh;
     bool _buildQueued;
@@ -59,9 +69,16 @@ public class SphericalPlanet : MonoBehaviour
         && shellHeightMap != null
         && shellHeightAmplitude > 0.0001f;
 
+    bool HasVisualShell => customVisualModel != null || useVisualShell;
+
     public void SetVisualShellVisible(bool visible)
     {
         _shellVisible = visible;
+        bool show = visible && HasVisualShell;
+
+        if (_customVisualInstance != null)
+            _customVisualInstance.gameObject.SetActive(show);
+
         if (_shellRenderer == null)
             return;
 
@@ -70,7 +87,7 @@ public class SphericalPlanet : MonoBehaviour
         if (!Application.isPlaying && UnityEditor.EditorApplication.isUpdating)
             return;
 #endif
-        _shellRenderer.enabled = visible && useVisualShell && _runtimeShellMaterial != null;
+        _shellRenderer.enabled = show && customVisualModel == null && _runtimeShellMaterial != null;
     }
 
     void OnEnable()
@@ -80,6 +97,12 @@ public class SphericalPlanet : MonoBehaviour
             Instance = this;
             if (GetComponent<PlanetParticleGravity>() == null)
                 gameObject.AddComponent<PlanetParticleGravity>();
+        }
+
+        if (IsEditorBusy)
+        {
+            QueueBuild();
+            return;
         }
 
         BuildPlanet();
@@ -114,15 +137,43 @@ public class SphericalPlanet : MonoBehaviour
             return;
 
         _buildQueued = true;
-        EditorApplication.delayCall += () =>
-        {
-            _buildQueued = false;
-            if (this != null)
-                BuildPlanet();
-        };
+        EditorApplication.delayCall += FlushQueuedBuild;
 #else
         BuildPlanet();
 #endif
+    }
+
+#if UNITY_EDITOR
+    void FlushQueuedBuild()
+    {
+        if (this == null)
+        {
+            _buildQueued = false;
+            return;
+        }
+
+        if (IsEditorBusy)
+        {
+            EditorApplication.delayCall += FlushQueuedBuild;
+            return;
+        }
+
+        _buildQueued = false;
+        BuildPlanet();
+    }
+#endif
+
+    static bool IsEditorBusy
+    {
+        get
+        {
+#if UNITY_EDITOR
+            return !Application.isPlaying
+                && (EditorApplication.isUpdating || EditorApplication.isCompiling);
+#else
+            return false;
+#endif
+        }
     }
 
     /// <summary>
@@ -206,6 +257,12 @@ public class SphericalPlanet : MonoBehaviour
 
     void BuildPlanet()
     {
+        if (IsEditorBusy)
+        {
+            QueueBuild();
+            return;
+        }
+
         _filter = gameObject.GetComponent<MeshFilter>();
         if (_filter == null)
             _filter = gameObject.AddComponent<MeshFilter>();
@@ -314,11 +371,18 @@ public class SphericalPlanet : MonoBehaviour
         if (_shellRoot == null || _shellFilter == null || _shellRenderer == null)
             return;
 
+        if (customVisualModel != null)
+        {
+            ClearProceduralShell();
+            SpawnOrRefreshCustomVisual();
+            return;
+        }
+
+        ClearCustomVisual();
+
         if (!useVisualShell)
         {
-            _shellFilter.sharedMesh = null;
-            _shellRenderer.sharedMaterial = null;
-            _shellRenderer.enabled = false;
+            ClearProceduralShell();
             return;
         }
 
@@ -359,6 +423,181 @@ public class SphericalPlanet : MonoBehaviour
         _shellRenderer.receiveShadows = true;
     }
 
+    void ClearProceduralShell()
+    {
+        if (_runtimeShellMaterial != null)
+        {
+            DestroyOwned(_runtimeShellMaterial);
+            _runtimeShellMaterial = null;
+        }
+
+        if (_runtimeShellMesh != null)
+        {
+            DestroyOwned(_runtimeShellMesh);
+            _runtimeShellMesh = null;
+        }
+
+        _shellFilter.sharedMesh = null;
+        _shellRenderer.sharedMaterial = null;
+        _shellRenderer.enabled = false;
+    }
+
+    void SpawnOrRefreshCustomVisual()
+    {
+        if (_customVisualInstance == null && _shellRoot != null)
+        {
+            Transform existing = _shellRoot.Find(CustomVisualName);
+            if (existing != null)
+                _customVisualInstance = existing;
+        }
+
+        if (_customVisualInstance == null)
+        {
+            var instance = Instantiate(customVisualModel, _shellRoot);
+            instance.name = CustomVisualName;
+            instance.hideFlags = HideFlags.DontSave;
+            instance.transform.localPosition = Vector3.zero;
+            instance.transform.localRotation = Quaternion.identity;
+            instance.transform.localScale = Vector3.one;
+            _customVisualInstance = instance.transform;
+        }
+
+        ApplyCustomVisualSettings();
+    }
+
+    void ApplyCustomVisualSettings()
+    {
+        if (_customVisualInstance == null)
+            return;
+
+        _customVisualInstance.gameObject.hideFlags = HideFlags.DontSave;
+        _customVisualInstance.gameObject.SetActive(_shellVisible);
+        ApplyLayerRecursive(_customVisualInstance, gameObject.layer);
+
+        foreach (var col in _customVisualInstance.GetComponentsInChildren<Collider>(true))
+            col.enabled = false;
+
+        foreach (var animator in _customVisualInstance.GetComponentsInChildren<Animator>(true))
+            animator.enabled = false;
+
+        var shadowMode = castShellShadows
+            ? UnityEngine.Rendering.ShadowCastingMode.On
+            : UnityEngine.Rendering.ShadowCastingMode.Off;
+        foreach (var meshRenderer in _customVisualInstance.GetComponentsInChildren<Renderer>(true))
+        {
+            meshRenderer.shadowCastingMode = shadowMode;
+            meshRenderer.receiveShadows = true;
+        }
+
+        if (fitCustomVisualToRadius)
+            FitCustomVisualToRadius();
+    }
+
+    void FitCustomVisualToRadius()
+    {
+        Transform model = _customVisualInstance;
+        if (model == null)
+            return;
+
+        model.localScale = Vector3.one;
+        model.localPosition = Vector3.zero;
+
+        if (!TryGetLocalMeshBounds(model, out Bounds local))
+            return;
+
+        float currentRadius = Mathf.Max(local.extents.x, Mathf.Max(local.extents.y, local.extents.z));
+        if (currentRadius < 0.0001f)
+            return;
+
+        float targetRadius = Mathf.Max(0.01f, radius + shellRadiusOffset);
+        float scale = targetRadius / currentRadius;
+        model.localScale = Vector3.one * scale;
+        model.localPosition = -local.center * scale;
+    }
+
+    static bool TryGetLocalMeshBounds(Transform model, out Bounds local)
+    {
+        local = new Bounds();
+        bool has = false;
+
+        var meshFilters = model.GetComponentsInChildren<MeshFilter>(true);
+        for (int i = 0; i < meshFilters.Length; i++)
+        {
+            MeshFilter filter = meshFilters[i];
+            if (filter.sharedMesh == null)
+                continue;
+            EncapsulateLocalBounds(model, filter.transform, filter.sharedMesh.bounds, ref local, ref has);
+        }
+
+        var skinned = model.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        for (int i = 0; i < skinned.Length; i++)
+        {
+            SkinnedMeshRenderer renderer = skinned[i];
+            if (renderer.sharedMesh == null)
+                continue;
+            EncapsulateLocalBounds(model, renderer.transform, renderer.localBounds, ref local, ref has);
+        }
+
+        return has;
+    }
+
+    static void EncapsulateLocalBounds(
+        Transform model,
+        Transform meshTransform,
+        Bounds meshLocalBounds,
+        ref Bounds local,
+        ref bool has)
+    {
+        Vector3 extents = meshLocalBounds.extents;
+        Vector3 center = meshLocalBounds.center;
+        for (int x = -1; x <= 1; x += 2)
+        {
+            for (int y = -1; y <= 1; y += 2)
+            {
+                for (int z = -1; z <= 1; z += 2)
+                {
+                    var corner = new Vector3(
+                        center.x + extents.x * x,
+                        center.y + extents.y * y,
+                        center.z + extents.z * z);
+                    Vector3 inModel = model.InverseTransformPoint(meshTransform.TransformPoint(corner));
+                    if (!has)
+                    {
+                        local = new Bounds(inModel, Vector3.zero);
+                        has = true;
+                    }
+                    else
+                    {
+                        local.Encapsulate(inModel);
+                    }
+                }
+            }
+        }
+    }
+
+    static void ApplyLayerRecursive(Transform root, int layer)
+    {
+        root.gameObject.layer = layer;
+        for (int i = 0; i < root.childCount; i++)
+            ApplyLayerRecursive(root.GetChild(i), layer);
+    }
+
+    void ClearCustomVisual()
+    {
+        if (_customVisualInstance != null)
+        {
+            DestroyOwned(_customVisualInstance.gameObject);
+            _customVisualInstance = null;
+        }
+
+        if (_shellRoot == null)
+            return;
+
+        Transform existing = _shellRoot.Find(CustomVisualName);
+        if (existing != null)
+            DestroyOwned(existing.gameObject);
+    }
+
     void EnsureShellObjects()
     {
         // Never mutate hierarchy while this object is the Prefab Asset itself.
@@ -367,6 +606,7 @@ public class SphericalPlanet : MonoBehaviour
             _shellRoot = null;
             _shellFilter = null;
             _shellRenderer = null;
+            _customVisualInstance = null;
             return;
         }
 

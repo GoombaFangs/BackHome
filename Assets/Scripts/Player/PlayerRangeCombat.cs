@@ -93,7 +93,7 @@ public class PlayerRangeCombat : MonoBehaviour
 
             if (_inside.Add(creature))
             {
-                creature.TakeDamage(damage);
+                creature.TakeDamage(damage, origin);
                 _hitThisFrame.Add(creature);
             }
         }
@@ -123,7 +123,7 @@ public class PlayerRangeCombat : MonoBehaviour
             if (_hitThisFrame.Contains(creature))
                 continue;
 
-            creature.TakeDamage(damage);
+            creature.TakeDamage(damage, transform.position);
             if (!creature.IsAlive)
                 _removeBuffer.Add(creature);
         }

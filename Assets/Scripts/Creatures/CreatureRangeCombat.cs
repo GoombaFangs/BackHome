@@ -58,6 +58,13 @@ public class CreatureRangeCombat : MonoBehaviour
             return;
         }
 
+        // Brief flinch: keep occupancy so we don't re-trigger an enter hit after the shove.
+        if (_chase != null && _chase.IsKnockedBack)
+        {
+            _anim?.SetAttacking(false);
+            return;
+        }
+
         float attackSpeed = _creature.AttackSpeed;
         float damage = _creature.AttackDamage;
         float radius = ResolveRadius();

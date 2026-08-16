@@ -17,7 +17,8 @@ using UnityEngine;
 public class ShipReentryGlow : MonoBehaviour
 {
     [Tooltip("Prefab with the re-entry fire look (flame shell + embers + flicker light). Edit this " +
-        "prefab directly in the Editor to tune the effect - it's instantiated as-is at runtime.")]
+        "prefab directly in the Editor to tune the effect - it's instantiated as-is at runtime. " +
+        "Leave empty to load Ship/Capsule/CapsuleVFX from Resources.")]
     [SerializeField] GameObject effectPrefab;
 
     [Header("Light Flicker (animated on top of the prefab's own light settings)")]
@@ -31,6 +32,8 @@ public class ShipReentryGlow : MonoBehaviour
     float _baseLightIntensity;
     Coroutine _flickerRoutine;
     bool _built;
+
+    const string DefaultEffectResource = "Ship/Capsule/CapsuleVFX";
 
     /// <summary>The instantiated effect prefab's transform (e.g. "CapsuleParticalSystem"), once
     /// built - lets other VFX components (see ShipFireTrail.SetEffectParent) nest under the same
@@ -74,6 +77,9 @@ public class ShipReentryGlow : MonoBehaviour
     /// <summary>Call the moment the capsule appears in space - burns continuously until Stop().</summary>
     public void Play()
     {
+        if (effectPrefab == null)
+            effectPrefab = Resources.Load<GameObject>(DefaultEffectResource);
+
         Build();
         if (_instance == null)
         {

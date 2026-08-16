@@ -28,6 +28,12 @@ public class CreatureChase : MonoBehaviour
     [SerializeField, Min(0f)] float loseVisionDelay = 3f;
     [SerializeField, Min(0.05f)] float homeArriveDistance = 0.35f;
 
+    [Header("Hit reaction")]
+    [Tooltip("Surface distance shoved away from the attacker. Keep small — a punch, not a launch.")]
+    [SerializeField, Min(0f)] float knockbackDistance = 0.4f;
+    [Tooltip("Seconds for the shove to ease out. Short = snappy.")]
+    [SerializeField, Min(0.05f)] float knockbackDuration = 0.16f;
+
     Creature _creature;
     CreatureAnimator _anim;
     PlayerVitals _player;
@@ -40,8 +46,18 @@ public class CreatureChase : MonoBehaviour
     float _outOfVisionTime;
     bool _homeCaptured;
 
+    bool _knockActive;
+    float _knockElapsed;
+    float _knockDuration;
+    float _knockDistance;
+    Vector3 _knockDir;
+    Vector3 _knockFaceTarget;
+
     /// <summary>True while actively chasing / fighting the player.</summary>
     public bool IsAggroed => _state == State.Aggroed;
+
+    /// <summary>True during the short hit-shove after taking damage.</summary>
+    public bool IsKnockedBack => _knockActive;
 
     void Awake()
     {
@@ -61,7 +77,13 @@ public class CreatureChase : MonoBehaviour
 
     void Update()
     {
-        if (_creature == null || !_creature.IsAlive)
+        if (_creature == null)
+        {
+            _anim?.ResetToIdle();
+            return;
+        }
+
+        if (!_creature.IsAlive)
         {
             _anim?.ResetToIdle();
             return;
@@ -71,6 +93,12 @@ public class CreatureChase : MonoBehaviour
             CaptureHome();
 
         if (!TryResolvePlanet())
+        {
+            _anim?.SetMoving(false);
+            return;
+        }
+
+        if (_knockActive)
         {
             _anim?.SetMoving(false);
             return;
@@ -88,6 +116,41 @@ public class CreatureChase : MonoBehaviour
                 TickReturning();
                 break;
         }
+    }
+
+    void LateUpdate()
+    {
+        if (_knockActive)
+            TickKnockback();
+    }
+
+    /// <summary>
+    /// Short surface shove away from <paramref name="fromWorldPosition"/>. Refreshes if already sliding.
+    /// </summary>
+    public void ApplyKnockback(Vector3 fromWorldPosition)
+    {
+        if (_state != State.Aggroed)
+            EnterAggro();
+
+        if (knockbackDistance <= 0f || knockbackDuration <= 0f)
+            return;
+
+        if (!TryResolvePlanet())
+            return;
+
+        Vector3 up = _planet.GetUpAt(transform.position);
+        Vector3 away = Vector3.ProjectOnPlane(transform.position - fromWorldPosition, up);
+        if (away.sqrMagnitude < 0.0001f)
+            away = Vector3.ProjectOnPlane(-transform.forward, up);
+        if (away.sqrMagnitude < 0.0001f)
+            return;
+
+        _knockDir = away.normalized;
+        _knockFaceTarget = fromWorldPosition;
+        _knockDistance = knockbackDistance;
+        _knockDuration = knockbackDuration;
+        _knockElapsed = 0f;
+        _knockActive = true;
     }
 
     void TickIdle()
@@ -225,6 +288,48 @@ public class CreatureChase : MonoBehaviour
         return true;
     }
 
+    void TickKnockback()
+    {
+        if (!TryResolvePlanet())
+        {
+            _knockActive = false;
+            return;
+        }
+
+        float duration = Mathf.Max(0.01f, _knockDuration);
+        float t0 = Mathf.Clamp01(_knockElapsed / duration);
+        _knockElapsed += Time.deltaTime;
+        float t1 = Mathf.Clamp01(_knockElapsed / duration);
+
+        Vector3 up = _planet.GetUpAt(transform.position);
+        Vector3 dir = Vector3.ProjectOnPlane(_knockDir, up);
+        Vector3 next = transform.position;
+
+        if (dir.sqrMagnitude > 0.0001f)
+        {
+            dir.Normalize();
+            _knockDir = dir;
+
+            float step = (EaseOutCubic(t1) - EaseOutCubic(t0)) * _knockDistance;
+            if (step > 0.00001f)
+                StepOnSurface(dir, step, out next, out up);
+        }
+
+        Vector3 faceDir = Vector3.ProjectOnPlane(_knockFaceTarget - next, up);
+        if (faceDir.sqrMagnitude < 0.001f)
+            faceDir = Vector3.ProjectOnPlane(transform.forward, up);
+        if (faceDir.sqrMagnitude < 0.001f)
+            faceDir = Vector3.ProjectOnPlane(Vector3.forward, up);
+
+        if (faceDir.sqrMagnitude > 0.001f)
+            ApplyPose(next, faceDir.normalized, up);
+        else
+            transform.position = next;
+
+        if (t1 >= 1f)
+            _knockActive = false;
+    }
+
     void MoveToward(Vector3 targetPosition)
     {
         Vector3 up = _planet.GetUpAt(transform.position);
@@ -233,22 +338,7 @@ public class CreatureChase : MonoBehaviour
             return;
 
         Vector3 moveDir = toTarget.normalized;
-        Vector3 probeOrigin = transform.position + moveDir * (moveSpeed * Time.deltaTime);
-        Vector3 radial = (probeOrigin - _planet.Center).normalized;
-
-        Vector3 next;
-        Vector3 surfaceUp;
-        if (TryStickToCollider(radial, out next, out surfaceUp))
-            up = surfaceUp;
-        else
-        {
-            next = transform.position + moveDir * (moveSpeed * Time.deltaTime);
-            float minDist = GetFallbackSurfaceRadius(radial) + footOffset;
-            Vector3 fromCenter = next - _planet.Center;
-            if (fromCenter.magnitude < minDist)
-                next = _planet.Center + fromCenter.normalized * minDist;
-            up = _planet.GetUpAt(next);
-        }
+        StepOnSurface(moveDir, moveSpeed * Time.deltaTime, out Vector3 next, out up);
 
         Vector3 faceDir = Vector3.ProjectOnPlane(moveDir, up);
         if (faceDir.sqrMagnitude < 0.001f)
@@ -257,6 +347,32 @@ public class CreatureChase : MonoBehaviour
             faceDir = Vector3.ProjectOnPlane(Vector3.forward, up);
 
         ApplyPose(next, faceDir.normalized, up);
+    }
+
+    void StepOnSurface(Vector3 moveDir, float distance, out Vector3 next, out Vector3 up)
+    {
+        Vector3 probeOrigin = transform.position + moveDir * distance;
+        Vector3 radial = (probeOrigin - _planet.Center).normalized;
+
+        if (TryStickToCollider(radial, out next, out Vector3 surfaceUp))
+        {
+            up = surfaceUp;
+            return;
+        }
+
+        next = probeOrigin;
+        float minDist = GetFallbackSurfaceRadius(radial) + footOffset;
+        Vector3 fromCenter = next - _planet.Center;
+        if (fromCenter.magnitude < minDist)
+            next = _planet.Center + fromCenter.normalized * minDist;
+        up = _planet.GetUpAt(next);
+    }
+
+    static float EaseOutCubic(float t)
+    {
+        t = Mathf.Clamp01(t);
+        float inv = 1f - t;
+        return 1f - inv * inv * inv;
     }
 
     void FaceToward(Vector3 targetPosition)

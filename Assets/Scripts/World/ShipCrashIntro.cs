@@ -19,12 +19,13 @@ public class ShipCrashIntro : MonoBehaviour
 {
     [Header("Actor")]
     [SerializeField] Transform shipCapsule;
-    [Tooltip("Authored re-entry fire effect (flame shell + embers + flicker light). Passed to " +
-        "ShipReentryGlow so the look is edited as a normal prefab instead of generated in code.")]
+    [Tooltip("Authored re-entry fire effect (Hovl Studio sparks/smoke inside CapsuleVFX). Passed " +
+        "to ShipReentryGlow so the look is edited as a normal prefab instead of generated in code. " +
+        "Leave empty to load Ship/Capsule/CapsuleVFX from Resources.")]
     [SerializeField] GameObject reentryEffectPrefab;
-    [Tooltip("Authored impact burst effect (flash + dust + sparks + debris, e.g. CapsuleImpact). " +
-        "Passed to ShipCrashImpact so the look is edited as a normal prefab instead of generated " +
-        "in code.")]
+    [Tooltip("Authored impact burst (Hovl Studio explosion/dust inside CapsuleImpactVFX). Passed " +
+        "to ShipCrashImpact so the look is edited as a normal prefab instead of generated in code. " +
+        "Leave empty to load Ship/Capsule/CapsuleImpactVFX from Resources.")]
     [SerializeField] GameObject impactEffectPrefab;
     [Tooltip("Impact crater mesh stamped onto the planet at the landing site. Leave empty to " +
         "load the Crater model from Resources/Ship/Capsule.")]
@@ -218,6 +219,11 @@ public class ShipCrashIntro : MonoBehaviour
             trail = shipCapsule.GetComponent<ShipFireTrail>();
         if (trail == null)
         {
+            // Authored particle FX (e.g. Hovl Studio nested inside CapsuleVFX) already cover the
+            // re-entry look - don't bolt the old procedural trail on top of them.
+            if (effectRoot != null && effectRoot.GetComponentInChildren<ParticleSystem>(true) != null)
+                return null;
+
             trail = shipCapsule.gameObject.AddComponent<ShipFireTrail>();
             // No authored "FireTrail" child found anywhere - the sub-emitters above were just
             // built procedurally straight onto the capsule, so tidy them under the same visible

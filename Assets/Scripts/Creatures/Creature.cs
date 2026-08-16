@@ -13,6 +13,7 @@ public class Creature : MonoBehaviour, IVitalsReadable
     float _currentHealth;
     bool _dying;
     Action _diedNoArg;
+    CreatureChase _chase;
 
     public CreatureStats Stats => stats;
     public string DisplayName => stats != null ? stats.DisplayName : name;
@@ -41,6 +42,7 @@ public class Creature : MonoBehaviour, IVitalsReadable
 
     void Awake()
     {
+        _chase = GetComponent<CreatureChase>();
         ResetHealth();
     }
 
@@ -69,8 +71,24 @@ public class Creature : MonoBehaviour, IVitalsReadable
 
     public void TakeDamage(float amount)
     {
-        if (!IsAlive || amount <= 0f)
+        ApplyDamage(amount);
+    }
+
+    /// <summary>
+    /// Damages this creature and knocks it away from <paramref name="sourcePosition"/> along the surface.
+    /// </summary>
+    public void TakeDamage(float amount, Vector3 sourcePosition)
+    {
+        if (!ApplyDamage(amount))
             return;
+
+        _chase?.ApplyKnockback(sourcePosition);
+    }
+
+    bool ApplyDamage(float amount)
+    {
+        if (!IsAlive || amount <= 0f)
+            return false;
 
         _currentHealth = Mathf.Max(0f, _currentHealth - amount);
         RaiseVitalsChanged();
@@ -78,6 +96,8 @@ public class Creature : MonoBehaviour, IVitalsReadable
 
         if (_currentHealth <= 0f)
             BeginDeath();
+
+        return true;
     }
 
     public void Heal(float amount)
