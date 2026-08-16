@@ -68,6 +68,8 @@ MonoBehaviour:
   shellLatitudeSegments: 24
   shellLongitudeSegments: 32
   castShellShadows: 1
+  customVisualModel: {fileID: 0}
+  fitCustomVisualToRadius: 1
 --- !u!114 &500003
 MonoBehaviour:
   m_ObjectHideFlags: 0

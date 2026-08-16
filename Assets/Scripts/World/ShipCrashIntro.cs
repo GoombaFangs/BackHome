@@ -19,9 +19,8 @@ public class ShipCrashIntro : MonoBehaviour
 {
     [Header("Actor")]
     [SerializeField] Transform shipCapsule;
-    [Tooltip("Authored re-entry fire effect (Hovl Studio sparks/smoke inside CapsuleVFX). Passed " +
-        "to ShipReentryGlow so the look is edited as a normal prefab instead of generated in code. " +
-        "Leave empty to load Ship/Capsule/CapsuleVFX from Resources.")]
+    [Tooltip("Authored re-entry fire trail (Hovl streak + sparks/smoke inside CapsuleTrailVFX). " +
+        "Leave empty to load Ship/Capsule/CapsuleTrailVFX from Resources.")]
     [SerializeField] GameObject reentryEffectPrefab;
     [Tooltip("Authored impact burst (Hovl Studio explosion/dust inside CapsuleImpactVFX). Passed " +
         "to ShipCrashImpact so the look is edited as a normal prefab instead of generated in code. " +

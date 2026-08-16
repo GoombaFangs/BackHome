@@ -3,9 +3,9 @@ using UnityEngine.Rendering;
 
 /// <summary>
 /// Fiery re-entry trail for the ShipCapsule crash cinematic (see <see cref="ShipCrashIntro"/>):
-/// a bright core streak (TrailRenderer) plus a thick, overlapping column of flame puffs, a sooty
-/// smoke fringe, and outward-flying sparks - together reading as a proper meteor fireball rather
-/// than a thin line.
+/// a bright core streak (TrailRenderer), a flickering fire Line (hot core + orange envelope),
+/// plus optional flame puffs, a sooty smoke fringe, and outward-flying sparks - together reading
+/// as a proper meteor fireball.
 ///
 /// Authored as a normal child ("FireTrail", with FlameBody/Smoke/Sparks/FireEmbers underneath it)
 /// inside the CapsuleParticalSystem prefab, so every particle system here is directly editable in
@@ -22,22 +22,22 @@ using UnityEngine.Rendering;
 public class ShipFireTrail : MonoBehaviour
 {
     [Header("Trail Shape (bright core streak)")]
-    [SerializeField, Min(0.05f)] float trailTime = 0.4f;
-    [SerializeField, Min(0.01f)] float headWidth = 1.4f;
+    [SerializeField, Min(0.05f)] float trailTime = 0.6f;
+    [SerializeField, Min(0.01f)] float headWidth = 2.6f;
     [SerializeField, Min(0f)] float tailWidthRatio = 0.05f;
     [SerializeField, Min(0f)] float minVertexDistance = 0.1f;
     [Tooltip("World units of trail pre-seeded behind the capsule the instant Play() is called, so " +
         "the streak appears at full length immediately instead of visibly growing in over the first " +
         "fraction of a second (a TrailRenderer normally starts as a single point).")]
-    [SerializeField, Min(0f)] float instantSeedLength = 5f;
+    [SerializeField, Min(0f)] float instantSeedLength = 12f;
 
     [Header("Trail Color (head -> tail)")]
-    [SerializeField] Color coreColor = new Color(1f, 0.96f, 0.78f, 0.95f);
-    [SerializeField] Color midColor = new Color(1f, 0.5f, 0.08f, 0.85f);
+    [SerializeField] Color coreColor = new Color(1f, 0.98f, 0.85f, 1f);
+    [SerializeField] Color midColor = new Color(1f, 0.42f, 0.06f, 0.9f);
     // RGB (not just alpha) fades toward black - the additive blend is forced directly via
     // Src/DstBlend, bypassing the shader's own alpha-premultiply path, so alpha alone can't be
     // relied on to fade the tail to nothing.
-    [SerializeField] Color tailColor = new Color(0.05f, 0.01f, 0f, 0f);
+    [SerializeField] Color tailColor = new Color(0.08f, 0.01f, 0f, 0f);
 
     [Header("Flame Body (thick overlapping fire puffs)")]
     [Tooltip("Continuously-spawned, additively-blended glow puffs along the fall path - this is " +
@@ -70,11 +70,31 @@ public class ShipFireTrail : MonoBehaviour
     [SerializeField] Color emberHotColor = new Color(1f, 0.85f, 0.4f, 1f);
     [SerializeField] Color emberCoolColor = new Color(0.9f, 0.25f, 0.05f, 1f);
 
+    [Header("Fire Line (flickering flame streak)")]
+    [Tooltip("Straight fire line behind the capsule: a thin white-hot core plus a wider orange " +
+        "envelope, with Perlin flicker so it reads as flame tongues rather than a laser.")]
+    [SerializeField] bool enableFireLine = true;
+    [SerializeField, Min(0.5f)] float lineLength = 11f;
+    [SerializeField, Min(0.05f)] float lineCoreWidth = 0.48f;
+    [SerializeField, Min(0.05f)] float lineGlowWidth = 2.1f;
+    [SerializeField, Range(0f, 0.6f)] float lineFlicker = 0.24f;
+    [SerializeField] Color lineCoreColor = new Color(1f, 0.97f, 0.78f, 1f);
+    [SerializeField] Color lineMidColor = new Color(1f, 0.42f, 0.06f, 0.95f);
+    [SerializeField] Color lineTailColor = new Color(0.18f, 0.02f, 0f, 0f);
+
     TrailRenderer _trail;
     ParticleSystem _flameBody;
     ParticleSystem _smoke;
     ParticleSystem _sparks;
     ParticleSystem _embers;
+    LineRenderer _lineCore;
+    LineRenderer _lineGlow;
+    ParticleSystem _lineTongues;
+    Material _lineMaterial;
+    Vector3 _travelDirection = Vector3.down;
+    Vector3 _lastLinePosition;
+    bool _linePlaying;
+    bool _hasLastLinePosition;
 
     static Material _trailMaterial;
     static Material _flameMaterial;
@@ -94,6 +114,8 @@ public class ShipFireTrail : MonoBehaviour
             ConfigureSparks();
         if (enableEmbers)
             ConfigureEmbers();
+        if (enableFireLine)
+            ConfigureFireLine();
         Stop();
     }
 
@@ -125,11 +147,13 @@ public class ShipFireTrail : MonoBehaviour
         _trail.alignment = LineAlignment.View;
         _trail.numCapVertices = 4;
         _trail.numCornerVertices = 2;
-        _trail.textureMode = LineTextureMode.Stretch;
+        _trail.textureMode = LineTextureMode.Tile;
+        _trail.textureScale = new Vector2(2.4f, 1f);
         _trail.shadowCastingMode = ShadowCastingMode.Off;
         _trail.receiveShadows = false;
-        _trail.material = GetTrailMaterial();
-        _trail.emitting = false;
+        if (_trail.sharedMaterial == null)
+            _trail.sharedMaterial = GetTrailMaterial();
+        SetAllTrailsEmitting(false);
     }
 
     /// <summary>Thick column of overlapping additive glow puffs - the main "this is a fireball, not
@@ -331,6 +355,253 @@ public class ShipFireTrail : MonoBehaviour
         renderer.material = GetEmberMaterial();
     }
 
+    /// <summary>Two layered LineRenderers that always point opposite the fall: a thin white-hot
+    /// core and a wider orange envelope. Vertices are rebuilt every frame with Perlin offset that
+    /// grows toward the tail, so the streak licks like flame instead of sitting as a straight
+    /// laser. Looks for an authored "Line" child first (same pattern as the particle systems).</summary>
+    void ConfigureFireLine()
+    {
+        Transform lineRoot = transform.Find("Line");
+        if (lineRoot == null)
+        {
+            GameObject go = new GameObject("Line");
+            go.transform.SetParent(transform, false);
+            lineRoot = go.transform;
+        }
+
+        _lineCore = lineRoot.GetComponent<LineRenderer>();
+        if (_lineCore == null)
+            _lineCore = lineRoot.gameObject.AddComponent<LineRenderer>();
+
+        Transform glowRoot = lineRoot.Find("LineGlow");
+        if (glowRoot == null)
+        {
+            GameObject glowGo = new GameObject("LineGlow");
+            glowGo.transform.SetParent(lineRoot, false);
+            glowRoot = glowGo.transform;
+        }
+
+        _lineGlow = glowRoot.GetComponent<LineRenderer>();
+        if (_lineGlow == null)
+            _lineGlow = glowRoot.gameObject.AddComponent<LineRenderer>();
+
+        if (_lineMaterial == null)
+        {
+            Material source = _trail != null && _trail.sharedMaterial != null
+                ? _trail.sharedMaterial
+                : GetTrailMaterial();
+            _lineMaterial = new Material(source) { name = "ShipFireTrail_Line" };
+        }
+
+        ApplyFireLineStyle(_lineCore, lineCoreWidth, 3, BuildFireLineGradient(true));
+        ApplyFireLineStyle(_lineGlow, lineGlowWidth, 1, BuildFireLineGradient(false));
+        ConfigureFireLineTongues(lineRoot);
+        SetFireLineVisible(false);
+    }
+
+    /// <summary>Short stretched fire wisps around the main line - breaks the ribbon into
+    /// overlapping flame tongues so it doesn't read as a single smooth stroke.</summary>
+    void ConfigureFireLineTongues(Transform lineRoot)
+    {
+        Transform existing = lineRoot.Find("Tongues");
+        _lineTongues = existing != null ? existing.GetComponent<ParticleSystem>() : null;
+        if (_lineTongues != null)
+            return;
+
+        GameObject go = new GameObject("Tongues");
+        go.transform.SetParent(lineRoot, false);
+        _lineTongues = go.AddComponent<ParticleSystem>();
+
+        ParticleSystem.MainModule main = _lineTongues.main;
+        main.loop = true;
+        main.playOnAwake = false;
+        main.simulationSpace = ParticleSystemSimulationSpace.World;
+        main.startLifetime = new ParticleSystem.MinMaxCurve(0.18f, 0.38f);
+        main.startSpeed = new ParticleSystem.MinMaxCurve(0.4f, 2.2f);
+        main.startSize = new ParticleSystem.MinMaxCurve(0.12f, 0.32f);
+        main.startColor = new ParticleSystem.MinMaxGradient(lineCoreColor, lineMidColor);
+        main.maxParticles = 80;
+
+        ParticleSystem.EmissionModule emission = _lineTongues.emission;
+        emission.rateOverTime = 28f;
+
+        ParticleSystem.ShapeModule shape = _lineTongues.shape;
+        shape.shapeType = ParticleSystemShapeType.Sphere;
+        shape.radius = 0.22f;
+
+        ParticleSystem.InheritVelocityModule inherit = _lineTongues.inheritVelocity;
+        inherit.enabled = true;
+        inherit.mode = ParticleSystemInheritVelocityMode.Current;
+        inherit.curve = new ParticleSystem.MinMaxCurve(0.35f);
+
+        ParticleSystem.ColorOverLifetimeModule colorOverLifetime = _lineTongues.colorOverLifetime;
+        colorOverLifetime.enabled = true;
+        colorOverLifetime.color = ShipVfxUtility.BuildFadeGradient(true);
+
+        ParticleSystem.SizeOverLifetimeModule sizeOverLifetime = _lineTongues.sizeOverLifetime;
+        sizeOverLifetime.enabled = true;
+        sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 0.1f));
+
+        ParticleSystem.TrailModule trails = _lineTongues.trails;
+        trails.enabled = true;
+        trails.mode = ParticleSystemTrailMode.PerParticle;
+        trails.lifetime = new ParticleSystem.MinMaxCurve(0.22f, 0.4f);
+        trails.ratio = 1f;
+        trails.worldSpace = true;
+        trails.dieWithParticles = true;
+        trails.sizeAffectsWidth = true;
+        trails.inheritParticleColor = true;
+        trails.minVertexDistance = 0.08f;
+        trails.textureMode = ParticleSystemTrailTextureMode.Stretch;
+        trails.widthOverTrail = new ParticleSystem.MinMaxCurve(1f, new AnimationCurve(
+            new Keyframe(0f, 1f),
+            new Keyframe(1f, 0f)));
+        trails.colorOverTrail = BuildFireLineGradient(true);
+
+        ParticleSystemRenderer renderer = _lineTongues.GetComponent<ParticleSystemRenderer>();
+        renderer.renderMode = ParticleSystemRenderMode.Stretch;
+        renderer.velocityScale = 0.18f;
+        renderer.lengthScale = 4.5f;
+        renderer.shadowCastingMode = ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        renderer.material = GetSparkMaterial();
+        renderer.trailMaterial = _lineMaterial;
+        renderer.sortingOrder = 4;
+    }
+
+    void ApplyFireLineStyle(LineRenderer line, float width, int sortingOrder, Gradient gradient)
+    {
+        line.positionCount = FireLinePointCount;
+        line.useWorldSpace = true;
+        line.loop = false;
+        line.alignment = LineAlignment.View;
+        line.textureMode = LineTextureMode.Stretch;
+        line.numCapVertices = 5;
+        line.numCornerVertices = 3;
+        line.shadowCastingMode = ShadowCastingMode.Off;
+        line.receiveShadows = false;
+        line.allowOcclusionWhenDynamic = false;
+        line.sortingOrder = sortingOrder;
+        line.widthMultiplier = width;
+        line.widthCurve = new AnimationCurve(
+            new Keyframe(0f, 1f, 0f, -0.6f),
+            new Keyframe(0.18f, 0.72f, -0.8f, -0.8f),
+            new Keyframe(0.55f, 0.28f, -0.7f, -0.7f),
+            new Keyframe(1f, 0.02f, -0.3f, 0f));
+        line.colorGradient = gradient;
+        line.sharedMaterial = _lineMaterial;
+    }
+
+    Gradient BuildFireLineGradient(bool core)
+    {
+        Gradient gradient = new Gradient();
+        if (core)
+        {
+            gradient.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(lineCoreColor, 0f),
+                    new GradientColorKey(new Color(1f, 0.78f, 0.28f, 1f), 0.28f),
+                    new GradientColorKey(lineMidColor, 0.62f),
+                    new GradientColorKey(lineTailColor, 1f),
+                },
+                new[]
+                {
+                    new GradientAlphaKey(1f, 0f),
+                    new GradientAlphaKey(0.95f, 0.35f),
+                    new GradientAlphaKey(0.45f, 0.75f),
+                    new GradientAlphaKey(0f, 1f),
+                });
+        }
+        else
+        {
+            Color glowHead = new Color(1f, 0.55f, 0.12f, 0.85f);
+            Color glowMid = new Color(1f, 0.22f, 0.03f, 0.55f);
+            gradient.SetKeys(
+                new[]
+                {
+                    new GradientColorKey(glowHead, 0f),
+                    new GradientColorKey(glowMid, 0.4f),
+                    new GradientColorKey(lineTailColor, 1f),
+                },
+                new[]
+                {
+                    new GradientAlphaKey(0.85f, 0f),
+                    new GradientAlphaKey(0.55f, 0.35f),
+                    new GradientAlphaKey(0.2f, 0.72f),
+                    new GradientAlphaKey(0f, 1f),
+                });
+        }
+        return gradient;
+    }
+
+    const int FireLinePointCount = 14;
+
+    void LateUpdate()
+    {
+        if (!_linePlaying || _lineCore == null)
+            return;
+
+        Vector3 origin = transform.position;
+        Vector3 travel = _travelDirection;
+        if (_hasLastLinePosition)
+        {
+            Vector3 delta = origin - _lastLinePosition;
+            if (delta.sqrMagnitude > 0.0001f)
+                travel = delta;
+        }
+        _lastLinePosition = origin;
+        _hasLastLinePosition = true;
+
+        if (travel.sqrMagnitude < 0.0001f)
+            travel = _travelDirection;
+        Vector3 behind = -travel.normalized;
+
+        RebuildFireLine(_lineCore, origin, behind, lineFlicker * 0.45f, 0f);
+        RebuildFireLine(_lineGlow, origin, behind, lineFlicker, 17.3f);
+    }
+
+    void RebuildFireLine(LineRenderer line, Vector3 origin, Vector3 behind, float flicker, float noiseSeed)
+    {
+        if (line == null)
+            return;
+
+        Vector3 right = Vector3.Cross(behind, Vector3.up);
+        if (right.sqrMagnitude < 0.001f)
+            right = Vector3.Cross(behind, Vector3.forward);
+        right.Normalize();
+        Vector3 up = Vector3.Cross(right, behind);
+
+        float time = Time.time;
+        int count = line.positionCount;
+        for (int i = 0; i < count; i++)
+        {
+            float t = count > 1 ? i / (float)(count - 1) : 0f;
+            // Displacement grows toward the tail so the head stays a tight hot core and the end
+            // breaks into licking flame tongues.
+            float amp = flicker * lineGlowWidth * t * t;
+            float n1 = (Mathf.PerlinNoise(time * 16f + noiseSeed, t * 3.4f) - 0.5f) * 2f;
+            float n2 = (Mathf.PerlinNoise(t * 3.4f, time * 21f + noiseSeed + 8f) - 0.5f) * 2f;
+            float tongue = Mathf.Sin(time * 13f + t * 10f + noiseSeed) * 0.35f;
+            Vector3 offset = right * ((n1 + tongue) * amp) + up * (n2 * amp * 0.75f);
+            line.SetPosition(i, origin + behind * (lineLength * t) + offset);
+        }
+    }
+
+    void SetFireLineVisible(bool visible)
+    {
+        if (_lineCore != null)
+            _lineCore.enabled = visible;
+        if (_lineGlow != null)
+            _lineGlow.enabled = visible;
+    }
+
+    void OnDestroy()
+    {
+        if (_lineMaterial != null)
+            Destroy(_lineMaterial);
+    }
+
     /// <summary>Looks for an already-authored child (e.g. baked into the CapsuleParticalSystem
     /// prefab) so Awake() can reuse it as-is instead of stomping hand-tuned values with the
     /// procedural defaults below.</summary>
@@ -380,16 +651,25 @@ public class ShipFireTrail : MonoBehaviour
     /// </summary>
     public void Play(Vector3 travelDirection = default)
     {
-        if (_trail != null)
+        TrailRenderer[] trails = GetComponentsInChildren<TrailRenderer>(true);
+        for (int i = 0; i < trails.Length; i++)
         {
-            _trail.Clear();
-            _trail.emitting = true;
-            SeedInstantTail(travelDirection);
+            trails[i].Clear();
+            trails[i].emitting = true;
         }
+        SeedInstantTail(travelDirection);
         PlaySystem(_flameBody);
         PlaySystem(_smoke);
         PlaySystem(_sparks);
         PlaySystem(_embers);
+
+        if (travelDirection.sqrMagnitude > 0.0001f)
+            _travelDirection = travelDirection;
+        _hasLastLinePosition = false;
+        _linePlaying = enableFireLine && _lineCore != null;
+        SetFireLineVisible(_linePlaying);
+        if (_linePlaying)
+            PlaySystem(_lineTongues);
     }
 
     static void PlaySystem(ParticleSystem ps)
@@ -407,31 +687,45 @@ public class ShipFireTrail : MonoBehaviour
 
         Vector3 behind = -travelDirection.normalized;
         Vector3 origin = transform.position;
+        TrailRenderer[] trails = GetComponentsInChildren<TrailRenderer>(true);
 
-        const int seedSteps = 6;
-        for (int i = seedSteps; i >= 1; i--)
+        const int seedSteps = 8;
+        for (int i = 0; i < trails.Length; i++)
         {
-            float t = (float)i / seedSteps;
-            _trail.AddPosition(origin + behind * (instantSeedLength * t));
+            TrailRenderer trail = trails[i];
+            for (int step = seedSteps; step >= 1; step--)
+            {
+                float t = (float)step / seedSteps;
+                trail.AddPosition(origin + behind * (instantSeedLength * t));
+            }
+            trail.AddPosition(origin);
         }
-        _trail.AddPosition(origin);
     }
 
     /// <summary>Call on impact - stops new emission; already-emitted trail/particles fade out naturally.</summary>
     public void Stop()
     {
-        if (_trail != null)
-            _trail.emitting = false;
+        SetAllTrailsEmitting(false);
         StopSystem(_flameBody);
         StopSystem(_smoke);
         StopSystem(_sparks);
         StopSystem(_embers);
+        StopSystem(_lineTongues);
+        _linePlaying = false;
+        SetFireLineVisible(false);
     }
 
     static void StopSystem(ParticleSystem ps)
     {
         if (ps != null)
             ps.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+    }
+
+    void SetAllTrailsEmitting(bool emitting)
+    {
+        TrailRenderer[] trails = GetComponentsInChildren<TrailRenderer>(true);
+        for (int i = 0; i < trails.Length; i++)
+            trails[i].emitting = emitting;
     }
 
     // HDR over-brighten multipliers for the "hot" additive materials - pushes rendered pixels
@@ -445,7 +739,11 @@ public class ShipFireTrail : MonoBehaviour
     static Material GetTrailMaterial()
     {
         if (_trailMaterial == null)
-            _trailMaterial = ShipVfxUtility.BuildParticleMaterial(Texture2D.whiteTexture, true, "ShipFireTrail_Streak (Generated)", TrailHdrBoost);
+        {
+            _trailMaterial = Resources.Load<Material>("Ship/Capsule/Materials/ReentryFlame");
+            if (_trailMaterial == null)
+                _trailMaterial = ShipVfxUtility.BuildParticleMaterial(Texture2D.whiteTexture, true, "ShipFireTrail_Streak (Generated)", TrailHdrBoost);
+        }
         return _trailMaterial;
     }
 
