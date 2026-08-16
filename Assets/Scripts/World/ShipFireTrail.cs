@@ -396,7 +396,10 @@ public class ShipFireTrail : MonoBehaviour
         ApplyFireLineStyle(_lineCore, lineCoreWidth, 3, BuildFireLineGradient(true));
         ApplyFireLineStyle(_lineGlow, lineGlowWidth, 1, BuildFireLineGradient(false));
         ConfigureFireLineTongues(lineRoot);
-        SetFireLineVisible(false);
+        // Prefab-authored LineRenderers stay visible in Prefab Mode (Awake doesn't run there).
+        // In Play Mode Stop() hides them until Play().
+        if (Application.isPlaying)
+            SetFireLineVisible(false);
     }
 
     /// <summary>Short stretched fire wisps around the main line - breaks the ribbon into
@@ -405,13 +408,19 @@ public class ShipFireTrail : MonoBehaviour
     {
         Transform existing = lineRoot.Find("Tongues");
         _lineTongues = existing != null ? existing.GetComponent<ParticleSystem>() : null;
-        if (_lineTongues != null)
-            return;
+        if (_lineTongues == null)
+        {
+            GameObject go = new GameObject("Tongues");
+            go.transform.SetParent(lineRoot, false);
+            _lineTongues = go.AddComponent<ParticleSystem>();
+            ApplyTonguesSimulation();
+        }
 
-        GameObject go = new GameObject("Tongues");
-        go.transform.SetParent(lineRoot, false);
-        _lineTongues = go.AddComponent<ParticleSystem>();
+        ApplyTonguesRenderer();
+    }
 
+    void ApplyTonguesSimulation()
+    {
         ParticleSystem.MainModule main = _lineTongues.main;
         main.loop = true;
         main.playOnAwake = false;
@@ -441,31 +450,23 @@ public class ShipFireTrail : MonoBehaviour
         ParticleSystem.SizeOverLifetimeModule sizeOverLifetime = _lineTongues.sizeOverLifetime;
         sizeOverLifetime.enabled = true;
         sizeOverLifetime.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 1f, 1f, 0.1f));
+    }
 
+    void ApplyTonguesRenderer()
+    {
+        // Trails without a URP material render as solid magenta bars - keep tongues as
+        // stretched fire wisps only, same recipe as the working Sparks red child.
         ParticleSystem.TrailModule trails = _lineTongues.trails;
-        trails.enabled = true;
-        trails.mode = ParticleSystemTrailMode.PerParticle;
-        trails.lifetime = new ParticleSystem.MinMaxCurve(0.22f, 0.4f);
-        trails.ratio = 1f;
-        trails.worldSpace = true;
-        trails.dieWithParticles = true;
-        trails.sizeAffectsWidth = true;
-        trails.inheritParticleColor = true;
-        trails.minVertexDistance = 0.08f;
-        trails.textureMode = ParticleSystemTrailTextureMode.Stretch;
-        trails.widthOverTrail = new ParticleSystem.MinMaxCurve(1f, new AnimationCurve(
-            new Keyframe(0f, 1f),
-            new Keyframe(1f, 0f)));
-        trails.colorOverTrail = BuildFireLineGradient(true);
+        trails.enabled = false;
 
         ParticleSystemRenderer renderer = _lineTongues.GetComponent<ParticleSystemRenderer>();
         renderer.renderMode = ParticleSystemRenderMode.Stretch;
-        renderer.velocityScale = 0.18f;
-        renderer.lengthScale = 4.5f;
+        renderer.velocityScale = 0.06f;
+        renderer.lengthScale = 2.2f;
         renderer.shadowCastingMode = ShadowCastingMode.Off;
         renderer.receiveShadows = false;
-        renderer.material = GetSparkMaterial();
-        renderer.trailMaterial = _lineMaterial;
+        renderer.sharedMaterial = GetFlameMaterial();
+        renderer.trailMaterial = null;
         renderer.sortingOrder = 4;
     }
 
