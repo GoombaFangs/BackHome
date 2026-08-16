@@ -22,6 +22,7 @@ public class VitalsBars : MonoBehaviour
     Camera _camera;
     float _revealTimer;
     float _alpha = 1f;
+    bool _forcedHidden;
 
     public void SetWorldScale(float scale)
     {
@@ -31,6 +32,16 @@ public class VitalsBars : MonoBehaviour
     public void SetLocalOffset(Vector3 offset)
     {
         localOffset = offset;
+    }
+
+    /// <summary>Force the bars off (e.g. teleport cinematic). They stay hidden until cleared.</summary>
+    public void SetHidden(bool hidden)
+    {
+        _forcedHidden = hidden;
+        if (hidden)
+            HideBarsImmediate();
+        else
+            RefreshBars();
     }
 
     bool HideUntilDamaged => hideUntilDamaged || _source is Creature;
@@ -78,6 +89,12 @@ public class VitalsBars : MonoBehaviour
     {
         if (bars == null)
             return;
+
+        if (_forcedHidden)
+        {
+            HideBarsImmediate();
+            return;
+        }
 
         Transform root = bars.transform;
         Vector3 lossy = transform.lossyScale;
@@ -129,6 +146,12 @@ public class VitalsBars : MonoBehaviour
     {
         if (bars == null || _source == null)
             return;
+
+        if (_forcedHidden)
+        {
+            HideBarsImmediate();
+            return;
+        }
 
         ApplyOxygenVisibility();
         bars.SetHealthValues(_source.CurrentHealth, _source.MaxHealth);

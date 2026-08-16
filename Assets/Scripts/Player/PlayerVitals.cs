@@ -18,6 +18,7 @@ public class PlayerVitals : MonoBehaviour, IVitalsReadable
 
     float _currentHealth;
     float _currentOxygen;
+    bool _invulnerable;
 
     public PlayerStats Stats => stats;
     public string DisplayName => stats != null ? stats.DisplayName : name;
@@ -34,6 +35,7 @@ public class PlayerVitals : MonoBehaviour, IVitalsReadable
     public bool HasStats => stats != null;
     public bool HasOxygen => MaxOxygen > 0f;
     public bool IsOnSpaceship => SceneRoles.IsSpaceshipScene();
+    public bool IsInvulnerable => _invulnerable;
 
     public event Action VitalsChanged;
     public event Action<float> Damaged;
@@ -66,7 +68,7 @@ public class PlayerVitals : MonoBehaviour, IVitalsReadable
 
     void Update()
     {
-        if (SceneRoles.IsSpaceshipScene())
+        if (_invulnerable || SceneRoles.IsSpaceshipScene())
             return;
 
         if (_currentOxygen > 0f)
@@ -113,9 +115,14 @@ public class PlayerVitals : MonoBehaviour, IVitalsReadable
         RaiseChanged();
     }
 
+    public void SetInvulnerable(bool invulnerable)
+    {
+        _invulnerable = invulnerable;
+    }
+
     public void TakeDamage(float amount)
     {
-        if (!IsAlive || amount <= 0f)
+        if (_invulnerable || !IsAlive || amount <= 0f)
             return;
 
         _currentHealth = Mathf.Max(0f, _currentHealth - amount);

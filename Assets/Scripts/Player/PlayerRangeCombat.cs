@@ -18,6 +18,15 @@ public class PlayerRangeCombat : MonoBehaviour
     readonly System.Collections.Generic.HashSet<Creature> _currentlyInside = new();
     readonly System.Collections.Generic.List<Creature> _removeBuffer = new();
 
+    public void HideRange()
+    {
+        enabled = false;
+        if (rangeIndicator == null)
+            rangeIndicator = GetComponentInChildren<AttackRangeIndicator>(true);
+        if (rangeIndicator != null)
+            rangeIndicator.gameObject.SetActive(false);
+    }
+
     void Awake()
     {
         _vitals = GetComponent<PlayerVitals>();

@@ -127,3 +127,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::GalaxyGate
   targetSceneName: PlanetNyxara
   proximityFallbackRadius: 2.4
+  teleportEffectPrefab: {fileID: 7761031033666763820, guid: 1eb833340b41fb444b576c4dced8d4dc, type: 3}
+  effectDuration: 1.6
+  effectScale: 1.25
+  teleportBodyMaterial: {fileID: 2100000, guid: 8b4d2f9c5e3a4b7f0d1c2e3f4a5b6c7d, type: 2}
+  idleBlendDuration: 0.45
+  cameraDollyInDistance: 3.6
+  cameraDollyLookHeight: 1.15
+  cameraDollyFovDelta: -3.5
+  cameraLiftDuration: 1
+  cameraLiftDistance: 90
