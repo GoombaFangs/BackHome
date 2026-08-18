@@ -213,11 +213,11 @@ TrailRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 2
   m_MaskInteraction: 0
-  m_Time: 0.6
+  m_Time: 0.8
   m_PreviewTimeScale: 1
   m_Parameters:
     serializedVersion: 3
-    widthMultiplier: 2.6
+    widthMultiplier: 3.2
     widthCurve:
       serializedVersion: 2
       m_Curve:
@@ -325,7 +325,7 @@ MonoBehaviour:
   emberHotColor: {r: 1, g: 0.85, b: 0.4, a: 1}
   emberCoolColor: {r: 0.9, g: 0.25, b: 0.05, a: 1}
   enableFireLine: 1
-  lineLength: 11
+  lineLength: 14
   lineCoreWidth: 0.48
   lineGlowWidth: 2.1
   lineFlicker: 0.24
@@ -432,7 +432,7 @@ LineRenderer:
   - {x: 0.14, y: 11, z: -0.02}
   m_Parameters:
     serializedVersion: 3
-    widthMultiplier: 0.48
+    widthMultiplier: 3
     widthCurve:
       serializedVersion: 2
       m_Curve:
@@ -440,7 +440,7 @@ LineRenderer:
         time: 0
         value: 1
         inSlope: 0
-        outSlope: -0.6
+        outSlope: 0
         tangentMode: 0
         weightedMode: 0
         inWeight: 0
@@ -465,12 +465,12 @@ LineRenderer:
         outWeight: 0.3
       - serializedVersion: 3
         time: 1
-        value: 0.02
-        inSlope: -0.3
-        outSlope: 0
+        value: 0.22422363
+        inSlope: 0.52460885
+        outSlope: 0.52460885
         tangentMode: 0
         weightedMode: 0
-        inWeight: 0.3
+        inWeight: 0.32335758
         outWeight: 0
       m_PreInfinity: 2
       m_PostInfinity: 2
@@ -963,7 +963,7 @@ PrefabInstance:
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 2981612594640141968, guid: c4af6be39e87b634d9e26d8ce65b529b, type: 3}
-      propertyPath: m_Materials.Array.data[0]
+      propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: 650a9f5516ec4f64b95ecdf958958bf6, type: 2}
     - target: {fileID: 3891038236906903380, guid: c4af6be39e87b634d9e26d8ce65b529b, type: 3}

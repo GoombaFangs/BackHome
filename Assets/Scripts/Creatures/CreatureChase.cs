@@ -30,9 +30,11 @@ public class CreatureChase : MonoBehaviour
 
     [Header("Hit reaction")]
     [Tooltip("Surface distance shoved away from the attacker. Keep small — a punch, not a launch.")]
-    [SerializeField, Min(0f)] float knockbackDistance = 0.4f;
+    [SerializeField, Min(0f)] float knockbackDistance = 0.2f;
     [Tooltip("Seconds for the shove to ease out. Short = snappy.")]
     [SerializeField, Min(0.05f)] float knockbackDuration = 0.16f;
+    [Tooltip("Minimum seconds between knockbacks on this creature.")]
+    [SerializeField, Min(0f)] float knockbackCooldown = 0.5f;
 
     Creature _creature;
     CreatureAnimator _anim;
@@ -52,6 +54,7 @@ public class CreatureChase : MonoBehaviour
     float _knockDistance;
     Vector3 _knockDir;
     Vector3 _knockFaceTarget;
+    float _nextKnockbackTime;
 
     /// <summary>True while actively chasing / fighting the player.</summary>
     public bool IsAggroed => _state == State.Aggroed;
@@ -125,7 +128,8 @@ public class CreatureChase : MonoBehaviour
     }
 
     /// <summary>
-    /// Short surface shove away from <paramref name="fromWorldPosition"/>. Refreshes if already sliding.
+    /// Short surface shove away from <paramref name="fromWorldPosition"/>.
+    /// Ignored while this creature's knockback cooldown is active.
     /// </summary>
     public void ApplyKnockback(Vector3 fromWorldPosition)
     {
@@ -133,6 +137,9 @@ public class CreatureChase : MonoBehaviour
             EnterAggro();
 
         if (knockbackDistance <= 0f || knockbackDuration <= 0f)
+            return;
+
+        if (Time.time < _nextKnockbackTime)
             return;
 
         if (!TryResolvePlanet())
@@ -151,6 +158,7 @@ public class CreatureChase : MonoBehaviour
         _knockDuration = knockbackDuration;
         _knockElapsed = 0f;
         _knockActive = true;
+        _nextKnockbackTime = Time.time + knockbackCooldown;
     }
 
     void TickIdle()
