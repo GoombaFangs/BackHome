@@ -13,10 +13,40 @@ public class PlayerRangeCombat : MonoBehaviour
 
     PlayerVitals _vitals;
     float _tickCooldown;
+    Creature _aimTarget;
     readonly System.Collections.Generic.HashSet<Creature> _inside = new();
     readonly System.Collections.Generic.HashSet<Creature> _hitThisFrame = new();
     readonly System.Collections.Generic.HashSet<Creature> _currentlyInside = new();
     readonly System.Collections.Generic.List<Creature> _removeBuffer = new();
+
+    public bool HasAttackTargets => _inside.Count > 0;
+
+    /// <summary>
+    /// Aim point of the creature currently being attacked.
+    /// Holds the same target while it stays in range, unless another is clearly closer.
+    /// </summary>
+    public bool TryGetAttackAimPoint(out Vector3 worldPoint)
+    {
+        worldPoint = default;
+        Creature nearest = FindNearestInside();
+        Creature held = IsValidAimTarget(_aimTarget) ? _aimTarget : null;
+
+        if (held != null && nearest != null && nearest != held)
+        {
+            float heldSqr = SqrTo(held);
+            float nearestSqr = SqrTo(nearest);
+            // Switch only when the new one is ~20% closer, so the weapon doesn't flicker.
+            if (nearestSqr >= heldSqr * 0.64f)
+                nearest = held;
+        }
+
+        _aimTarget = nearest ?? held;
+        if (_aimTarget == null)
+            return false;
+
+        worldPoint = GetAimPoint(_aimTarget);
+        return true;
+    }
 
     public void HideRange()
     {
@@ -41,6 +71,7 @@ public class PlayerRangeCombat : MonoBehaviour
         if (_vitals == null || !_vitals.IsAlive)
         {
             _inside.Clear();
+            _aimTarget = null;
             return;
         }
 
@@ -107,6 +138,9 @@ public class PlayerRangeCombat : MonoBehaviour
 
         for (int i = 0; i < _removeBuffer.Count; i++)
             _inside.Remove(_removeBuffer[i]);
+
+        if (_aimTarget != null && !_inside.Contains(_aimTarget))
+            _aimTarget = null;
     }
 
     void DealTickDamage(float damage)
@@ -130,6 +164,51 @@ public class PlayerRangeCombat : MonoBehaviour
 
         for (int i = 0; i < _removeBuffer.Count; i++)
             _inside.Remove(_removeBuffer[i]);
+    }
+
+    Creature FindNearestInside()
+    {
+        Creature nearest = null;
+        float bestSqr = float.MaxValue;
+        foreach (Creature creature in _inside)
+        {
+            if (!IsValidAimTarget(creature))
+                continue;
+
+            float sqr = SqrTo(creature);
+            if (sqr >= bestSqr)
+                continue;
+
+            bestSqr = sqr;
+            nearest = creature;
+        }
+
+        return nearest;
+    }
+
+    bool IsValidAimTarget(Creature creature)
+    {
+        return creature != null && creature.IsAlive && _inside.Contains(creature);
+    }
+
+    float SqrTo(Creature creature)
+    {
+        Vector3 delta = creature.transform.position - transform.position;
+        if (SphericalPlanet.Instance != null)
+        {
+            Vector3 up = SphericalPlanet.Instance.GetUpAt(transform.position);
+            delta = Vector3.ProjectOnPlane(delta, up);
+        }
+
+        return delta.sqrMagnitude;
+    }
+
+    static Vector3 GetAimPoint(Creature creature)
+    {
+        Vector3 up = SphericalPlanet.Instance != null
+            ? SphericalPlanet.Instance.GetUpAt(creature.transform.position)
+            : creature.transform.up;
+        return creature.transform.position + up * 0.7f;
     }
 
     static bool IsInsideRange(Vector3 target, Vector3 origin, Vector3? planetCenter, Vector3 fallbackUp, float radius)

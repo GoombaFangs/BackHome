@@ -1874,6 +1874,7 @@ GameObject:
   - component: {fileID: 8234567890123456792}
   - component: {fileID: 8234567890123456793}
   - component: {fileID: 8234567890123456794}
+  - component: {fileID: 8234567890123456795}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -2208,6 +2209,33 @@ MonoBehaviour:
   popupPrefab: {fileID: 100004, guid: e1f2a3b4c5d60718293a4b5c6d7e8f90, type: 3}
   localOffset: {x: 0, y: 2.15, z: 0}
   showOnHeal: 0
+--- !u!114 &8234567890123456795
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7594552319720850513}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c8e1a4b27d6f4093a5c1e90b74d2f6a1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FloatingWeapon
+  weaponPrefab: {fileID: 360693444757737031, guid: fff4fbd597db9874f8297d52dbc51ca5, type: 3}
+  slotOffset: {x: 1.03, y: 4.26, z: 0.06}
+  visualEuler: {x: 0, y: -90, z: 0}
+  targetSize: 2
+  followLag: 0.08
+  rotationLag: 0.11
+  moveTrail: 0.14
+  cameraTilt: 0.28
+  aimRotationLag: 0.05
+  bobHeight: 0.055
+  bobSpeed: 0.42
+  swayAmount: 0.03
+  yawSway: 7
+  rollSway: 5
+  scalePulse: 0.018
 --- !u!1 &7654321453474240811
 GameObject:
   m_ObjectHideFlags: 0
