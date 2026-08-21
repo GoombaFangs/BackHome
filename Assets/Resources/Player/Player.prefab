@@ -2804,7 +2804,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4602144420521336352, guid: c9ba9337b1f3238409496d899e3f611f, type: 3}
       propertyPath: m_Name
-      value: PlayerRanger
+      value: AttackRange
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

@@ -2,9 +2,9 @@ using UnityEngine;
 
 /// <summary>
 /// Shared stat definition for a creature type (HP, attack, range, …).
-/// Create one asset per creature (e.g. Grimling_Stats) and reuse it on every instance.
+/// Create one asset per creature (e.g. GrimlingStats) and reuse it on every instance.
 /// </summary>
-[CreateAssetMenu(menuName = "BackHome/Creature Stats", fileName = "CreatureStats_")]
+    [CreateAssetMenu(menuName = "BackHome/Creature Stats", fileName = "CreatureStats")]
 public class CreatureStats : ScriptableObject
 {
     [SerializeField] string displayName = "Creature";

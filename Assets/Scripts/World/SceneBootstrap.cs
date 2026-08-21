@@ -20,7 +20,7 @@ public class SceneBootstrap : MonoBehaviour
 
     void Awake()
     {
-        if (uiPrefab != null && GameObject.Find("UI") == null)
+        if (uiPrefab != null && GameObject.Find("Hud") == null)
         {
             GameObject uiObject = Instantiate(uiPrefab);
             uiObject.name = uiPrefab.name;

@@ -4,7 +4,7 @@ using UnityEngine;
 /// Shared definition for an inventory item (icon, name).
 /// Create one asset per loot type.
 /// </summary>
-[CreateAssetMenu(menuName = "BackHome/Item Definition", fileName = "Item_")]
+    [CreateAssetMenu(menuName = "BackHome/Item Definition", fileName = "Item")]
 public class ItemDefinition : ScriptableObject
 {
     [SerializeField] string displayName = "Item";

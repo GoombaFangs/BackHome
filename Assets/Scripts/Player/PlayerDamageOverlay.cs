@@ -2,12 +2,12 @@ using UnityEngine;
 
 /// <summary>
 /// Fullscreen red vignette when the player is hit. Uses
-/// <c>BackHome/VFX/Getting Damaged Effect</c>: dissolves in, holds, dissolves out.
+/// <c>BackHome/Hud/PlayerDamageOverlay</c>: dissolves in, holds, dissolves out.
 /// </summary>
 [RequireComponent(typeof(PlayerVitals))]
 public class PlayerDamageOverlay : MonoBehaviour
 {
-    const string ResourcesPath = "HUD/Damage/GettingDamagedEffect";
+    const string ResourcesPath = "Player/Combat/PlayerDamageOverlay";
 
     static readonly int DissolveId = Shader.PropertyToID("_Dissolve");
 
@@ -190,7 +190,7 @@ public class PlayerDamageOverlay : MonoBehaviour
             source = Resources.Load<Material>(ResourcesPath);
         if (source == null)
         {
-            Debug.LogWarning($"{name}: Getting Damaged Effect material missing at Resources/{ResourcesPath}.", this);
+            Debug.LogWarning($"{name}: PlayerDamageOverlay material missing at Resources/{ResourcesPath}.", this);
             return false;
         }
 
@@ -208,7 +208,7 @@ public class PlayerDamageOverlay : MonoBehaviour
 
         if (_overlay == null)
         {
-            var go = new GameObject("GettingDamagedOverlay");
+            var go = new GameObject("PlayerDamageOverlay");
             _overlay = go.transform;
             var filter = go.AddComponent<MeshFilter>();
             filter.sharedMesh = BuildQuad();
@@ -266,7 +266,7 @@ public class PlayerDamageOverlay : MonoBehaviour
 
     static Mesh BuildQuad()
     {
-        var mesh = new Mesh { name = "GettingDamagedQuad" };
+        var mesh = new Mesh { name = "PlayerDamageOverlayQuad" };
         mesh.vertices = new[]
         {
             new Vector3(-0.5f, -0.5f, 0f),

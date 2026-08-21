@@ -6,7 +6,7 @@ using UnityEngine;
 /// </summary>
 public static class CasualShaderForceImport
 {
-    const string ShaderPath = "Assets/Shaders/Casual/CasualShader.shader";
+    const string ShaderPath = "Assets/Resources/Galaxy/Planets/Shaders/Casual/CasualShader.shader";
     const string ShaderName = "BackHome/CasualToon";
 
     [MenuItem("BackHome/Reimport Casual Shader")]
@@ -20,7 +20,7 @@ public static class CasualShaderForceImport
         if (Application.isPlaying)
             return;
 
-        string abs = System.IO.Path.Combine(Application.dataPath, "Shaders/Casual/CasualShader.shader");
+        string abs = System.IO.Path.Combine(Application.dataPath, "Resources/Galaxy/Planets/Shaders/Casual/CasualShader.shader");
         if (!System.IO.File.Exists(abs))
             return;
 
@@ -34,7 +34,12 @@ public static class CasualShaderForceImport
         }
 
         int n = 0;
-        string[] folders = { "Assets/Galaxy/Planets/Nyxara/Materials", "Assets/Shaders/Casual" };
+        string[] folders =
+        {
+            "Assets/Resources/Galaxy/Planets/Nyxara/Biomes",
+            "Assets/Resources/Galaxy/Planets/Nyxara/Environment",
+            "Assets/Resources/Galaxy/Planets/Shaders/Casual"
+        };
         string[] matGuids = AssetDatabase.FindAssets("t:Material", folders);
         for (int i = 0; i < matGuids.Length; i++)
         {

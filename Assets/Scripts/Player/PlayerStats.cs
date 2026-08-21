@@ -7,7 +7,7 @@ using UnityEngine;
 /// Runtime combat is <see cref="ResolvedCombat"/> — <c>base + Weapons</c> via <see cref="CombatLoadout"/>.
 /// Swap this asset, change the base numbers, or drop a different <see cref="WeaponDefinition"/> in the list.
 /// </summary>
-[CreateAssetMenu(menuName = "BackHome/Player Stats", fileName = "PlayerStats_")]
+    [CreateAssetMenu(menuName = "BackHome/Player Stats", fileName = "PlayerStats")]
 public class PlayerStats : ScriptableObject
 {
     [SerializeField] string displayName = "Player";
@@ -33,7 +33,6 @@ public class PlayerStats : ScriptableObject
     public float OxygenTank => oxygenTank;
     public CombatStats BaseCombat => new CombatStats(attackDamage, attackSpeed, attackRange);
     public IReadOnlyList<WeaponDefinition> Weapons => weapons ?? Array.Empty<WeaponDefinition>();
-    public WeaponDefinition PrimaryWeapon => CombatLoadout.Primary(Weapons);
     public CombatStats ResolvedCombat => CombatLoadout.Combine(BaseCombat, Weapons);
 
     void OnValidate()

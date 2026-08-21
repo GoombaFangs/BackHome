@@ -21,8 +21,6 @@ public class PlayerRangeCombat : MonoBehaviour
     readonly HashSet<Creature> _currentlyInside = new();
     readonly List<Creature> _removeBuffer = new();
 
-    public bool HasAttackTargets => _queue.Count > 0;
-
     /// <summary>Aim at the creature whose turn it is right now.</summary>
     public bool TryGetAttackAimPoint(out Vector3 worldPoint)
     {

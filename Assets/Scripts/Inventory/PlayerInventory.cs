@@ -52,20 +52,6 @@ public class PlayerInventory : MonoBehaviour
             _instance = null;
     }
 
-    public int GetCount(ItemDefinition item)
-    {
-        if (item == null)
-            return 0;
-
-        for (int i = 0; i < _slots.Count; i++)
-        {
-            if (_slots[i].item == item)
-                return _slots[i].count;
-        }
-
-        return 0;
-    }
-
     public void Add(ItemDefinition item, int amount = 1)
     {
         if (item == null || amount <= 0)
@@ -84,42 +70,6 @@ public class PlayerInventory : MonoBehaviour
         }
 
         _slots.Add(new Slot { item = item, count = amount });
-        Changed?.Invoke();
-    }
-
-    public bool TryRemove(ItemDefinition item, int amount = 1)
-    {
-        if (item == null || amount <= 0)
-            return false;
-
-        for (int i = 0; i < _slots.Count; i++)
-        {
-            if (_slots[i].item != item)
-                continue;
-
-            if (_slots[i].count < amount)
-                return false;
-
-            Slot slot = _slots[i];
-            slot.count -= amount;
-            if (slot.count <= 0)
-                _slots.RemoveAt(i);
-            else
-                _slots[i] = slot;
-
-            Changed?.Invoke();
-            return true;
-        }
-
-        return false;
-    }
-
-    public void Clear()
-    {
-        if (_slots.Count == 0)
-            return;
-
-        _slots.Clear();
         Changed?.Invoke();
     }
 }

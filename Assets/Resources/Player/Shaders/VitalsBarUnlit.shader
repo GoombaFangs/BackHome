@@ -1,9 +1,8 @@
-Shader "BackHome/Vfx/HitFlash"
+Shader "BackHome/Hud/VitalsBarUnlit"
 {
     Properties
     {
-        [HDR] _HitColor("Hit Color", Color) = (1, 1, 1, 1)
-        _HitAmount("Hit Amount", Range(0, 1)) = 0
+        _Color("Color", Color) = (1, 1, 1, 1)
     }
 
     SubShader
@@ -18,54 +17,43 @@ Shader "BackHome/Vfx/HitFlash"
 
         Pass
         {
-            Name "HitFlash"
+            Name "Unlit"
             Tags { "LightMode" = "UniversalForward" }
 
             Blend SrcAlpha OneMinusSrcAlpha
             ZWrite Off
             ZTest LEqual
-            Cull Back
-            Offset -1, -1
+            Cull Off
 
             HLSLPROGRAM
-            #pragma target 3.5
-            #pragma vertex Vert
-            #pragma fragment Frag
-            #pragma multi_compile_instancing
-
+            #pragma vertex vert
+            #pragma fragment frag
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
             CBUFFER_START(UnityPerMaterial)
-                half4 _HitColor;
-                half _HitAmount;
+                half4 _Color;
             CBUFFER_END
 
             struct Attributes
             {
                 float4 positionOS : POSITION;
-                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
-                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
-            Varyings Vert(Attributes input)
+            Varyings vert(Attributes input)
             {
-                Varyings output = (Varyings)0;
-                UNITY_SETUP_INSTANCE_ID(input);
-                UNITY_TRANSFER_INSTANCE_ID(input, output);
+                Varyings output;
                 output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
                 return output;
             }
 
-            half4 Frag(Varyings input) : SV_Target
+            half4 frag(Varyings input) : SV_Target
             {
-                UNITY_SETUP_INSTANCE_ID(input);
-                clip(_HitAmount - 0.001h);
-                return half4(_HitColor.rgb, _HitColor.a * _HitAmount);
+                return _Color;
             }
             ENDHLSL
         }

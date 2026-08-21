@@ -2,12 +2,12 @@ using UnityEngine;
 
 /// <summary>
 /// Short white overlay flash when this creature takes damage.
-/// Adds <c>BackHome/VFX/HitFlash</c> as an extra pass on body renderers.
+/// Adds <c>BackHome/Vfx/HitFlash</c> as an extra pass on body renderers.
 /// </summary>
 [RequireComponent(typeof(Creature))]
 public class CreatureHitFlash : MonoBehaviour
 {
-    const string ResourcesPath = "Galaxy/Planets/Nyxara/Creatures/Shaders/HitFlash";
+    const string ResourcesPath = "Galaxy/Planets/Nyxara/Creatures/HitFlash";
 
     static readonly int HitColorId = Shader.PropertyToID("_HitColor");
     static readonly int HitAmountId = Shader.PropertyToID("_HitAmount");

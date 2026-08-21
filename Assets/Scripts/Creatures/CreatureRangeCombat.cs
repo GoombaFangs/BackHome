@@ -1,16 +1,18 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 /// <summary>
 /// Damages the player when they are inside this creature's attack range.
-/// Spawns / drives a shared <see cref="AttackRangeIndicator"/> (Ranger) so visual radius matches combat.
+/// Spawns / drives a shared <see cref="AttackRangeIndicator"/> so visual radius matches combat.
 /// Instant hit on enter, then ticks every 1 / AttackSpeed seconds while the player stays inside.
 /// </summary>
 [RequireComponent(typeof(Creature))]
 public class CreatureRangeCombat : MonoBehaviour
 {
     [SerializeField] AttackRangeIndicator rangeIndicator;
-    [Tooltip("Ranger prefab (AttackRangeIndicator). Instantiated if none is already a child.")]
-    [SerializeField] GameObject rangerPrefab;
+    [Tooltip("Attack-range ring prefab (AttackRangeIndicator). Instantiated if none is already a child.")]
+    [FormerlySerializedAs("rangerPrefab")]
+    [SerializeField] GameObject rangeIndicatorPrefab;
     [SerializeField] Color rangeColor = new Color(1f, 0.35f, 0.22f, 0.55f);
     [Tooltip("Show the ground ring for this creature's attack range. Off by default — combat still " +
         "uses the same radius, it's just not drawn.")]
@@ -135,11 +137,11 @@ public class CreatureRangeCombat : MonoBehaviour
             return;
         }
 
-        if (rangerPrefab == null)
+        if (rangeIndicatorPrefab == null)
             return;
 
-        GameObject instance = Instantiate(rangerPrefab, transform, false);
-        instance.name = "Ranger";
+        GameObject instance = Instantiate(rangeIndicatorPrefab, transform, false);
+        instance.name = "AttackRange";
         instance.transform.localPosition = Vector3.zero;
         instance.transform.localRotation = Quaternion.identity;
 

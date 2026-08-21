@@ -8,7 +8,7 @@ using UnityEngine;
 /// </summary>
 public class PlanetPropPlacerWindow : EditorWindow
 {
-    const string PrefabsFolder = "Assets/Galaxy/Planets/Nyxara/Objects/Prefabs";
+    const string PrefabsFolder = "Assets/Resources/Galaxy/Planets/Nyxara/Environment";
     const string PrefKeyPlaceMode = "BackHome.PlanetPropPlacer.PlaceMode";
     const string PrefKeyRandomYaw = "BackHome.PlanetPropPlacer.RandomYaw";
     const string PrefKeyScale = "BackHome.PlanetPropPlacer.Scale";

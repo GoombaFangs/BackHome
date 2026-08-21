@@ -49,9 +49,6 @@ public class FloatingWeapon : MonoBehaviour
     Camera _camera;
     WeaponDefinition _shown;
 
-    public WeaponDefinition Equipped => ResolveDefinition();
-    public Transform MuzzleAnchor => _hover;
-
     void Awake()
     {
         _walker = GetComponent<PlanetWalker>();
@@ -67,25 +64,6 @@ public class FloatingWeapon : MonoBehaviour
     {
         if (_vitals != null)
             _vitals.LoadoutChanged -= ApplyLoadout;
-    }
-
-    public void Equip(WeaponDefinition definition)
-    {
-        if (_vitals == null)
-            _vitals = GetComponent<PlayerVitals>();
-
-        if (_vitals != null)
-        {
-            _vitals.SetPrimaryWeapon(definition);
-            return;
-        }
-
-        if (definition == equipped && _visual != null)
-            return;
-
-        equipped = definition;
-        ClearHover();
-        EnsureVisual();
     }
 
     public void ApplyLoadout()
