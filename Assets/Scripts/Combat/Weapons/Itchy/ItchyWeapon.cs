@@ -2,11 +2,14 @@ using UnityEngine;
 using UnityEngine.Serialization;
 
 /// <summary>
-/// Itchy rapid fire: lives on the Itchy prefab. Muzzle VFX stretches from the gun to the
-/// creature; Hit VFX plays at the impact; Debuff VFX is the poison aura.
+/// Itchy rapid fire: lives on the Itchy prefab. Muzzle VFX is a short flash at the gun;
+/// a bullet prefab flies to the creature; Hit VFX and damage play on impact.
+/// Debuff VFX is the poison aura.
 /// </summary>
 public class ItchyWeapon : EquippedWeapon
 {
+    const float MuzzleFlashLength = 0.45f;
+
     [Header("Muzzle")]
     [FormerlySerializedAs("shotPrefab")]
     [SerializeField] GameObject muzzleVFX;
@@ -20,6 +23,13 @@ public class ItchyWeapon : EquippedWeapon
     [Header("Hit")]
     [SerializeField] GameObject hitVFX;
     [SerializeField, Min(0.05f)] float hitLifetime = 0.6f;
+
+    [Header("Bullets")]
+    [SerializeField] GameObject bullets;
+    [SerializeField, Min(1f)] float bulletSpeed = 22f;
+    [SerializeField, Min(0.05f)] float bulletHitRadius = 0.5f;
+    [SerializeField, Min(0.1f)] float bulletLifetime = 1.5f;
+    [SerializeField] Vector3 bulletEuler = Vector3.zero;
 
     [Header("Debuff")]
     [SerializeField] GameObject debuffVFX;
@@ -35,9 +45,53 @@ public class ItchyWeapon : EquippedWeapon
         float distance = delta.magnitude;
         Vector3 dir = distance > 0.0001f ? delta / distance : transform.forward;
 
+        if (bullets != null)
+        {
+            PlayMuzzle(muzzle, muzzleParent, dir, Mathf.Min(MuzzleFlashLength, distance));
+            SpawnBullet(target, damage, muzzle, dir, knockFrom);
+            return;
+        }
+
         PlayMuzzle(muzzle, muzzleParent, dir, distance);
         PlayHit(target, hit, dir);
         DealHit(target, damage, knockFrom, debuffVFX, debuffEuler);
+    }
+
+    internal Vector3 GetBulletAim(Creature creature)
+    {
+        return AimPoint(creature);
+    }
+
+    internal static Vector3 GetBulletUp(Vector3 origin, Vector3 dir)
+    {
+        return ResolveUp(origin, dir);
+    }
+
+    internal void ResolveBulletHit(Creature target, float damage, Vector3 knockFrom, Vector3 hitPoint, Vector3 dir)
+    {
+        if (target == null || !target.IsAlive)
+            return;
+
+        PlayHit(target, hitPoint, dir);
+        DealHit(target, damage, knockFrom, debuffVFX, debuffEuler);
+    }
+
+    void SpawnBullet(Creature target, float damage, Vector3 origin, Vector3 dir, Vector3 knockFrom)
+    {
+        Vector3 up = ResolveUp(origin, dir);
+        GameObject instance = Instantiate(
+            bullets,
+            origin,
+            Quaternion.LookRotation(dir, up) * Quaternion.Euler(bulletEuler));
+        instance.name = bullets.name;
+        StripFlightPhysics(instance);
+        PlayBurst(instance);
+
+        ItchyBullet projectile = instance.GetComponent<ItchyBullet>();
+        if (projectile == null)
+            projectile = instance.AddComponent<ItchyBullet>();
+
+        projectile.Launch(this, target, damage, knockFrom, bulletSpeed, bulletHitRadius, bulletLifetime, bulletEuler);
     }
 
     void PlayMuzzle(Vector3 origin, Transform parent, Vector3 dir, float distance)
@@ -74,6 +128,21 @@ public class ItchyWeapon : EquippedWeapon
 
         PlayBurst(fx);
         Destroy(fx, hitLifetime);
+    }
+
+    static void StripFlightPhysics(GameObject root)
+    {
+        Collider[] colliders = root.GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < colliders.Length; i++)
+            colliders[i].enabled = false;
+
+        Rigidbody[] bodies = root.GetComponentsInChildren<Rigidbody>(true);
+        for (int i = 0; i < bodies.Length; i++)
+        {
+            bodies[i].isKinematic = true;
+            bodies[i].useGravity = false;
+            bodies[i].detectCollisions = false;
+        }
     }
 
     static void SetBeamLength(GameObject fx, Vector3 dir, float distance, float thickness)

@@ -2209,7 +2209,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::DamageNumbers
   popupPrefab: {fileID: 100004, guid: e1f2a3b4c5d60718293a4b5c6d7e8f90, type: 3}
   localOffset: {x: 0, y: 2.15, z: 0}
-  showOnHeal: 0
 --- !u!114 &8234567890123456795
 MonoBehaviour:
   m_ObjectHideFlags: 0

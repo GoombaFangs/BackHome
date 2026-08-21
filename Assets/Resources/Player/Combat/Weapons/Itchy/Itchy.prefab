@@ -50,12 +50,17 @@ MonoBehaviour:
   targetSize: 2
   muzzleOffset: 0.9
   aimHeight: 0.7
-  muzzleVFX: {fileID: 2164645466515832974, guid: f627b9c8c33d91c408c8f1f53322e76e, type: 3}
+  muzzleVFX: {fileID: 6818450731999971250, guid: f627b9c8c33d91c408c8f1f53322e76e, type: 3}
   muzzleScale: 0.3
   muzzleLifetime: 0.45
   muzzleEuler: {x: 90, y: 0, z: 0}
-  hitVFX: {fileID: 0}
+  hitVFX: {fileID: 4163985246729562549, guid: bbbe3e889f9c3244aa3e36ea4b5eb48b, type: 3}
   hitLifetime: 0.6
+  bullets: {fileID: 2748193650182748101, guid: 8b4f2c91e6a047d3b1c8e5a0d2f73916, type: 3}
+  bulletSpeed: 45
+  bulletHitRadius: 0.5
+  bulletLifetime: 0.5
+  bulletEuler: {x: 0, y: 0, z: 0}
   debuffVFX: {fileID: 6692867938163089439, guid: 23e6f02f2e0cc59468dd81c7118c75ef, type: 3}
   debuffEuler: {x: 90, y: 0, z: 0}
 --- !u!1001 &3999338091653613302
