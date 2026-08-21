@@ -9,6 +9,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7838814646173120039}
+  - component: {fileID: 1847362910584736201}
   m_Layer: 0
   m_Name: Stinger
   m_TagString: Untagged
@@ -32,6 +33,31 @@ Transform:
   - {fileID: 3461642706412806429}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1847362910584736201
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 360693444757737031}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e9b0c17a5d8462f8b3e1c90d4a67258, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::StingerWeapon
+  slotOffset: {x: 1.03, y: 4.26, z: 0.06}
+  visualEuler: {x: 0, y: -90, z: 0}
+  targetSize: 2
+  muzzleOffset: 0.9
+  aimHeight: 0.7
+  muzzleVFX: {fileID: 2164645466515832974, guid: f627b9c8c33d91c408c8f1f53322e76e, type: 3}
+  muzzleScale: 0.3
+  muzzleLifetime: 0.45
+  muzzleEuler: {x: 90, y: 0, z: 0}
+  hitVFX: {fileID: 0}
+  hitLifetime: 0.6
+  debuffVFX: {fileID: 6692867938163089439, guid: 23e6f02f2e0cc59468dd81c7118c75ef, type: 3}
+  debuffEuler: {x: 90, y: 0, z: 0}
 --- !u!1001 &3999338091653613302
 PrefabInstance:
   m_ObjectHideFlags: 0

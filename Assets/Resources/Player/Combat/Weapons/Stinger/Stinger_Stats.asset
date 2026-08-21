@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7c2a91e04b6e4d1f9a38c5d0e2b14780, type: 3}
+  m_Name: Stinger_Stats
+  m_EditorClassIdentifier: Assembly-CSharp::WeaponDefinition
+  displayName: Stinger
+  archetype: Automatic rifle
+  prefab: {fileID: 360693444757737031, guid: fff4fbd597db9874f8297d52dbc51ca5, type: 3}
+  attackDamage: 4
+  attackSpeed: 6
+  attackRange: 5
+  hitEffect: 1
+  hitsToApplyDot: 1
+  hitWindow: 2
+  dotDuration: 5
+  dotDamagePerSecond: 1
+  dotTickInterval: 0.5

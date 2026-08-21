@@ -15,6 +15,8 @@ MonoBehaviour:
   displayName: Player
   attackDamage: 30
   attackSpeed: 3
-  attackRange: 5.7
+  attackRange: 2.7
+  weapons:
+  - {fileID: 11400000, guid: 8a3f15d29c704b6ea1d28f47c0e9b356, type: 2}
   maxHealth: 800
   oxygenTank: 90

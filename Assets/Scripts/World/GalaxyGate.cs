@@ -118,6 +118,7 @@ public class GalaxyGate : MonoBehaviour
         StopLocomotion(player);
         yield return BlendToIdle(player, frozenPosition, frozenRotation);
         FreezePose(player);
+        HideFloatingWeapons(player);
 
         Vector3 up = GetUpAt(frozenPosition);
         TeleportBodyFx bodyFx = TeleportBodyFx.Begin(player, teleportBodyMaterial, frozenPosition, up);
@@ -352,6 +353,19 @@ public class GalaxyGate : MonoBehaviour
                             ?? player.GetComponentInChildren<VitalsBars>();
         if (vitals != null)
             vitals.SetHidden(true);
+    }
+
+    static void HideFloatingWeapons(Transform player)
+    {
+        if (player == null)
+            return;
+
+        FloatingWeapon[] weapons = player.GetComponentsInChildren<FloatingWeapon>(true);
+        for (int i = 0; i < weapons.Length; i++)
+        {
+            if (weapons[i] != null)
+                weapons[i].SetVisible(false);
+        }
     }
 
     static void StopLocomotion(Transform player)

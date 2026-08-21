@@ -2,21 +2,17 @@ using UnityEngine;
 
 /// <summary>
 /// XP Hero-style hover weapon: sits beside the character, follows with a light lag,
-/// and breathes instead of being glued to a hand bone.
+/// and breathes instead of being glued to a hand bone. Which gun is held comes from
+/// <see cref="PlayerVitals.PrimaryWeapon"/> (PlayerStats.Weapons). How it fires lives on that prefab.
 /// </summary>
 [DefaultExecutionOrder(80)]
 public class FloatingWeapon : MonoBehaviour
 {
-    const string DefaultResourcePath = "Player/Combat/Weapons/Stinger/Stinger";
     const float TeleportSnapDistance = 6f;
 
-    [Header("Visual")]
-    [SerializeField] GameObject weaponPrefab;
-    [Tooltip("World meters from the character pivot. X = right, Y = up, Z = forward.")]
-    [SerializeField] Vector3 slotOffset = new Vector3(0.68f, 1.66f, 0.06f);
-    [SerializeField] Vector3 visualEuler = Vector3.zero;
-    [Tooltip("Longest world-axis size of the floating weapon.")]
-    [SerializeField, Min(0.1f)] float targetSize = 1.05f;
+    [Header("Weapon")]
+    [Tooltip("Used only if PlayerStats.Weapons is empty. Prefer assigning weapons on the stats asset.")]
+    [SerializeField] WeaponDefinition equipped;
 
     [Header("Follow")]
     [SerializeField, Min(0f)] float followLag = 0.08f;
@@ -39,29 +35,116 @@ public class FloatingWeapon : MonoBehaviour
 
     Transform _hover;
     Transform _visual;
+    EquippedWeapon _attack;
     Vector3 _baseVisualScale = Vector3.one;
     Vector3 _followVelocity;
     Vector3 _smoothedSlot;
     Quaternion _smoothedFacing = Quaternion.identity;
     bool _hasPose;
+    bool _visible = true;
     PlanetWalker _walker;
     CharacterController _controller;
     PlayerRangeCombat _combat;
+    PlayerVitals _vitals;
     Camera _camera;
+    WeaponDefinition _shown;
+
+    public WeaponDefinition Equipped => ResolveDefinition();
+    public Transform MuzzleAnchor => _hover;
 
     void Awake()
     {
         _walker = GetComponent<PlanetWalker>();
         _controller = GetComponent<CharacterController>();
         _combat = GetComponent<PlayerRangeCombat>();
+        _vitals = GetComponent<PlayerVitals>();
+        if (_vitals != null)
+            _vitals.LoadoutChanged += ApplyLoadout;
         EnsureVisual();
+    }
+
+    void OnDestroy()
+    {
+        if (_vitals != null)
+            _vitals.LoadoutChanged -= ApplyLoadout;
+    }
+
+    public void Equip(WeaponDefinition definition)
+    {
+        if (_vitals == null)
+            _vitals = GetComponent<PlayerVitals>();
+
+        if (_vitals != null)
+        {
+            _vitals.SetPrimaryWeapon(definition);
+            return;
+        }
+
+        if (definition == equipped && _visual != null)
+            return;
+
+        equipped = definition;
+        ClearHover();
+        EnsureVisual();
+    }
+
+    public void ApplyLoadout()
+    {
+        WeaponDefinition definition = ResolveDefinition();
+        if (definition == _shown && _visual != null)
+            return;
+
+        ClearHover();
+        EnsureVisual();
+    }
+
+    public bool TryFire(Creature target, float damage, Vector3 knockFrom)
+    {
+        if (_attack == null)
+            return false;
+        if (!TryGetMuzzle(out Vector3 muzzle, out _))
+            return false;
+
+        _attack.Fire(target, damage, muzzle, _hover, knockFrom);
+        return true;
+    }
+
+    public bool TryGetMuzzle(out Vector3 position, out Vector3 forward)
+    {
+        if (_hover == null)
+        {
+            position = transform.position;
+            forward = transform.forward;
+            return false;
+        }
+
+        GetBasis(out Vector3 up, out _, out Vector3 bodyForward);
+        if (TryGetAimForward(_hover.position, up, out Vector3 aimForward))
+            forward = aimForward;
+        else
+            forward = Vector3.ProjectOnPlane(_smoothedFacing * Vector3.forward, up);
+
+        if (forward.sqrMagnitude < 0.0001f)
+            forward = bodyForward;
+        forward.Normalize();
+
+        float muzzleOffset = _attack != null ? _attack.MuzzleOffset : 0f;
+        position = _hover.position + forward * muzzleOffset;
+        return true;
+    }
+
+    public void SetVisible(bool visible)
+    {
+        _visible = visible;
+        if (_hover != null)
+            _hover.gameObject.SetActive(visible);
     }
 
     void OnEnable()
     {
         _hasPose = false;
         if (_hover != null)
-            _hover.gameObject.SetActive(true);
+            _hover.gameObject.SetActive(_visible);
     }
 
     void OnDisable()
@@ -72,12 +155,15 @@ public class FloatingWeapon : MonoBehaviour
 
     void LateUpdate()
     {
+        if (!_visible)
+            return;
         if (_hover == null)
             EnsureVisual();
         if (_hover == null)
             return;
 
         GetBasis(out Vector3 up, out Vector3 right, out Vector3 forward);
+        Vector3 slotOffset = HoldSlotOffset();
         Vector3 slot = transform.position
             + right * slotOffset.x
             + up * slotOffset.y
@@ -107,7 +193,7 @@ public class FloatingWeapon : MonoBehaviour
         KeepWorldScale();
         _hover.SetPositionAndRotation(
             _smoothedSlot + breathPos,
-            _smoothedFacing * Quaternion.Euler(visualEuler) * breathRot);
+            _smoothedFacing * Quaternion.Euler(HoldVisualEuler()) * breathRot);
 
         if (_visual != null)
             _visual.localScale = _baseVisualScale * breathScale;
@@ -116,6 +202,7 @@ public class FloatingWeapon : MonoBehaviour
     void OnDrawGizmosSelected()
     {
         GetBasis(out Vector3 up, out Vector3 right, out Vector3 forward);
+        Vector3 slotOffset = HoldSlotOffset();
         Vector3 slot = transform.position
             + right * slotOffset.x
             + up * slotOffset.y
@@ -130,14 +217,15 @@ public class FloatingWeapon : MonoBehaviour
         if (_hover != null)
             return;
 
-        GameObject prefab = weaponPrefab;
-        if (prefab == null)
-            prefab = Resources.Load<GameObject>(DefaultResourcePath);
+        WeaponDefinition definition = ResolveDefinition();
+        GameObject prefab = definition != null ? definition.Prefab : null;
         if (prefab == null)
         {
-            Debug.LogWarning($"{name}: FloatingWeapon has no visual. Assign weaponPrefab or add {DefaultResourcePath}.", this);
+            Debug.LogWarning($"{name}: FloatingWeapon has no weapon in PlayerStats.Weapons (or fallback).", this);
             return;
         }
+
+        _shown = definition;
 
         var hoverGo = new GameObject("FloatingWeapon");
         _hover = hoverGo.transform;
@@ -152,9 +240,34 @@ public class FloatingWeapon : MonoBehaviour
         _visual.localPosition = Vector3.zero;
         _visual.localRotation = Quaternion.identity;
         _visual.localScale = Vector3.one;
+        _attack = instance.GetComponent<EquippedWeapon>();
+        if (_attack != null)
+            _attack.Bind(definition);
 
-        CenterAndFit(_visual);
+        CenterAndFit(_visual, _attack != null ? _attack.TargetSize : 1.05f);
         _baseVisualScale = _visual.localScale;
+    }
+
+    EquippedWeapon PreviewHold()
+    {
+        if (_attack != null)
+            return _attack;
+        WeaponDefinition definition = ResolveDefinition();
+        if (definition == null || definition.Prefab == null)
+            return null;
+        return definition.Prefab.GetComponent<EquippedWeapon>();
+    }
+
+    Vector3 HoldSlotOffset()
+    {
+        EquippedWeapon hold = PreviewHold();
+        return hold != null ? hold.SlotOffset : Vector3.zero;
+    }
+
+    Vector3 HoldVisualEuler()
+    {
+        EquippedWeapon hold = PreviewHold();
+        return hold != null ? hold.VisualEuler : Vector3.zero;
     }
 
     void KeepWorldScale()
@@ -169,12 +282,12 @@ public class FloatingWeapon : MonoBehaviour
             Inverse(lossy.z));
     }
 
-    void CenterAndFit(Transform visual)
+    void CenterAndFit(Transform visual, float targetSize)
     {
         Recenter(visual);
         Bounds bounds = Encapsulate(visual);
         float longest = Longest(bounds.size);
-        if (longest > 0.0001f)
+        if (longest > 0.0001f && targetSize > 0.0001f)
             visual.localScale *= targetSize / longest;
         Recenter(visual);
     }
@@ -287,6 +400,25 @@ public class FloatingWeapon : MonoBehaviour
             right = transform.right;
         else
             right.Normalize();
+    }
+
+    void ClearHover()
+    {
+        if (_hover != null)
+            Destroy(_hover.gameObject);
+        _hover = null;
+        _visual = null;
+        _attack = null;
+        _shown = null;
+        _hasPose = false;
+    }
+
+    WeaponDefinition ResolveDefinition()
+    {
+        if (_vitals == null)
+            _vitals = GetComponent<PlayerVitals>();
+        WeaponDefinition fromLoadout = _vitals != null ? _vitals.PrimaryWeapon : null;
+        return fromLoadout != null ? fromLoadout : equipped;
     }
 
     Camera ResolveCamera()

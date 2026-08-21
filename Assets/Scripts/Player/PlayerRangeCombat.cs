@@ -1,8 +1,9 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Damages living <see cref="Creature"/>s inside the player range ring.
-/// Instant hit on enter, then ticks every 1 / AttackSpeed seconds while they stay inside.
+/// Turn-based player attacks: anyone inside the range ring gets a number (entry order),
+/// and each attack tick hits the next number in the circle.
 /// </summary>
 [RequireComponent(typeof(PlayerVitals))]
 public class PlayerRangeCombat : MonoBehaviour
@@ -12,39 +13,25 @@ public class PlayerRangeCombat : MonoBehaviour
     [SerializeField, Min(0.05f)] float fallbackRadius = 2.5f;
 
     PlayerVitals _vitals;
+    FloatingWeapon _weapon;
     float _tickCooldown;
-    Creature _aimTarget;
-    readonly System.Collections.Generic.HashSet<Creature> _inside = new();
-    readonly System.Collections.Generic.HashSet<Creature> _hitThisFrame = new();
-    readonly System.Collections.Generic.HashSet<Creature> _currentlyInside = new();
-    readonly System.Collections.Generic.List<Creature> _removeBuffer = new();
+    int _turnIndex;
+    readonly List<Creature> _queue = new();
+    readonly HashSet<Creature> _queued = new();
+    readonly HashSet<Creature> _currentlyInside = new();
+    readonly List<Creature> _removeBuffer = new();
 
-    public bool HasAttackTargets => _inside.Count > 0;
+    public bool HasAttackTargets => _queue.Count > 0;
 
-    /// <summary>
-    /// Aim point of the creature currently being attacked.
-    /// Holds the same target while it stays in range, unless another is clearly closer.
-    /// </summary>
+    /// <summary>Aim at the creature whose turn it is right now.</summary>
     public bool TryGetAttackAimPoint(out Vector3 worldPoint)
     {
         worldPoint = default;
-        Creature nearest = FindNearestInside();
-        Creature held = IsValidAimTarget(_aimTarget) ? _aimTarget : null;
-
-        if (held != null && nearest != null && nearest != held)
-        {
-            float heldSqr = SqrTo(held);
-            float nearestSqr = SqrTo(nearest);
-            // Switch only when the new one is ~20% closer, so the weapon doesn't flicker.
-            if (nearestSqr >= heldSqr * 0.64f)
-                nearest = held;
-        }
-
-        _aimTarget = nearest ?? held;
-        if (_aimTarget == null)
+        Creature current = CurrentTurnTarget();
+        if (current == null)
             return false;
 
-        worldPoint = GetAimPoint(_aimTarget);
+        worldPoint = GetAimPoint(current);
         return true;
     }
 
@@ -55,23 +42,27 @@ public class PlayerRangeCombat : MonoBehaviour
             rangeIndicator = GetComponentInChildren<AttackRangeIndicator>(true);
         if (rangeIndicator != null)
             rangeIndicator.gameObject.SetActive(false);
+        ClearQueue();
     }
 
     void Awake()
     {
         _vitals = GetComponent<PlayerVitals>();
+        _weapon = GetComponent<FloatingWeapon>();
         if (rangeIndicator == null)
             rangeIndicator = GetComponentInChildren<AttackRangeIndicator>(true);
     }
 
+    void OnDisable()
+    {
+        ClearQueue();
+    }
+
     void Update()
     {
-        _hitThisFrame.Clear();
-
         if (_vitals == null || !_vitals.IsAlive)
         {
-            _inside.Clear();
-            _aimTarget = null;
+            ClearQueue();
             return;
         }
 
@@ -79,17 +70,26 @@ public class PlayerRangeCombat : MonoBehaviour
         float damage = _vitals.AttackDamage;
         float radius = ResolveRadius();
         if (attackSpeed <= 0f || damage <= 0f || radius <= 0f)
+        {
+            ClearQueue();
             return;
+        }
 
-        UpdateOccupancy(radius, damage);
+        UpdateOccupancy(radius);
 
-        float interval = 1f / attackSpeed;
+        if (_queue.Count == 0)
+        {
+            _tickCooldown = 0f;
+            _turnIndex = 0;
+            return;
+        }
+
         _tickCooldown -= Time.deltaTime;
         if (_tickCooldown > 0f)
             return;
 
-        _tickCooldown = interval;
-        DealTickDamage(damage);
+        _tickCooldown = 1f / attackSpeed;
+        StrikeCurrentTurn(damage);
     }
 
     float ResolveRadius()
@@ -101,7 +101,7 @@ public class PlayerRangeCombat : MonoBehaviour
         return fallbackRadius;
     }
 
-    void UpdateOccupancy(float radius, float damage)
+    void UpdateOccupancy(float radius)
     {
         Vector3 origin = transform.position;
         Vector3? planetCenter = SphericalPlanet.Instance != null
@@ -121,86 +121,111 @@ public class PlayerRangeCombat : MonoBehaviour
                 continue;
 
             _currentlyInside.Add(creature);
-
-            if (_inside.Add(creature))
-            {
-                creature.TakeDamage(damage, origin);
-                _hitThisFrame.Add(creature);
-            }
+            if (_queued.Add(creature))
+                _queue.Add(creature);
         }
 
         _removeBuffer.Clear();
-        foreach (Creature tracked in _inside)
+        for (int i = 0; i < _queue.Count; i++)
         {
+            Creature tracked = _queue[i];
             if (tracked == null || !tracked.IsAlive || !_currentlyInside.Contains(tracked))
                 _removeBuffer.Add(tracked);
         }
 
         for (int i = 0; i < _removeBuffer.Count; i++)
-            _inside.Remove(_removeBuffer[i]);
+            RemoveFromQueue(_removeBuffer[i]);
 
-        if (_aimTarget != null && !_inside.Contains(_aimTarget))
-            _aimTarget = null;
+        SyncQueuedSet();
     }
 
-    void DealTickDamage(float damage)
+    void SyncQueuedSet()
     {
-        _removeBuffer.Clear();
-        foreach (Creature creature in _inside)
+        _queued.Clear();
+        for (int i = 0; i < _queue.Count; i++)
         {
-            if (creature == null || !creature.IsAlive)
-            {
-                _removeBuffer.Add(creature);
-                continue;
-            }
+            if (_queue[i] != null)
+                _queued.Add(_queue[i]);
+        }
+    }
 
-            if (_hitThisFrame.Contains(creature))
-                continue;
+    void StrikeCurrentTurn(float damage)
+    {
+        Creature target = CurrentTurnTarget();
+        if (target == null)
+            return;
 
-            creature.TakeDamage(damage, transform.position);
-            if (!creature.IsAlive)
-                _removeBuffer.Add(creature);
+        int index = _turnIndex;
+        if (_weapon == null || !_weapon.TryFire(target, damage, transform.position))
+            target.TakeDamage(damage, transform.position);
+
+        if (_queue.Count == 0)
+        {
+            _turnIndex = 0;
+            return;
         }
 
-        for (int i = 0; i < _removeBuffer.Count; i++)
-            _inside.Remove(_removeBuffer[i]);
+        _turnIndex = (index + 1) % _queue.Count;
     }
 
-    Creature FindNearestInside()
+    Creature CurrentTurnTarget()
     {
-        Creature nearest = null;
-        float bestSqr = float.MaxValue;
-        foreach (Creature creature in _inside)
+        int guard = _queue.Count + 2;
+        while (_queue.Count > 0 && guard-- > 0)
         {
-            if (!IsValidAimTarget(creature))
-                continue;
+            if (_turnIndex < 0 || _turnIndex >= _queue.Count)
+                _turnIndex = 0;
 
-            float sqr = SqrTo(creature);
-            if (sqr >= bestSqr)
-                continue;
+            Creature current = _queue[_turnIndex];
+            if (current != null && current.IsAlive)
+                return current;
 
-            bestSqr = sqr;
-            nearest = creature;
+            RemoveFromQueue(current);
         }
 
-        return nearest;
+        return null;
     }
 
-    bool IsValidAimTarget(Creature creature)
+    void RemoveFromQueue(Creature creature)
     {
-        return creature != null && creature.IsAlive && _inside.Contains(creature);
-    }
+        int index = creature != null ? _queue.IndexOf(creature) : IndexOfDestroyed();
+        if (index < 0)
+            return;
 
-    float SqrTo(Creature creature)
-    {
-        Vector3 delta = creature.transform.position - transform.position;
-        if (SphericalPlanet.Instance != null)
+        Creature removed = _queue[index];
+        _queue.RemoveAt(index);
+        if (removed != null)
+            _queued.Remove(removed);
+
+        if (_queue.Count == 0)
         {
-            Vector3 up = SphericalPlanet.Instance.GetUpAt(transform.position);
-            delta = Vector3.ProjectOnPlane(delta, up);
+            _turnIndex = 0;
+            return;
         }
 
-        return delta.sqrMagnitude;
+        if (index < _turnIndex)
+            _turnIndex--;
+        if (_turnIndex >= _queue.Count)
+            _turnIndex = 0;
+    }
+
+    int IndexOfDestroyed()
+    {
+        for (int i = 0; i < _queue.Count; i++)
+        {
+            if (_queue[i] == null)
+                return i;
+        }
+
+        return -1;
+    }
+
+    void ClearQueue()
+    {
+        _queue.Clear();
+        _queued.Clear();
+        _turnIndex = 0;
+        _tickCooldown = 0f;
     }
 
     static Vector3 GetAimPoint(Creature creature)
