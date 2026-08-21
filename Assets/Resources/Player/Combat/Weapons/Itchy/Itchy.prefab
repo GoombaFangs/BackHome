@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 7838814646173120039}
   - component: {fileID: 1847362910584736201}
   m_Layer: 0
-  m_Name: Stinger
+  m_Name: Itchy
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -44,7 +44,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4e9b0c17a5d8462f8b3e1c90d4a67258, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::StingerWeapon
+  m_EditorClassIdentifier: Assembly-CSharp::ItchyWeapon
   slotOffset: {x: 1.03, y: 4.26, z: 0.06}
   visualEuler: {x: 0, y: -90, z: 0}
   targetSize: 2

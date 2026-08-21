@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 6695353173825780958}
   - component: {fileID: 8773677101980821873}
   m_Layer: 0
-  m_Name: Stinger_Muzzle_VFX
+  m_Name: Itchy_Debuff
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4933,7 +4933,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6126188424833946103, guid: a58aa9a78f2b45b45bb0f3e2e1e3ad3c, type: 3}
       propertyPath: m_Name
-      value: Stinger_Debuff
+      value: Itchy_Debuff
       objectReference: {fileID: 0}
     - target: {fileID: 6169707542896970202, guid: a58aa9a78f2b45b45bb0f3e2e1e3ad3c, type: 3}
       propertyPath: moveWithTransform

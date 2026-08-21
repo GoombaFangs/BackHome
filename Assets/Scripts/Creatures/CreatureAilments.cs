@@ -56,6 +56,8 @@ public class CreatureAilments : MonoBehaviour
 
     void Update()
     {
+        if (_creature == null)
+            _creature = GetComponent<Creature>();
         if (_creature == null || !_creature.IsAlive)
         {
             ClearDots();

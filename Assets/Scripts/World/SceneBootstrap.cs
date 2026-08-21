@@ -53,6 +53,13 @@ public class SceneBootstrap : MonoBehaviour
         BindCameraTarget(player);
         ApplyVitalsBarsSettings(player);
         BindMobileInput(player);
+        EnsureDamageOverlay(player);
+    }
+
+    static void EnsureDamageOverlay(Transform player)
+    {
+        if (player.GetComponent<PlayerDamageOverlay>() == null)
+            player.gameObject.AddComponent<PlayerDamageOverlay>();
     }
 
     static void BindMobileInput(Transform player)

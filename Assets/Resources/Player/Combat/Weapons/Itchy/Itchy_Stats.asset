@@ -10,9 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7c2a91e04b6e4d1f9a38c5d0e2b14780, type: 3}
-  m_Name: Stinger_Stats
+  m_Name: Itchy_Stats
   m_EditorClassIdentifier: Assembly-CSharp::WeaponDefinition
-  displayName: Stinger
+  displayName: Itchy
   archetype: Automatic rifle
   prefab: {fileID: 360693444757737031, guid: fff4fbd597db9874f8297d52dbc51ca5, type: 3}
   attackDamage: 4

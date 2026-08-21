@@ -2,10 +2,10 @@ using UnityEngine;
 using UnityEngine.Serialization;
 
 /// <summary>
-/// Stinger laser: lives on the Stinger prefab. Muzzle VFX stretches from the gun to the
-/// creature; Hit VFX plays at the impact; Debuff VFX is the DoT aura.
+/// Itchy rapid fire: lives on the Itchy prefab. Muzzle VFX stretches from the gun to the
+/// creature; Hit VFX plays at the impact; Debuff VFX is the poison aura.
 /// </summary>
-public class StingerWeapon : EquippedWeapon
+public class ItchyWeapon : EquippedWeapon
 {
     [Header("Muzzle")]
     [FormerlySerializedAs("shotPrefab")]

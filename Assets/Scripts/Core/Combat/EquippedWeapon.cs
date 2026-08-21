@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// Attack + hold pose for a weapon prefab. Put a subclass on the weapon itself
-/// (e.g. <see cref="StingerWeapon"/> on Stinger) so the player can swap definitions
+/// (e.g. <see cref="ItchyWeapon"/> on Itchy) so the player can swap definitions
 /// without knowing how each gun fires.
 /// </summary>
 public abstract class EquippedWeapon : MonoBehaviour
