@@ -341,13 +341,6 @@ public class GalaxyGate : MonoBehaviour
         if (combat != null)
             combat.HideRange();
 
-        AttackRangeIndicator[] rings = player.GetComponentsInChildren<AttackRangeIndicator>(true);
-        for (int i = 0; i < rings.Length; i++)
-        {
-            if (rings[i] != null)
-                rings[i].gameObject.SetActive(false);
-        }
-
         VitalsBars vitals = player.GetComponent<VitalsBars>()
                             ?? player.GetComponentInParent<VitalsBars>()
                             ?? player.GetComponentInChildren<VitalsBars>();

@@ -181,8 +181,6 @@ public class CreatureHitFlash : MonoBehaviour
     {
         if (renderer == null || renderer is ParticleSystemRenderer)
             return false;
-        if (renderer.GetComponent<AttackRangeIndicator>() != null)
-            return false;
         return renderer is SkinnedMeshRenderer || renderer is MeshRenderer;
     }
 }

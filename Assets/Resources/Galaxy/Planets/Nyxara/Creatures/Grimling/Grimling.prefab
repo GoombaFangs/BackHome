@@ -154,9 +154,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f7a8b9c0d1e223456789abcdef789012, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CreatureRangeCombat
-  rangeIndicator: {fileID: 0}
-  rangerPrefab: {fileID: 4602144420521336352, guid: c9ba9337b1f3238409496d899e3f611f, type: 3}
-  rangeColor: {r: 1, g: 0.35, b: 0.22, a: 0.55}
 --- !u!114 &8361180514612207394
 MonoBehaviour:
   m_ObjectHideFlags: 0

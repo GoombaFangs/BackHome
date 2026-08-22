@@ -8,8 +8,6 @@ using UnityEngine;
 [RequireComponent(typeof(PlayerVitals))]
 public class PlayerRangeCombat : MonoBehaviour
 {
-    [SerializeField] AttackRangeIndicator rangeIndicator;
-    [Tooltip("Fallback radius if no AttackRangeIndicator is found.")]
     [SerializeField, Min(0.05f)] float fallbackRadius = 2.5f;
 
     PlayerVitals _vitals;
@@ -37,10 +35,6 @@ public class PlayerRangeCombat : MonoBehaviour
     public void HideRange()
     {
         enabled = false;
-        if (rangeIndicator == null)
-            rangeIndicator = GetComponentInChildren<AttackRangeIndicator>(true);
-        if (rangeIndicator != null)
-            rangeIndicator.gameObject.SetActive(false);
         ClearQueue();
     }
 
@@ -48,8 +42,6 @@ public class PlayerRangeCombat : MonoBehaviour
     {
         _vitals = GetComponent<PlayerVitals>();
         _weapon = GetComponent<FloatingWeapon>();
-        if (rangeIndicator == null)
-            rangeIndicator = GetComponentInChildren<AttackRangeIndicator>(true);
         if (SceneRoles.IsSpaceshipScene())
             HideRange();
     }
@@ -118,8 +110,6 @@ public class PlayerRangeCombat : MonoBehaviour
     {
         if (_vitals.AttackRange > 0f)
             return _vitals.AttackRange;
-        if (rangeIndicator != null)
-            return rangeIndicator.GetCombatRadius();
         return fallbackRadius;
     }
 

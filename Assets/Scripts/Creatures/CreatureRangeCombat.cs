@@ -1,23 +1,12 @@
 using UnityEngine;
-using UnityEngine.Serialization;
 
 /// <summary>
 /// Damages the player when they are inside this creature's attack range.
-/// Spawns / drives a shared <see cref="AttackRangeIndicator"/> so visual radius matches combat.
 /// Instant hit on enter, then ticks every 1 / AttackSpeed seconds while the player stays inside.
 /// </summary>
 [RequireComponent(typeof(Creature))]
 public class CreatureRangeCombat : MonoBehaviour
 {
-    [SerializeField] AttackRangeIndicator rangeIndicator;
-    [Tooltip("Attack-range ring prefab (AttackRangeIndicator). Instantiated if none is already a child.")]
-    [FormerlySerializedAs("rangerPrefab")]
-    [SerializeField] GameObject rangeIndicatorPrefab;
-    [SerializeField] Color rangeColor = new Color(1f, 0.35f, 0.22f, 0.55f);
-    [Tooltip("Show the ground ring for this creature's attack range. Off by default — combat still " +
-        "uses the same radius, it's just not drawn.")]
-    [SerializeField] bool showRangeIndicator = false;
-
     Creature _creature;
     CreatureAnimator _anim;
     CreatureChase _chase;
@@ -33,7 +22,6 @@ public class CreatureRangeCombat : MonoBehaviour
         if (_anim == null)
             _anim = GetComponentInChildren<CreatureAnimator>();
         _chase = GetComponent<CreatureChase>();
-        EnsureRanger();
     }
 
     void Update()
@@ -44,13 +32,8 @@ public class CreatureRangeCombat : MonoBehaviour
         {
             _playerInside = false;
             _anim?.SetAttacking(false);
-            if (rangeIndicator != null)
-                rangeIndicator.gameObject.SetActive(false);
             return;
         }
-
-        if (rangeIndicator != null && rangeIndicator.gameObject.activeSelf != showRangeIndicator)
-            rangeIndicator.gameObject.SetActive(showRangeIndicator);
 
         // No damage / attack anim while idle or returning home.
         if (_chase != null && !_chase.IsAggroed)
@@ -69,15 +52,12 @@ public class CreatureRangeCombat : MonoBehaviour
 
         float attackSpeed = _creature.AttackSpeed;
         float damage = _creature.AttackDamage;
-        float radius = ResolveRadius();
+        float radius = _creature.AttackRange;
         if (attackSpeed <= 0f || damage <= 0f || radius <= 0f)
         {
             _anim?.SetAttacking(false);
             return;
         }
-
-        if (rangeIndicator != null)
-            rangeIndicator.SetRadius(radius);
 
         if (!TryResolvePlayer(out PlayerVitals player) || !player.IsAlive)
         {
@@ -115,42 +95,6 @@ public class CreatureRangeCombat : MonoBehaviour
 
         if (_playerInside && !_hitPlayerThisFrame && player.IsAlive)
             player.TakeDamage(damage);
-    }
-
-    float ResolveRadius()
-    {
-        if (_creature.AttackRange > 0f)
-            return _creature.AttackRange;
-        if (rangeIndicator != null)
-            return rangeIndicator.GetCombatRadius();
-        return 0f;
-    }
-
-    void EnsureRanger()
-    {
-        if (rangeIndicator == null)
-            rangeIndicator = GetComponentInChildren<AttackRangeIndicator>(true);
-
-        if (rangeIndicator != null)
-        {
-            rangeIndicator.SetColor(rangeColor);
-            return;
-        }
-
-        if (rangeIndicatorPrefab == null)
-            return;
-
-        GameObject instance = Instantiate(rangeIndicatorPrefab, transform, false);
-        instance.name = "AttackRange";
-        instance.transform.localPosition = Vector3.zero;
-        instance.transform.localRotation = Quaternion.identity;
-
-        rangeIndicator = instance.GetComponent<AttackRangeIndicator>();
-        if (rangeIndicator == null)
-            rangeIndicator = instance.GetComponentInChildren<AttackRangeIndicator>(true);
-
-        if (rangeIndicator != null)
-            rangeIndicator.SetColor(rangeColor);
     }
 
     bool TryResolvePlayer(out PlayerVitals player)

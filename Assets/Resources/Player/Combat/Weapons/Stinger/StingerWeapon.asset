@@ -23,3 +23,5 @@ MonoBehaviour:
   dotDuration: 2
   dotDamagePerSecond: 10
   dotTickInterval: 0.5
+  debuffVFX: {fileID: 0}
+  debuffEuler: {x: 90, y: 0, z: 0}
