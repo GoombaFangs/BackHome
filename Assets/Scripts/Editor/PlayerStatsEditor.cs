@@ -10,37 +10,40 @@ public class PlayerStatsEditor : Editor
 
         var stats = (PlayerStats)target;
         CombatStats origin = stats.BaseCombat;
-        CombatStats resolved = stats.ResolvedCombat;
 
         EditorGUILayout.Space(8f);
         EditorGUILayout.LabelField("Resolved Combat", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
-            "Runtime combat = Combat fields + every weapon in Weapons.\n" +
-            "Swap the base numbers or drop a different Weapon Definition in the list.",
+            "Each weapon floats on its own and fights with Combat + that weapon (up to 3).\n" +
+            "The range ring uses the longest weapon range.",
             MessageType.Info);
 
-        using (new EditorGUI.DisabledScope(true))
-        {
-            EditorGUILayout.FloatField("Attack Damage", resolved.AttackDamage);
-            EditorGUILayout.FloatField("Attack Speed", resolved.AttackSpeed);
-            EditorGUILayout.FloatField("Attack Range", resolved.AttackRange);
-        }
-
-        EditorGUILayout.Space(4f);
         EditorGUILayout.LabelField("Base", FormatCombat(origin));
         var weapons = stats.Weapons;
         bool anyWeapon = false;
+        int shown = 0;
         for (int i = 0; i < weapons.Count; i++)
         {
             WeaponDefinition weapon = weapons[i];
             if (weapon == null)
                 continue;
             anyWeapon = true;
-            EditorGUILayout.LabelField($"  + {weapon.DisplayName}", FormatCombat(weapon.Combat));
+            if (shown >= CombatLoadout.MaxWeapons)
+            {
+                EditorGUILayout.HelpBox($"Only the first {CombatLoadout.MaxWeapons} weapons are used.", MessageType.Warning);
+                break;
+            }
+
+            CombatStats resolved = stats.CombatFor(weapon);
+            EditorGUILayout.LabelField($"  {weapon.DisplayName}", FormatCombat(resolved));
+            shown++;
         }
 
         if (!anyWeapon)
-            EditorGUILayout.LabelField("  + Weapons", "none");
+            EditorGUILayout.LabelField("  Weapons", "none — base combat only");
+
+        using (new EditorGUI.DisabledScope(true))
+            EditorGUILayout.FloatField("Range Ring", stats.MaxAttackRange);
     }
 
     static string FormatCombat(CombatStats combat)

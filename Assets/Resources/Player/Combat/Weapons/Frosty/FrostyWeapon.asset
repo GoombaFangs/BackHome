@@ -10,15 +10,14 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7c2a91e04b6e4d1f9a38c5d0e2b14780, type: 3}
-  m_Name: ItchyStats
+  m_Name: FrostyWeapon
   m_EditorClassIdentifier: Assembly-CSharp::WeaponDefinition
-  displayName: Itchy
-  archetype: Automatic rifle
-  prefab: {fileID: 360693444757737031, guid: fff4fbd597db9874f8297d52dbc51ca5, type: 3}
-  attackDamage: 4
-  attackSpeed: 6
-  attackRange: 5
-  hitEffect: 1
+  displayName: Frosty
+  prefab: {fileID: 9005750326231209856, guid: e9ed112abe3166f41b4bed21919adee4, type: 3}
+  attackDamage: 5
+  attackSpeed: 4
+  attackRange: 8
+  hitEffect: 0
   hitsToApplyDot: 1
   hitWindow: 2
   dotDuration: 5

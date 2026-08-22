@@ -1,11 +1,11 @@
 using UnityEngine;
 
 /// <summary>
-/// Flies from the Itchy muzzle toward a creature. Damage is applied only on impact.
+/// Flies from a ranged weapon muzzle toward a creature. Damage is applied only on impact.
 /// </summary>
-public class ItchyBullet : MonoBehaviour
+public class RangedBullet : MonoBehaviour
 {
-    ItchyWeapon _weapon;
+    RangedWeapon _weapon;
     Creature _target;
     float _damage;
     Vector3 _knockFrom;
@@ -17,7 +17,7 @@ public class ItchyBullet : MonoBehaviour
     bool _spent;
 
     public void Launch(
-        ItchyWeapon weapon,
+        RangedWeapon weapon,
         Creature target,
         float damage,
         Vector3 knockFrom,
@@ -75,7 +75,7 @@ public class ItchyBullet : MonoBehaviour
 
     void Face(Vector3 dir)
     {
-        Vector3 up = ItchyWeapon.GetBulletUp(transform.position, dir);
+        Vector3 up = RangedWeapon.GetBulletUp(transform.position, dir);
         transform.rotation = Quaternion.LookRotation(dir, up) * Quaternion.Euler(_euler);
     }
 

@@ -4,6 +4,8 @@ Shader "BackHome/CasualToon"
     {
         [MainTexture] _BaseMap("Albedo", 2D) = "white" {}
         [MainColor] _BaseColor("Color", Color) = (1, 1, 1, 1)
+        [Normal] _BumpMap("Normal Map", 2D) = "bump" {}
+        _BumpScale("Normal Strength", Range(0, 2)) = 1
 
         [Header(Cel Shading)]
         _ShadeSteps("Shade Steps", Range(2, 5)) = 3
@@ -69,12 +71,15 @@ Shader "BackHome/CasualToon"
 
             TEXTURE2D(_BaseMap);
             SAMPLER(sampler_BaseMap);
+            TEXTURE2D(_BumpMap);
+            SAMPLER(sampler_BumpMap);
             TEXTURE2D(_EmissionMap);
             SAMPLER(sampler_EmissionMap);
 
             CBUFFER_START(UnityPerMaterial)
                 float4 _BaseMap_ST;
                 half4 _BaseColor;
+                half _BumpScale;
                 half _ShadeSteps;
                 half _ShadeSoftness;
                 half _ShadeFloor;
@@ -97,6 +102,7 @@ Shader "BackHome/CasualToon"
             {
                 float4 positionOS : POSITION;
                 float3 normalOS : NORMAL;
+                float4 tangentOS : TANGENT;
                 float2 uv : TEXCOORD0;
                 float4 color : COLOR;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -110,6 +116,7 @@ Shader "BackHome/CasualToon"
                 float3 positionWS : TEXCOORD2;
                 half4 color : COLOR;
                 float fogFactor : TEXCOORD3;
+                float4 tangentWS : TEXCOORD4;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -192,11 +199,13 @@ Shader "BackHome/CasualToon"
                 UNITY_TRANSFER_INSTANCE_ID(input, o);
 
                 VertexPositionInputs posInputs = GetVertexPositionInputs(input.positionOS.xyz);
-                VertexNormalInputs nrmInputs = GetVertexNormalInputs(input.normalOS);
+                VertexNormalInputs nrmInputs = GetVertexNormalInputs(input.normalOS, input.tangentOS);
 
                 o.positionCS = posInputs.positionCS;
                 o.positionWS = posInputs.positionWS;
                 o.normalWS = nrmInputs.normalWS;
+                real tangentSign = input.tangentOS.w * GetOddNegativeScale();
+                o.tangentWS = float4(nrmInputs.tangentWS, tangentSign);
                 o.uv = TRANSFORM_TEX(input.uv, _BaseMap);
                 o.color = half4(input.color);
                 o.fogFactor = ComputeFogFactor(posInputs.positionCS.z);
@@ -212,7 +221,10 @@ Shader "BackHome/CasualToon"
                 baseRgb = ApplySaturation(baseRgb, _Saturation);
                 baseRgb = ApplyContrast(baseRgb, _Contrast);
 
-                float3 normalWS = normalize(input.normalWS);
+                float3 bitangentWS = input.tangentWS.w * cross(input.normalWS, input.tangentWS.xyz);
+                float3x3 tangentToWorld = float3x3(input.tangentWS.xyz, bitangentWS, input.normalWS);
+                half3 normalTS = UnpackNormalScale(SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, input.uv), _BumpScale);
+                float3 normalWS = normalize(TransformTangentToWorld(normalTS, tangentToWorld));
                 float3 viewDir = GetWorldSpaceNormalizeViewDir(input.positionWS);
 
                 float4 shadowCoord = TransformWorldToShadowCoord(input.positionWS);

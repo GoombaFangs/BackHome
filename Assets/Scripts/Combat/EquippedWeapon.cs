@@ -1,9 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Attack + hold pose for a weapon prefab. Put a subclass on the weapon itself
-/// (e.g. <see cref="ItchyWeapon"/> on Itchy) so the player can swap definitions
-/// without knowing how each gun fires.
+/// Attack + hold pose for a weapon prefab. Put <see cref="RangedWeapon"/> on the
+/// weapon itself so the player can swap definitions without knowing how each gun fires.
 /// </summary>
 public abstract class EquippedWeapon : MonoBehaviour
 {
@@ -31,14 +30,14 @@ public abstract class EquippedWeapon : MonoBehaviour
 
     public abstract void Fire(Creature target, float damage, Vector3 muzzle, Transform muzzleParent, Vector3 knockFrom);
 
-    protected void DealHit(Creature target, float damage, Vector3 knockFrom, GameObject debuffVfx = null, Vector3 debuffEuler = default)
+    protected void DealHit(Creature target, float damage, Vector3 knockFrom)
     {
         if (target == null || !target.IsAlive || damage <= 0f)
             return;
 
         target.TakeDamage(damage, knockFrom);
         if (target.IsAlive)
-            Definition?.ApplyHitEffect(target, damage, debuffVfx, debuffEuler);
+            Definition?.ApplyHitEffect(target, damage);
     }
 
     protected Vector3 AimPoint(Creature creature)

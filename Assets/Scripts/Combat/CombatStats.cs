@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Additive combat numbers. Player base, each weapon, and the resolved loadout all use this.
-/// Future bonuses (armor, relics, buffs) can add the same way: <c>origin + extra</c>.
+/// Additive combat numbers. Player base and each weapon use this.
+/// A held gun fights with <c>origin + that weapon</c>, not the sum of every gun.
 /// </summary>
 [Serializable]
 public struct CombatStats
@@ -36,25 +36,53 @@ public struct CombatStats
 }
 
 /// <summary>
-/// Resolves a loadout: <c>base combat + every weapon in the list</c>.
-/// This is the only combat-stat calculation — author the list on <see cref="PlayerStats"/>.
+/// Loadout rules: up to <see cref="MaxWeapons"/> guns, each fighting with
+/// <c>player base + that weapon</c>. Author the list on <see cref="PlayerStats"/>.
 /// </summary>
 public static class CombatLoadout
 {
-    public static CombatStats Combine(CombatStats origin, IReadOnlyList<WeaponDefinition> weapons)
-    {
-        CombatStats total = origin;
-        if (weapons == null)
-            return total;
+    public const int MaxWeapons = 3;
 
+    public static CombatStats ForWeapon(CombatStats origin, WeaponDefinition weapon)
+    {
+        return weapon != null ? origin + weapon.Combat : origin;
+    }
+
+    public static float MaxRange(CombatStats origin, IReadOnlyList<WeaponDefinition> weapons)
+    {
+        float range = origin.AttackRange;
+        if (weapons == null)
+            return range;
+
+        int count = 0;
         for (int i = 0; i < weapons.Count; i++)
         {
             WeaponDefinition weapon = weapons[i];
-            if (weapon != null)
-                total += weapon.Combat;
+            if (weapon == null)
+                continue;
+            range = Mathf.Max(range, ForWeapon(origin, weapon).AttackRange);
+            count++;
+            if (count >= MaxWeapons)
+                break;
         }
 
-        return total;
+        return range;
+    }
+
+    public static void CopyClamped(IReadOnlyList<WeaponDefinition> source, List<WeaponDefinition> dest)
+    {
+        dest.Clear();
+        if (source == null)
+            return;
+
+        for (int i = 0; i < source.Count; i++)
+        {
+            if (source[i] == null)
+                continue;
+            dest.Add(source[i]);
+            if (dest.Count >= MaxWeapons)
+                return;
+        }
     }
 
     public static WeaponDefinition Primary(IReadOnlyList<WeaponDefinition> weapons)

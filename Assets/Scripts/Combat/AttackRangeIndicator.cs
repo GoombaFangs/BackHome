@@ -2,7 +2,8 @@ using UnityEngine;
 
 /// <summary>
 /// Ground attack-range ring. Works under player or creature — radius comes from
-/// parent <see cref="PlayerVitals"/> / <see cref="Creature"/> AttackRange (or <see cref="SetRadius"/>).
+/// parent <see cref="PlayerVitals"/> max weapon range / <see cref="Creature"/> AttackRange
+/// (or <see cref="SetRadius"/>).
 /// </summary>
 [ExecuteAlways]
 [DisallowMultipleComponent]

@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Itchy
+  m_Name: Stinger
   m_Shader: {fileID: 4800000, guid: e4f8a21c7b6d9053c8e1f4a63720d5b9, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -25,11 +25,11 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _BaseMap:
-        m_Texture: {fileID: 2800000, guid: 05478bf17e4ee8242bfba85b44e5e915, type: 3}
+        m_Texture: {fileID: 2800000, guid: 40e00c79542a8a5419e91fa55fb4b0a4, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _BumpMap:
-        m_Texture: {fileID: 2800000, guid: 44c4ea149c852be4a8f04c9f90a127e3, type: 3}
+        m_Texture: {fileID: 2800000, guid: 5b3d624922145714cbdd2fa15350ce62, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _EmissionMap:
@@ -40,23 +40,23 @@ Material:
     m_Floats:
     - _AmbientStrength: 1
     - _BumpScale: 1
-    - _Contrast: 1.08
+    - _Contrast: 1.16
     - _Cull: 2
-    - _RimLightMask: 0.55
-    - _RimPower: 5.61
-    - _Saturation: 1.16
+    - _RimLightMask: 1
+    - _RimPower: 7.2
+    - _Saturation: 1.76
     - _ShadeFloor: 0.56
-    - _ShadeSoftness: 0.28
-    - _ShadeSteps: 3
+    - _ShadeSoftness: 0
+    - _ShadeSteps: 2.29
     - _SpecularSize: 0.01
-    - _SpecularSoftness: 0.16
+    - _SpecularSoftness: 0.5
     m_Colors:
-    - _AmbientTint: {r: 1, g: 1, b: 1, a: 1}
+    - _AmbientTint: {r: 0.8784314, g: 0.8454143, b: 0.61960787, a: 1}
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _KeyTint: {r: 1, g: 0.8878279, b: 0.6462264, a: 1}
-    - _RimColor: {r: 0.92, g: 0.97, b: 1, a: 0.62}
-    - _ShadowTint: {r: 0.18039216, g: 0.16862746, b: 0.23137257, a: 1}
-    - _SpecularColor: {r: 0.5137255, g: 0.5137255, b: 0.53333336, a: 0.95}
+    - _KeyTint: {r: 0.8962264, g: 0.8472546, b: 0.62143993, a: 1}
+    - _RimColor: {r: 0.7264151, g: 0.6770099, b: 0.19530971, a: 1}
+    - _ShadowTint: {r: 0.6698113, g: 0.30647027, b: 0.592739, a: 1}
+    - _SpecularColor: {r: 0.6603774, g: 0.47026676, b: 0.04672479, a: 0.13333334}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

@@ -2,8 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Turn-based player attacks: anyone inside the range ring gets a number (entry order),
-/// and each attack tick hits the next number in the circle.
+/// Turn-based player attacks per equipped gun. Anyone inside a weapon's range
+/// gets a number (entry order), and that gun ticks through the circle at its own speed.
 /// </summary>
 [RequireComponent(typeof(PlayerVitals))]
 public class PlayerRangeCombat : MonoBehaviour
@@ -14,18 +14,19 @@ public class PlayerRangeCombat : MonoBehaviour
 
     PlayerVitals _vitals;
     FloatingWeapon _weapon;
-    float _tickCooldown;
-    int _turnIndex;
+    readonly float[] _tickCooldown = new float[CombatLoadout.MaxWeapons];
+    readonly int[] _turnIndex = new int[CombatLoadout.MaxWeapons];
+    readonly Creature[] _aimTarget = new Creature[CombatLoadout.MaxWeapons];
     readonly List<Creature> _queue = new();
     readonly HashSet<Creature> _queued = new();
     readonly HashSet<Creature> _currentlyInside = new();
     readonly List<Creature> _removeBuffer = new();
 
-    /// <summary>Aim at the creature whose turn it is right now.</summary>
-    public bool TryGetAttackAimPoint(out Vector3 worldPoint)
+    /// <summary>Aim at the creature this slot will shoot next.</summary>
+    public bool TryGetAttackAimPoint(int slot, out Vector3 worldPoint)
     {
         worldPoint = default;
-        Creature current = CurrentTurnTarget();
+        Creature current = AimTarget(slot);
         if (current == null)
             return false;
 
@@ -49,6 +50,8 @@ public class PlayerRangeCombat : MonoBehaviour
         _weapon = GetComponent<FloatingWeapon>();
         if (rangeIndicator == null)
             rangeIndicator = GetComponentInChildren<AttackRangeIndicator>(true);
+        if (SceneRoles.IsSpaceshipScene())
+            HideRange();
     }
 
     void OnDisable()
@@ -64,30 +67,51 @@ public class PlayerRangeCombat : MonoBehaviour
             return;
         }
 
-        float attackSpeed = _vitals.AttackSpeed;
-        float damage = _vitals.AttackDamage;
+        IReadOnlyList<WeaponDefinition> weapons = _vitals.Weapons;
+        int weaponCount = 0;
+        if (weapons != null)
+            weaponCount = Mathf.Min(weapons.Count, CombatLoadout.MaxWeapons);
+
         float radius = ResolveRadius();
-        if (attackSpeed <= 0f || damage <= 0f || radius <= 0f)
+        if (radius <= 0f || weaponCount <= 0)
         {
             ClearQueue();
             return;
         }
 
         UpdateOccupancy(radius);
+        CombatStats origin = _vitals.BaseCombat;
 
-        if (_queue.Count == 0)
+        for (int i = 0; i < weaponCount; i++)
         {
-            _tickCooldown = 0f;
-            _turnIndex = 0;
-            return;
+            WeaponDefinition definition = weapons[i];
+            CombatStats combat = _vitals.CombatFor(definition);
+            float range = combat.AttackRange;
+            _aimTarget[i] = PeekTarget(i, range);
+
+            if (combat.AttackSpeed <= 0f || combat.AttackDamage <= 0f || range <= 0f)
+                continue;
+
+            if (_aimTarget[i] == null)
+            {
+                _tickCooldown[i] = 0f;
+                continue;
+            }
+
+            _tickCooldown[i] -= Time.deltaTime;
+            if (_tickCooldown[i] > 0f)
+                continue;
+
+            _tickCooldown[i] = 1f / combat.AttackSpeed;
+            Strike(i, _aimTarget[i], combat.AttackDamage, range);
         }
 
-        _tickCooldown -= Time.deltaTime;
-        if (_tickCooldown > 0f)
-            return;
-
-        _tickCooldown = 1f / attackSpeed;
-        StrikeCurrentTurn(damage);
+        for (int i = weaponCount; i < CombatLoadout.MaxWeapons; i++)
+        {
+            _tickCooldown[i] = 0f;
+            _turnIndex[i] = 0;
+            _aimTarget[i] = null;
+        }
     }
 
     float ResolveRadius()
@@ -147,38 +171,73 @@ public class PlayerRangeCombat : MonoBehaviour
         }
     }
 
-    void StrikeCurrentTurn(float damage)
+    void Strike(int slot, Creature target, float damage, float range)
     {
-        Creature target = CurrentTurnTarget();
-        if (target == null)
+        if (target == null || !target.IsAlive)
             return;
 
-        int index = _turnIndex;
-        if (_weapon == null || !_weapon.TryFire(target, damage, transform.position))
+        int hitIndex = _queue.IndexOf(target);
+        if (_weapon == null || !_weapon.TryFire(slot, target, damage, transform.position))
             target.TakeDamage(damage, transform.position);
 
         if (_queue.Count == 0)
         {
-            _turnIndex = 0;
+            _turnIndex[slot] = 0;
+            _aimTarget[slot] = PeekTarget(slot, range);
             return;
         }
 
-        _turnIndex = (index + 1) % _queue.Count;
+        if (hitIndex >= 0)
+            _turnIndex[slot] = (hitIndex + 1) % _queue.Count;
+        else
+            _turnIndex[slot] = (_turnIndex[slot] + 1) % _queue.Count;
+
+        _aimTarget[slot] = PeekTarget(slot, range);
     }
 
-    Creature CurrentTurnTarget()
+    Creature AimTarget(int slot)
     {
-        int guard = _queue.Count + 2;
-        while (_queue.Count > 0 && guard-- > 0)
+        if (slot < 0 || slot >= CombatLoadout.MaxWeapons)
+            return null;
+
+        Creature current = _aimTarget[slot];
+        if (current != null && current.IsAlive)
+            return current;
+
+        return PeekTarget(slot, SlotRange(slot));
+    }
+
+    float SlotRange(int slot)
+    {
+        IReadOnlyList<WeaponDefinition> weapons = _vitals != null ? _vitals.Weapons : null;
+        if (weapons == null || slot < 0 || slot >= weapons.Count)
+            return 0f;
+        return _vitals.CombatFor(weapons[slot]).AttackRange;
+    }
+
+    Creature PeekTarget(int slot, float range)
+    {
+        if (range <= 0f || _queue.Count == 0)
+            return null;
+
+        int start = _turnIndex[slot];
+        if (start < 0 || start >= _queue.Count)
+            start = 0;
+
+        Vector3 origin = transform.position;
+        Vector3? planetCenter = SphericalPlanet.Instance != null
+            ? SphericalPlanet.Instance.Center
+            : (Vector3?)null;
+
+        for (int n = 0; n < _queue.Count; n++)
         {
-            if (_turnIndex < 0 || _turnIndex >= _queue.Count)
-                _turnIndex = 0;
-
-            Creature current = _queue[_turnIndex];
-            if (current != null && current.IsAlive)
-                return current;
-
-            RemoveFromQueue(current);
+            int index = (start + n) % _queue.Count;
+            Creature current = _queue[index];
+            if (current == null || !current.IsAlive)
+                continue;
+            if (!IsInsideRange(current.transform.position, origin, planetCenter, transform.up, range))
+                continue;
+            return current;
         }
 
         return null;
@@ -195,16 +254,22 @@ public class PlayerRangeCombat : MonoBehaviour
         if (removed != null)
             _queued.Remove(removed);
 
-        if (_queue.Count == 0)
+        for (int slot = 0; slot < CombatLoadout.MaxWeapons; slot++)
         {
-            _turnIndex = 0;
-            return;
-        }
+            if (_aimTarget[slot] == removed)
+                _aimTarget[slot] = null;
 
-        if (index < _turnIndex)
-            _turnIndex--;
-        if (_turnIndex >= _queue.Count)
-            _turnIndex = 0;
+            if (_queue.Count == 0)
+            {
+                _turnIndex[slot] = 0;
+                continue;
+            }
+
+            if (index < _turnIndex[slot])
+                _turnIndex[slot]--;
+            if (_turnIndex[slot] >= _queue.Count)
+                _turnIndex[slot] = 0;
+        }
     }
 
     int IndexOfDestroyed()
@@ -222,8 +287,12 @@ public class PlayerRangeCombat : MonoBehaviour
     {
         _queue.Clear();
         _queued.Clear();
-        _turnIndex = 0;
-        _tickCooldown = 0f;
+        for (int i = 0; i < CombatLoadout.MaxWeapons; i++)
+        {
+            _tickCooldown[i] = 0f;
+            _turnIndex[i] = 0;
+            _aimTarget[i] = null;
+        }
     }
 
     static Vector3 GetAimPoint(Creature creature)

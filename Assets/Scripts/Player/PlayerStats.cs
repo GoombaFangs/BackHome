@@ -3,11 +3,10 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Player kit: vitality, base combat, and the weapons that stack on top of it.
-/// Runtime combat is <see cref="ResolvedCombat"/> — <c>base + Weapons</c> via <see cref="CombatLoadout"/>.
-/// Swap this asset, change the base numbers, or drop a different <see cref="WeaponDefinition"/> in the list.
+/// Player kit: vitality, base combat, and up to <see cref="CombatLoadout.MaxWeapons"/> weapons.
+/// Each gun fights with <c>base + that weapon</c> and floats on its own.
 /// </summary>
-    [CreateAssetMenu(menuName = "BackHome/Player Stats", fileName = "PlayerStats")]
+[CreateAssetMenu(menuName = "BackHome/Player Stats", fileName = "PlayerStats")]
 public class PlayerStats : ScriptableObject
 {
     [SerializeField] string displayName = "Player";
@@ -20,7 +19,7 @@ public class PlayerStats : ScriptableObject
     [SerializeField, Min(0f)] float attackRange = 5f;
 
     [Header("Weapons")]
-    [Tooltip("Equipped weapons. Resolved combat is base + every entry in this list.")]
+    [Tooltip("Up to 3. Each floats beside the player and fights with Combat + this weapon.")]
     [SerializeField] WeaponDefinition[] weapons;
 
     [Header("Vitality")]
@@ -33,7 +32,12 @@ public class PlayerStats : ScriptableObject
     public float OxygenTank => oxygenTank;
     public CombatStats BaseCombat => new CombatStats(attackDamage, attackSpeed, attackRange);
     public IReadOnlyList<WeaponDefinition> Weapons => weapons ?? Array.Empty<WeaponDefinition>();
-    public CombatStats ResolvedCombat => CombatLoadout.Combine(BaseCombat, Weapons);
+    public float MaxAttackRange => CombatLoadout.MaxRange(BaseCombat, Weapons);
+
+    public CombatStats CombatFor(WeaponDefinition weapon)
+    {
+        return CombatLoadout.ForWeapon(BaseCombat, weapon);
+    }
 
     void OnValidate()
     {
@@ -42,5 +46,7 @@ public class PlayerStats : ScriptableObject
         attackSpeed = Mathf.Max(0f, attackSpeed);
         attackRange = Mathf.Max(0f, attackRange);
         oxygenTank = Mathf.Max(1f, oxygenTank);
+        if (weapons != null && weapons.Length > CombatLoadout.MaxWeapons)
+            Array.Resize(ref weapons, CombatLoadout.MaxWeapons);
     }
 }

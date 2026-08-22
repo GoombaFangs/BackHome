@@ -4,8 +4,8 @@ using UnityEngine;
 
 /// <summary>
 /// Runtime vitals. HP / oxygen come from <see cref="PlayerStats"/>.
-/// Combat is <see cref="CombatLoadout"/> of that asset's base + Weapons (copied at spawn so play mode
-/// can swap guns without dirtying the shared asset).
+/// Weapons are copied at spawn (up to <see cref="CombatLoadout.MaxWeapons"/>) so play mode
+/// can swap guns without dirtying the shared asset. Each gun fights with base + itself.
 /// Drain rates stay here as survival feel.
 /// </summary>
 public class PlayerVitals : MonoBehaviour, IVitalsReadable
@@ -29,12 +29,16 @@ public class PlayerVitals : MonoBehaviour, IVitalsReadable
     public string DisplayName => stats != null ? stats.DisplayName : name;
     public float MaxHealth => stats != null ? stats.MaxHealth : 0f;
     public float MaxOxygen => stats != null ? stats.OxygenTank : 0f;
-    public CombatStats Combat => CombatLoadout.Combine(stats != null ? stats.BaseCombat : CombatStats.Zero, ActiveWeapons);
-    public float AttackDamage => Combat.AttackDamage;
-    public float AttackSpeed => Combat.AttackSpeed;
-    public float AttackRange => Combat.AttackRange;
+    public CombatStats BaseCombat => stats != null ? stats.BaseCombat : CombatStats.Zero;
+    public float AttackRange => CombatLoadout.MaxRange(BaseCombat, ActiveWeapons);
     public IReadOnlyList<WeaponDefinition> Weapons => ActiveWeapons;
     public WeaponDefinition PrimaryWeapon => CombatLoadout.Primary(ActiveWeapons);
+
+    public CombatStats CombatFor(WeaponDefinition weapon)
+    {
+        return CombatLoadout.ForWeapon(BaseCombat, weapon);
+    }
+
     public float CurrentHealth => _currentHealth;
     public float CurrentOxygen => _currentOxygen;
     public float HealthNormalized => MaxHealth > 0f ? _currentHealth / MaxHealth : 0f;
@@ -131,21 +135,12 @@ public class PlayerVitals : MonoBehaviour, IVitalsReadable
     /// <summary>Replaces the runtime weapon list. Does not mutate the <see cref="PlayerStats"/> asset.</summary>
     public void SetWeapons(IReadOnlyList<WeaponDefinition> weapons)
     {
-        _loadout.Clear();
         _loadoutReady = true;
-        if (weapons != null)
-        {
-            for (int i = 0; i < weapons.Count; i++)
-            {
-                if (weapons[i] != null)
-                    _loadout.Add(weapons[i]);
-            }
-        }
-
+        CombatLoadout.CopyClamped(weapons, _loadout);
         RaiseLoadoutChanged();
     }
 
-    /// <summary>Sets slot 0 (the held weapon). Extra weapons in the list stay as stat contributors.</summary>
+    /// <summary>Sets slot 0 (the first floating weapon). Other equipped guns stay in later slots.</summary>
     public void SetPrimaryWeapon(WeaponDefinition weapon)
     {
         EnsureLoadout();
@@ -235,12 +230,7 @@ public class PlayerVitals : MonoBehaviour, IVitalsReadable
         if (stats == null)
             return;
 
-        IReadOnlyList<WeaponDefinition> source = stats.Weapons;
-        for (int i = 0; i < source.Count; i++)
-        {
-            if (source[i] != null)
-                _loadout.Add(source[i]);
-        }
+        CombatLoadout.CopyClamped(stats.Weapons, _loadout);
     }
 
     void RaiseLoadoutChanged()

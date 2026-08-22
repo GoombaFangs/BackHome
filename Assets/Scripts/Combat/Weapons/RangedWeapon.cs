@@ -2,11 +2,10 @@ using UnityEngine;
 using UnityEngine.Serialization;
 
 /// <summary>
-/// Itchy rapid fire: lives on the Itchy prefab. Muzzle VFX is a short flash at the gun;
-/// a bullet prefab flies to the creature; Hit VFX and damage play on impact.
-/// Debuff VFX is the poison aura.
+/// Shared ranged attack: muzzle flash, flying bullet, and hit VFX.
+/// Put this on every ranged weapon prefab. Optional on-hit procs live on <see cref="WeaponDefinition"/>.
 /// </summary>
-public class ItchyWeapon : EquippedWeapon
+public class RangedWeapon : EquippedWeapon
 {
     const float MuzzleFlashLength = 0.45f;
 
@@ -31,10 +30,6 @@ public class ItchyWeapon : EquippedWeapon
     [SerializeField, Min(0.1f)] float bulletLifetime = 1.5f;
     [SerializeField] Vector3 bulletEuler = Vector3.zero;
 
-    [Header("Debuff")]
-    [SerializeField] GameObject debuffVFX;
-    [SerializeField] Vector3 debuffEuler = new Vector3(90f, 0f, 0f);
-
     public override void Fire(Creature target, float damage, Vector3 muzzle, Transform muzzleParent, Vector3 knockFrom)
     {
         if (target == null || !target.IsAlive || damage <= 0f)
@@ -54,7 +49,7 @@ public class ItchyWeapon : EquippedWeapon
 
         PlayMuzzle(muzzle, muzzleParent, dir, distance);
         PlayHit(target, hit, dir);
-        DealHit(target, damage, knockFrom, debuffVFX, debuffEuler);
+        DealHit(target, damage, knockFrom);
     }
 
     internal Vector3 GetBulletAim(Creature creature)
@@ -73,7 +68,7 @@ public class ItchyWeapon : EquippedWeapon
             return;
 
         PlayHit(target, hitPoint, dir);
-        DealHit(target, damage, knockFrom, debuffVFX, debuffEuler);
+        DealHit(target, damage, knockFrom);
     }
 
     void SpawnBullet(Creature target, float damage, Vector3 origin, Vector3 dir, Vector3 knockFrom)
@@ -87,9 +82,9 @@ public class ItchyWeapon : EquippedWeapon
         StripFlightPhysics(instance);
         PlayBurst(instance);
 
-        ItchyBullet projectile = instance.GetComponent<ItchyBullet>();
+        RangedBullet projectile = instance.GetComponent<RangedBullet>();
         if (projectile == null)
-            projectile = instance.AddComponent<ItchyBullet>();
+            projectile = instance.AddComponent<RangedBullet>();
 
         projectile.Launch(this, target, damage, knockFrom, bulletSpeed, bulletHitRadius, bulletLifetime, bulletEuler);
     }

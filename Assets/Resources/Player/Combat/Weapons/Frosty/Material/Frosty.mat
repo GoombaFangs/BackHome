@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Itchy
+  m_Name: Frosty
   m_Shader: {fileID: 4800000, guid: e4f8a21c7b6d9053c8e1f4a63720d5b9, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -25,11 +25,11 @@ Material:
     serializedVersion: 3
     m_TexEnvs:
     - _BaseMap:
-        m_Texture: {fileID: 2800000, guid: 05478bf17e4ee8242bfba85b44e5e915, type: 3}
+        m_Texture: {fileID: 2800000, guid: 96fd07bf7a08b4c43a108678035aff2d, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _BumpMap:
-        m_Texture: {fileID: 2800000, guid: 44c4ea149c852be4a8f04c9f90a127e3, type: 3}
+        m_Texture: {fileID: 2800000, guid: ed971e26385ef7a419a405276d7f311a, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _EmissionMap:
@@ -54,9 +54,9 @@ Material:
     - _AmbientTint: {r: 1, g: 1, b: 1, a: 1}
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
-    - _KeyTint: {r: 1, g: 0.8878279, b: 0.6462264, a: 1}
+    - _KeyTint: {r: 0.7685564, g: 0.8416019, b: 0.9528302, a: 1}
     - _RimColor: {r: 0.92, g: 0.97, b: 1, a: 0.62}
     - _ShadowTint: {r: 0.18039216, g: 0.16862746, b: 0.23137257, a: 1}
-    - _SpecularColor: {r: 0.5137255, g: 0.5137255, b: 0.53333336, a: 0.95}
+    - _SpecularColor: {r: 0.16078432, g: 0.6784314, b: 0.91372555, a: 0.95}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
