@@ -350,6 +350,10 @@ public class GalaxyGate : MonoBehaviour
         PlayerLowHpWarning warning = Object.FindAnyObjectByType<PlayerLowHpWarning>(FindObjectsInactive.Include);
         if (warning != null)
             warning.HideForCinematic();
+
+        PlayerLowOxygenWarning oxygen = Object.FindAnyObjectByType<PlayerLowOxygenWarning>(FindObjectsInactive.Include);
+        if (oxygen != null)
+            oxygen.HideForCinematic();
     }
 
     static void HideFloatingWeapons(Transform player)

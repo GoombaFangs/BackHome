@@ -2,6 +2,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 /// <summary>
 /// Keeps the HUD authored in playable scenes (and complete inside Hud.prefab)
@@ -96,6 +97,8 @@ public static class HudScenePresence
 
             if (EnsureLowHpOnHud(root, canvasTransform))
                 changed = true;
+            if (EnsureLowOxygenOnHud(root, canvasTransform))
+                changed = true;
             if (EnsureDamageOverlayOnHud(root))
                 changed = true;
 
@@ -152,6 +155,8 @@ public static class HudScenePresence
                 return root;
             if (root.GetComponentInChildren<PlayerLowHpWarning>(true) != null)
                 return root;
+            if (root.GetComponentInChildren<PlayerLowOxygenWarning>(true) != null)
+                return root;
             if (root.GetComponentInChildren<PlayerDamageOverlay>(true) != null)
                 return root;
         }
@@ -184,6 +189,105 @@ public static class HudScenePresence
             so.ApplyModifiedPropertiesWithoutUndo();
 
         return changed;
+    }
+
+    static bool EnsureLowOxygenOnHud(GameObject root, Transform canvasTransform)
+    {
+        bool changed = false;
+        var warning = root.GetComponent<PlayerLowOxygenWarning>();
+        if (warning == null)
+        {
+            warning = root.AddComponent<PlayerLowOxygenWarning>();
+            changed = true;
+        }
+
+        GameObject panel = FindChild(canvasTransform, "LowOxygenWarning");
+        if (panel == null)
+        {
+            panel = CreateLowOxygenPanel(canvasTransform);
+            changed = true;
+        }
+
+        Text label = null;
+        Transform labelTransform = panel.transform.Find("Label");
+        if (labelTransform != null)
+            label = labelTransform.GetComponent<Text>();
+
+        Image white = null;
+        Transform whiteTransform = panel.transform.Find("WhiteScreen");
+        if (whiteTransform != null)
+            white = whiteTransform.GetComponent<Image>();
+
+        if (white == null)
+        {
+            var whiteGo = new GameObject("WhiteScreen", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            whiteGo.transform.SetParent(panel.transform, false);
+            whiteGo.transform.SetAsFirstSibling();
+            StretchFull(whiteGo.GetComponent<RectTransform>());
+            white = whiteGo.GetComponent<Image>();
+            white.color = new Color(1f, 1f, 1f, 0.05f);
+            white.raycastTarget = false;
+            changed = true;
+        }
+
+        var group = panel.GetComponent<CanvasGroup>();
+        var so = new SerializedObject(warning);
+        Material mat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Resources/HUD/LowOxygenWarning.mat");
+        changed |= AssignIfDifferent(so, "textMaterial", mat);
+        changed |= AssignIfDifferent(so, "panel", panel);
+        changed |= AssignIfDifferent(so, "label", label);
+        changed |= AssignIfDifferent(so, "canvasGroup", group);
+        changed |= AssignIfDifferent(so, "whiteScreen", white);
+        if (changed)
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+        return changed;
+    }
+
+    static GameObject CreateLowOxygenPanel(Transform canvasTransform)
+    {
+        var panel = new GameObject("LowOxygenWarning", typeof(RectTransform), typeof(CanvasGroup));
+        panel.transform.SetParent(canvasTransform, false);
+        StretchFull(panel.GetComponent<RectTransform>());
+
+        var group = panel.GetComponent<CanvasGroup>();
+        group.blocksRaycasts = false;
+        group.interactable = false;
+        group.alpha = 1f;
+
+        var textGo = new GameObject("Label", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
+        textGo.transform.SetParent(panel.transform, false);
+
+        var text = textGo.GetComponent<Text>();
+        text.text = "LOW OXYGEN WARNING";
+        text.alignment = TextAnchor.MiddleCenter;
+        text.fontSize = 44;
+        text.fontStyle = FontStyle.Bold;
+        text.color = new Color(0.28f, 0.72f, 1f, 1f);
+        text.raycastTarget = false;
+        text.horizontalOverflow = HorizontalWrapMode.Overflow;
+        text.verticalOverflow = VerticalWrapMode.Overflow;
+        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+
+        var textRect = text.rectTransform;
+        textRect.anchorMin = new Vector2(0f, 0.5f);
+        textRect.anchorMax = new Vector2(1f, 0.5f);
+        textRect.pivot = new Vector2(0.5f, 0.5f);
+        textRect.anchoredPosition = Vector2.zero;
+        textRect.sizeDelta = new Vector2(0f, 120f);
+
+        var outline = textGo.AddComponent<Outline>();
+        outline.effectColor = new Color(0.02f, 0.08f, 0.16f, 0.92f);
+        outline.effectDistance = new Vector2(2.2f, -2.2f);
+        outline.useGraphicAlpha = true;
+
+        var shadow = textGo.AddComponent<Shadow>();
+        shadow.effectColor = new Color(0f, 0f, 0f, 0.7f);
+        shadow.effectDistance = new Vector2(0f, -3f);
+        shadow.useGraphicAlpha = true;
+
+        panel.SetActive(false);
+        return panel;
     }
 
     static bool EnsureDamageOverlayOnHud(GameObject root)

@@ -108,6 +108,8 @@ public class CameraFollow : MonoBehaviour
     Coroutine _shakeRoutine;
     Vector3 _shakeOffset;
     Vector3 _heartbeatOffset;
+    Vector3 _oxygenOffset;
+    float _oxygenFovDelta;
 
     /// <summary>Brief positional shake (e.g. on crash impact). Decays smoothly to zero over duration.</summary>
     public void Shake(float duration, float magnitude)
@@ -126,6 +128,22 @@ public class CameraFollow : MonoBehaviour
     public void SetHeartbeatOffset(Vector3 offset)
     {
         _heartbeatOffset = offset;
+    }
+
+    /// <summary>
+    /// Sustained camera-space sway for low oxygen. Pass <see cref="Vector3.zero"/> to clear.
+    /// </summary>
+    public void SetOxygenOffset(Vector3 offset)
+    {
+        _oxygenOffset = offset;
+    }
+
+    /// <summary>
+    /// Extra FOV on top of motion framing (negative = tunnel vision). Pass 0 to clear.
+    /// </summary>
+    public void SetOxygenFovDelta(float fovDelta)
+    {
+        _oxygenFovDelta = fovDelta;
     }
 
     IEnumerator ShakeRoutine(float duration, float magnitude)
@@ -216,14 +234,26 @@ public class CameraFollow : MonoBehaviour
                 transform.rotation = Quaternion.LookRotation(toTarget.normalized, _smoothedUp);
         }
 
-        Vector3 shake = _shakeOffset + _heartbeatOffset;
+        Vector3 shake = _shakeOffset + _heartbeatOffset + _oxygenOffset;
         if (shake.sqrMagnitude > 0.0000001f)
             transform.position += transform.right * shake.x + transform.up * shake.y;
 
-        if (_hasBaseFov && _camera != null && enableMotionFraming && moveExtraFov > 0.01f)
+        if (_hasBaseFov && _camera != null)
         {
-            float fovSpeed = _smoothedMotion > 0.05f ? zoomOutSpeed : zoomInSpeed;
-            _camera.fieldOfView = Mathf.Lerp(_camera.fieldOfView, fov, 1f - Mathf.Exp(-fovSpeed * Time.deltaTime));
+            float targetFov = fov + _oxygenFovDelta;
+            bool motionFov = enableMotionFraming && moveExtraFov > 0.01f;
+            bool oxygenFov = Mathf.Abs(_oxygenFovDelta) > 0.001f
+                             || Mathf.Abs(_camera.fieldOfView - targetFov) > 0.02f;
+            if (motionFov || oxygenFov)
+            {
+                float fovSpeed = motionFov
+                    ? (_smoothedMotion > 0.05f ? zoomOutSpeed : zoomInSpeed)
+                    : 3.2f;
+                _camera.fieldOfView = Mathf.Lerp(
+                    _camera.fieldOfView,
+                    targetFov,
+                    1f - Mathf.Exp(-fovSpeed * Time.deltaTime));
+            }
         }
     }
 
