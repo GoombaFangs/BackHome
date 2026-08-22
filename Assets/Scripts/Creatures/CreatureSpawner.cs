@@ -24,9 +24,6 @@ public class CreatureSpawner : MonoBehaviour
         [Min(0f)]
         public float respawnTime;
 
-        [Tooltip("Optional world loot prefab dropped when this creature dies.")]
-        public GameObject lootDropPrefab;
-
         [Tooltip("Minimum spacing (degrees) enforced between spawned creatures of this entry. " +
             "0 (default) = use the spawner-wide default (12°). Lower values (e.g. 2-3°) allow a " +
             "tightly packed, much denser cluster — handy for a spawn-point \"den\" of many creatures.")]
@@ -404,8 +401,13 @@ public class CreatureSpawner : MonoBehaviour
 
     void TryDropLoot(TrackedCreature tracked)
     {
-        SpawnEntry entry = _allEntries[tracked.entryIndex].entry;
-        if (entry.lootDropPrefab == null)
+        Creature creature = tracked.creature;
+        if (creature == null || !creature.HasStats)
+            return;
+
+        CreatureStats stats = creature.Stats;
+        LootEntry[] table = stats.Loot;
+        if (table == null || table.Length == 0)
             return;
 
         Vector3 dropPos = tracked.instance != null
@@ -413,7 +415,13 @@ public class CreatureSpawner : MonoBehaviour
             : transform.position;
 
         EnsureLootPool();
-        _lootPool.Spawn(entry.lootDropPrefab, dropPos);
+        for (int i = 0; i < table.Length; i++)
+        {
+            if (!stats.TryRollLoot(i, out ItemDefinition item, out int amount))
+                continue;
+
+            _lootPool.Spawn(item, amount, dropPos);
+        }
     }
 
     void EnsureLootPool()

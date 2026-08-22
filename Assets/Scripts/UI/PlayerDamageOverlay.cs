@@ -3,8 +3,8 @@ using UnityEngine;
 /// <summary>
 /// Fullscreen red vignette when the player is hit. Uses
 /// <c>BackHome/Hud/PlayerDamageOverlay</c>: dissolves in, holds, dissolves out.
+/// Lives on the Hud and binds to the player at runtime.
 /// </summary>
-[RequireComponent(typeof(PlayerVitals))]
 public class PlayerDamageOverlay : MonoBehaviour
 {
     const string ResourcesPath = "Player/Combat/PlayerDamageOverlay";
@@ -42,32 +42,29 @@ public class PlayerDamageOverlay : MonoBehaviour
 
     void Awake()
     {
-        _vitals = GetComponent<PlayerVitals>();
         EnsureMaterial();
     }
 
-    void OnEnable()
+    void Start()
+    {
+        TryBindPlayer();
+    }
+
+    void Update()
     {
         if (_vitals == null)
-            return;
-        _vitals.Damaged += OnDamaged;
-        _vitals.Died += HideImmediate;
+            TryBindPlayer();
     }
 
     void OnDisable()
     {
-        if (_vitals != null)
-        {
-            _vitals.Damaged -= OnDamaged;
-            _vitals.Died -= HideImmediate;
-        }
-
+        UnbindPlayer();
         HideImmediate();
     }
 
     void OnDestroy()
     {
-        _vitals = null;
+        UnbindPlayer();
         if (_overlay != null)
         {
             Destroy(_overlay.gameObject);
@@ -90,6 +87,35 @@ public class PlayerDamageOverlay : MonoBehaviour
         StepPhase(Time.deltaTime);
         FitToCamera();
         ApplyDissolve();
+    }
+
+    void TryBindPlayer()
+    {
+        if (_vitals != null)
+            return;
+
+        GameObject playerGo = GameObject.FindGameObjectWithTag("Player");
+        if (playerGo == null)
+            return;
+
+        _vitals = playerGo.GetComponent<PlayerVitals>();
+        if (_vitals == null)
+            _vitals = playerGo.GetComponentInChildren<PlayerVitals>();
+        if (_vitals == null)
+            return;
+
+        _vitals.Damaged += OnDamaged;
+        _vitals.Died += HideImmediate;
+    }
+
+    void UnbindPlayer()
+    {
+        if (_vitals == null)
+            return;
+
+        _vitals.Damaged -= OnDamaged;
+        _vitals.Died -= HideImmediate;
+        _vitals = null;
     }
 
     void OnDamaged(float _)
@@ -188,6 +214,8 @@ public class PlayerDamageOverlay : MonoBehaviour
         Material source = overlayMaterial;
         if (source == null)
             source = Resources.Load<Material>(ResourcesPath);
+        if (source == null)
+            source = Resources.Load<Material>("Player/Combat/Shaders/PlayerDamageOverlay");
         if (source == null)
         {
             Debug.LogWarning($"{name}: PlayerDamageOverlay material missing at Resources/{ResourcesPath}.", this);

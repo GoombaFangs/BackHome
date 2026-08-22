@@ -2,17 +2,19 @@ using StarterAssets;
 using UnityEngine;
 
 /// <summary>
-/// Spawns Player + UI from prefabs when a playable scene starts.
+/// Spawns Player when a playable scene starts. HUD lives in the scene (Hud prefab instance)
+/// so the full Canvas is visible in edit mode; this only instantiates it if the scene has none.
 /// CameraFollow stays on Main Camera — only the target is wired at runtime.
 /// Per-scene defaults (spawn point, vitals bar size) live here because cameras differ per world.
 /// </summary>
 public class SceneBootstrap : MonoBehaviour
 {
     [SerializeField] GameObject playerPrefab;
+    [Tooltip("Fallback only. Prefer a Hud instance already placed in the scene.")]
     [SerializeField] GameObject uiPrefab;
     [SerializeField] Vector3 spawnPosition = new Vector3(0f, 2f, 0f);
 
-    [Header("Vitals HUD")]
+    [Header("Vitals Bars")]
     [Tooltip("World size of HP/Oxygen bars for this scene. Raise on distant/high cameras (planets).")]
     [SerializeField, Min(0.1f)] float vitalsBarsScale = 1f;
     [Tooltip("Local offset of the bars relative to the player (XYZ).")]
@@ -20,10 +22,10 @@ public class SceneBootstrap : MonoBehaviour
 
     void Awake()
     {
-        if (uiPrefab != null && GameObject.Find("Hud") == null)
+        if (uiPrefab != null && FindExistingHud() == null)
         {
             GameObject uiObject = Instantiate(uiPrefab);
-            uiObject.name = uiPrefab.name;
+            uiObject.name = "Hud";
         }
 
         PlayerInventory.EnsureExists();
@@ -53,13 +55,6 @@ public class SceneBootstrap : MonoBehaviour
         BindCameraTarget(player);
         ApplyVitalsBarsSettings(player);
         BindMobileInput(player);
-        EnsureDamageOverlay(player);
-    }
-
-    static void EnsureDamageOverlay(Transform player)
-    {
-        if (player.GetComponent<PlayerDamageOverlay>() == null)
-            player.gameObject.AddComponent<PlayerDamageOverlay>();
     }
 
     static void BindMobileInput(Transform player)
@@ -69,6 +64,16 @@ public class SceneBootstrap : MonoBehaviour
             return;
 
         binder.BindPlayer(player.GetComponent<StarterAssetsInputs>());
+    }
+
+    static GameObject FindExistingHud()
+    {
+        GameObject named = GameObject.Find("Hud");
+        if (named != null)
+            return named;
+
+        PlayerDeathUI death = Object.FindAnyObjectByType<PlayerDeathUI>(FindObjectsInactive.Include);
+        return death != null ? death.gameObject : null;
     }
 
     static Transform FindExistingPlayer()

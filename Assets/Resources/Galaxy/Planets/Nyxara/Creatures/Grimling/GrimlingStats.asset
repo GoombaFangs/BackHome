@@ -18,3 +18,8 @@ MonoBehaviour:
   attackRange: 3
   maxHealth: 220
   visionRange: 12
+  loot:
+  - item: {fileID: 11400000, guid: 5286eb086ba375649a38e9eee22e753d, type: 2}
+    minAmount: 1
+    maxAmount: 1
+    chance: 1

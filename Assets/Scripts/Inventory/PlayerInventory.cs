@@ -57,19 +57,25 @@ public class PlayerInventory : MonoBehaviour
         if (item == null || amount <= 0)
             return;
 
+        int cap = item.MaxStack;
+
         for (int i = 0; i < _slots.Count; i++)
         {
             if (_slots[i].item != item)
                 continue;
 
             Slot slot = _slots[i];
-            slot.count += amount;
+            int next = Mathf.Min(cap, slot.count + amount);
+            if (next == slot.count)
+                return;
+
+            slot.count = next;
             _slots[i] = slot;
             Changed?.Invoke();
             return;
         }
 
-        _slots.Add(new Slot { item = item, count = amount });
+        _slots.Add(new Slot { item = item, count = Mathf.Min(cap, amount) });
         Changed?.Invoke();
     }
 }

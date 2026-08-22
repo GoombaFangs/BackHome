@@ -1,8 +1,9 @@
 using UnityEngine;
 
 /// <summary>
-/// World-space loot pickup. Pops up along planet-up, lands, then plays Idle spin.
-/// Hierarchy: root (Animator) → Sprite (Drop scale / Idle rotation).
+/// World-space loot pickup. Pops up along planet-up, lands, then idles.
+/// Item identity is applied at spawn via <see cref="Configure"/> so one prefab can serve many items.
+/// Sprites billboard to camera; 3D meshes spin in place around planet-up.
 /// </summary>
 [RequireComponent(typeof(SphereCollider))]
 public class LootPickup : MonoBehaviour
@@ -21,31 +22,43 @@ public class LootPickup : MonoBehaviour
     [SerializeField, Min(0.05f)] float dropDuration = 0.55f;
     [SerializeField, Range(0f, 0.4f)] float bounceHeightRatio = 0.18f;
     [Header("Idle")]
+    [SerializeField] float idleSpinDegreesPerSecond = 90f;
     [SerializeField] string dropState = "Drop";
     [SerializeField] string idleState = "Idle";
 
     LootDropPool _pool;
     GameObject _prefabKey;
     SpriteRenderer _sprite;
-    Transform _spriteTransform;
+    Transform _visual;
     Animator _animator;
+    Quaternion _visualRestRotation;
     Vector3 _groundPosition;
     Vector3 _up;
     Phase _phase;
     float _dropElapsed;
+    float _idleSpin;
     bool _collected;
     bool _idleStarted;
 
     void Awake()
     {
-        _sprite = GetComponentInChildren<SpriteRenderer>();
-        _spriteTransform = _sprite != null ? _sprite.transform : null;
+        _sprite = GetComponentInChildren<SpriteRenderer>(true);
+        _visual = _sprite != null
+            ? _sprite.transform
+            : (transform.childCount > 0 ? transform.GetChild(0) : transform);
+        _visualRestRotation = _visual.localRotation;
         _animator = GetComponent<Animator>();
 
         SphereCollider col = GetComponent<SphereCollider>();
         col.isTrigger = true;
         if (col.radius < 0.2f)
             col.radius = 0.6f;
+    }
+
+    public void Configure(ItemDefinition definition, int dropAmount)
+    {
+        item = definition;
+        amount = Mathf.Max(1, dropAmount);
     }
 
     public void ActivateFromPool(LootDropPool pool, GameObject prefabKey, Vector3 worldPosition)
@@ -55,18 +68,22 @@ public class LootPickup : MonoBehaviour
         _collected = false;
         _idleStarted = false;
         _dropElapsed = 0f;
+        _idleSpin = 0f;
         _phase = Phase.Dropping;
 
         _up = ResolveUp(worldPosition);
         _groundPosition = worldPosition + _up * groundOffset;
-        transform.position = _groundPosition;
+        transform.SetPositionAndRotation(
+            _groundPosition,
+            Quaternion.FromToRotation(Vector3.up, _up));
 
-        if (_spriteTransform != null)
-            _spriteTransform.localPosition = Vector3.zero;
+        if (_visual != null)
+            _visual.localRotation = _visualRestRotation;
 
+        ApplyItemVisual();
         gameObject.SetActive(true);
 
-        if (_animator != null && !string.IsNullOrWhiteSpace(dropState))
+        if (_animator != null && _sprite != null && !string.IsNullOrWhiteSpace(dropState))
         {
             _animator.Rebind();
             _animator.Play(dropState, 0, 0f);
@@ -92,7 +109,7 @@ public class LootPickup : MonoBehaviour
         else
             transform.position = _groundPosition;
 
-        BillboardSprite();
+        UpdateVisual();
     }
 
     void TickDrop()
@@ -129,22 +146,42 @@ public class LootPickup : MonoBehaviour
             return;
 
         _idleStarted = true;
-        if (_animator != null && !string.IsNullOrWhiteSpace(idleState))
+        if (_animator != null && _sprite != null && !string.IsNullOrWhiteSpace(idleState))
             _animator.Play(idleState, 0, 0f);
+    }
+
+    void ApplyItemVisual()
+    {
+        if (_sprite != null && item != null && item.Icon != null)
+            _sprite.sprite = item.Icon;
+    }
+
+    void UpdateVisual()
+    {
+        if (_visual == null)
+            return;
+
+        if (_sprite != null)
+        {
+            BillboardSprite();
+            return;
+        }
+
+        if (_phase != Phase.Idle || Mathf.Abs(idleSpinDegreesPerSecond) < 0.01f)
+            return;
+
+        _idleSpin += idleSpinDegreesPerSecond * Time.deltaTime;
+        _visual.localRotation = _visualRestRotation * Quaternion.AngleAxis(_idleSpin, Vector3.up);
     }
 
     void BillboardSprite()
     {
-        if (_spriteTransform == null)
-            return;
-
         Camera cam = Camera.main;
         if (cam == null)
             return;
 
-        // Keep Idle local Z spin, face camera after Animator applies it.
-        Quaternion spin = _spriteTransform.localRotation;
-        _spriteTransform.rotation = cam.transform.rotation * spin;
+        Quaternion spin = _visual.localRotation;
+        _visual.rotation = cam.transform.rotation * spin;
     }
 
     void OnTriggerEnter(Collider other)

@@ -107,6 +107,7 @@ public class CameraFollow : MonoBehaviour
 
     Coroutine _shakeRoutine;
     Vector3 _shakeOffset;
+    Vector3 _heartbeatOffset;
 
     /// <summary>Brief positional shake (e.g. on crash impact). Decays smoothly to zero over duration.</summary>
     public void Shake(float duration, float magnitude)
@@ -116,6 +117,15 @@ public class CameraFollow : MonoBehaviour
         if (_shakeRoutine != null)
             StopCoroutine(_shakeRoutine);
         _shakeRoutine = StartCoroutine(ShakeRoutine(duration, magnitude));
+    }
+
+    /// <summary>
+    /// Sustained camera-space kick (x/y) added on top of <see cref="Shake"/>.
+    /// Used for low-HP heartbeat. Pass <see cref="Vector3.zero"/> to clear.
+    /// </summary>
+    public void SetHeartbeatOffset(Vector3 offset)
+    {
+        _heartbeatOffset = offset;
     }
 
     IEnumerator ShakeRoutine(float duration, float magnitude)
@@ -206,8 +216,9 @@ public class CameraFollow : MonoBehaviour
                 transform.rotation = Quaternion.LookRotation(toTarget.normalized, _smoothedUp);
         }
 
-        if (_shakeOffset.sqrMagnitude > 0.0000001f)
-            transform.position += transform.right * _shakeOffset.x + transform.up * _shakeOffset.y;
+        Vector3 shake = _shakeOffset + _heartbeatOffset;
+        if (shake.sqrMagnitude > 0.0000001f)
+            transform.position += transform.right * shake.x + transform.up * shake.y;
 
         if (_hasBaseFov && _camera != null && enableMotionFraming && moveExtraFov > 0.01f)
         {

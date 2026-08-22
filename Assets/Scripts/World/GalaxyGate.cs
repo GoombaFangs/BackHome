@@ -346,6 +346,10 @@ public class GalaxyGate : MonoBehaviour
                             ?? player.GetComponentInChildren<VitalsBars>();
         if (vitals != null)
             vitals.SetHidden(true);
+
+        PlayerLowHpWarning warning = Object.FindAnyObjectByType<PlayerLowHpWarning>(FindObjectsInactive.Include);
+        if (warning != null)
+            warning.HideForCinematic();
     }
 
     static void HideFloatingWeapons(Transform player)

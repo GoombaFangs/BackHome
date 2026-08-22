@@ -2,7 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Simple per-prefab pool for world loot drops (reuse via SetActive, no Destroy per kill).
+/// Per-prefab pool for world loot drops (reuse via SetActive, no Destroy per kill).
+/// Prefab key comes from <see cref="ItemDefinition.WorldDropPrefab"/>.
 /// </summary>
 public class LootDropPool : MonoBehaviour
 {
@@ -14,42 +15,32 @@ public class LootDropPool : MonoBehaviour
         EnsureRoot();
     }
 
-    public LootPickup Spawn(GameObject prefab, Vector3 worldPosition)
+    public LootPickup Spawn(ItemDefinition item, int amount, Vector3 worldPosition)
     {
-        if (prefab == null)
+        if (item == null)
             return null;
 
-        EnsureRoot();
-
-        if (!_pools.TryGetValue(prefab, out Queue<LootPickup> queue))
+        GameObject prefab = item.WorldDropPrefab;
+        if (prefab == null)
         {
-            queue = new Queue<LootPickup>(8);
-            _pools[prefab] = queue;
+            Debug.LogWarning($"{name}: item '{item.DisplayName}' has no world drop prefab.", item);
+            return null;
         }
 
-        LootPickup pickup = null;
-        while (queue.Count > 0 && pickup == null)
-        {
-            LootPickup candidate = queue.Dequeue();
-            if (candidate != null)
-                pickup = candidate;
-        }
-
+        LootPickup pickup = GetOrCreate(prefab);
         if (pickup == null)
-        {
-            GameObject instance = Instantiate(prefab, _root);
-            instance.name = prefab.name;
-            pickup = instance.GetComponent<LootPickup>();
-            if (pickup == null)
-                pickup = instance.GetComponentInChildren<LootPickup>();
+            return null;
 
-            if (pickup == null)
-            {
-                Debug.LogWarning($"{name}: loot prefab '{prefab.name}' is missing LootPickup.", this);
-                Destroy(instance);
-                return null;
-            }
-        }
+        pickup.Configure(item, amount);
+        pickup.ActivateFromPool(this, prefab, worldPosition);
+        return pickup;
+    }
+
+    public LootPickup Spawn(GameObject prefab, Vector3 worldPosition)
+    {
+        LootPickup pickup = GetOrCreate(prefab);
+        if (pickup == null)
+            return null;
 
         pickup.ActivateFromPool(this, prefab, worldPosition);
         return pickup;
@@ -73,6 +64,44 @@ public class LootDropPool : MonoBehaviour
         }
 
         queue.Enqueue(pickup);
+    }
+
+    LootPickup GetOrCreate(GameObject prefab)
+    {
+        if (prefab == null)
+            return null;
+
+        EnsureRoot();
+
+        if (!_pools.TryGetValue(prefab, out Queue<LootPickup> queue))
+        {
+            queue = new Queue<LootPickup>(8);
+            _pools[prefab] = queue;
+        }
+
+        LootPickup pickup = null;
+        while (queue.Count > 0 && pickup == null)
+        {
+            LootPickup candidate = queue.Dequeue();
+            if (candidate != null)
+                pickup = candidate;
+        }
+
+        if (pickup != null)
+            return pickup;
+
+        GameObject instance = Instantiate(prefab, _root);
+        instance.name = prefab.name;
+        pickup = instance.GetComponent<LootPickup>();
+        if (pickup == null)
+            pickup = instance.GetComponentInChildren<LootPickup>();
+
+        if (pickup != null)
+            return pickup;
+
+        Debug.LogWarning($"{name}: loot prefab '{prefab.name}' is missing LootPickup.", this);
+        Destroy(instance);
+        return null;
     }
 
     void EnsureRoot()
