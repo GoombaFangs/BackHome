@@ -53,7 +53,7 @@ public static class EquipmentPanelSetup
         GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PanelPath);
         if (prefab == null)
             return false;
-        if (UsesCasualKit(prefab))
+        if (UsesCasualKit(prefab) && prefab.transform.Find("BottomBar") != null)
             return false;
         return Build(force: true);
     }
@@ -67,7 +67,7 @@ public static class EquipmentPanelSetup
         if (prefab == null)
             return false;
 
-        if (!force && UsesCasualKit(prefab))
+        if (!force && UsesCasualKit(prefab) && prefab.transform.Find("BottomBar") != null)
             return false;
 
         Kit kit = LoadKit();
@@ -113,7 +113,7 @@ public static class EquipmentPanelSetup
             SlotYellow = CasualHudKit.SlotYellow(),
             SlotPurple = CasualHudKit.SlotPurple(),
             Pedestal = CasualHudKit.Pedestal(),
-            Bag = First(CasualHudKit.Item("Bag"), CasualHudKit.Picto("Bag"), CasualHudKit.Misc("Icon_MenuIcon02_Inventory")),
+            Bag = First(CasualHudKit.Misc("Icon_MenuIcon02_Inventory"), CasualHudKit.Item("Bag"), CasualHudKit.Picto("Bag")),
             Close = First(CasualHudKit.Picto("Close"), CasualHudKit.Misc("Icon_PictoIcon_Close")),
             Oxygen = First(CasualHudKit.Item("Potion01_Blue"), CasualHudKit.Picto("Water"), CasualHudKit.Picto("Mana")),
             Health = First(CasualHudKit.Item("Heart"), CasualHudKit.Picto("Health"), CasualHudKit.Item("Emergency_Bag")),
@@ -148,34 +148,66 @@ public static class EquipmentPanelSetup
             Object.DestroyImmediate(root.transform.GetChild(i).gameObject);
 
         Go("CasualKit", root.transform, typeof(RectTransform)).SetActive(false);
-        CreateToggle(root.transform, kit);
+        CreateBottomBar(root.transform, kit);
         CreateContent(root.transform, kit);
     }
 
-    static void CreateToggle(Transform parent, Kit kit)
+    static void CreateBottomBar(Transform parent, Kit kit)
     {
-        GameObject toggle = ImageGo("ToggleButton", parent, kit.SquareNavy, Color.white, raycast: true);
-        RectTransform rt = toggle.GetComponent<RectTransform>();
-        rt.anchorMin = new Vector2(1f, 1f);
-        rt.anchorMax = new Vector2(1f, 1f);
-        rt.pivot = new Vector2(1f, 1f);
-        rt.anchoredPosition = new Vector2(-18f, -18f);
-        rt.sizeDelta = new Vector2(128f, 128f);
+        GameObject bar = Go("BottomBar", parent, typeof(RectTransform));
+        RectTransform barRt = bar.GetComponent<RectTransform>();
+        barRt.anchorMin = new Vector2(0f, 0f);
+        barRt.anchorMax = new Vector2(1f, 0f);
+        barRt.pivot = new Vector2(0.5f, 0f);
+        barRt.anchoredPosition = Vector2.zero;
+        barRt.sizeDelta = new Vector2(0f, 240f);
 
-        GameObject icon = ImageGo("Icon", toggle.transform, kit.Bag, Color.white, raycast: false);
-        RectTransform iconRt = icon.GetComponent<RectTransform>();
-        iconRt.anchorMin = new Vector2(0.5f, 0.5f);
-        iconRt.anchorMax = new Vector2(0.5f, 0.5f);
-        iconRt.pivot = new Vector2(0.5f, 0.5f);
-        iconRt.anchoredPosition = new Vector2(0f, 4f);
-        iconRt.sizeDelta = new Vector2(72f, 72f);
-        icon.GetComponent<Image>().preserveAspect = true;
+        var layout = bar.AddComponent<HorizontalLayoutGroup>();
+        layout.padding = new RectOffset(36, 36, 18, 28);
+        layout.spacing = 18f;
+        layout.childAlignment = TextAnchor.LowerCenter;
+        layout.childControlWidth = true;
+        layout.childControlHeight = true;
+        layout.childForceExpandWidth = false;
+        layout.childForceExpandHeight = false;
 
-        Button button = toggle.AddComponent<Button>();
+        CreateDockButton(bar.transform, "Slot1", kit.SquareNavy, null, 148f, interactable: false);
+        CreateDockButton(bar.transform, "ToggleButton", kit.SquareNavy, kit.Bag, 148f, interactable: true);
+        CreateDockButton(bar.transform, "Slot3", kit.SquareNavy, null, 188f, interactable: false);
+        CreateDockButton(bar.transform, "Slot4", kit.SquareNavy, null, 148f, interactable: false);
+        CreateDockButton(bar.transform, "Slot5", kit.SquareNavy, null, 148f, interactable: false);
+    }
+
+    static void CreateDockButton(Transform parent, string name, Sprite frame, Sprite icon, float size, bool interactable)
+    {
+        GameObject buttonGo = ImageGo(name, parent, frame, Color.white, raycast: true);
+        var le = buttonGo.AddComponent<LayoutElement>();
+        le.minWidth = size;
+        le.minHeight = size;
+        le.preferredWidth = size;
+        le.preferredHeight = size;
+        le.flexibleWidth = 0f;
+        le.flexibleHeight = 0f;
+
+        if (icon != null)
+        {
+            GameObject iconGo = ImageGo("Icon", buttonGo.transform, icon, Color.white, raycast: false);
+            RectTransform iconRt = iconGo.GetComponent<RectTransform>();
+            iconRt.anchorMin = new Vector2(0.5f, 0.5f);
+            iconRt.anchorMax = new Vector2(0.5f, 0.5f);
+            iconRt.pivot = new Vector2(0.5f, 0.5f);
+            iconRt.anchoredPosition = new Vector2(0f, 6f);
+            iconRt.sizeDelta = new Vector2(size * 0.52f, size * 0.52f);
+            iconGo.GetComponent<Image>().preserveAspect = true;
+        }
+
+        Button button = buttonGo.AddComponent<Button>();
         button.transition = Selectable.Transition.ColorTint;
         ColorBlock colors = button.colors;
         colors.pressedColor = new Color(0.82f, 0.82f, 0.82f, 1f);
+        colors.disabledColor = new Color(1f, 1f, 1f, 1f);
         button.colors = colors;
+        button.interactable = interactable;
     }
 
     static void CreateContent(Transform parent, Kit kit)

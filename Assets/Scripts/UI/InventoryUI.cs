@@ -12,6 +12,7 @@ public class InventoryUI : MonoBehaviour
     [SerializeField] GameObject inventoryPanelPrefab;
     [SerializeField] GameObject inventoryPanel;
     [SerializeField] GameObject contentPanel;
+    [SerializeField] GameObject bottomBar;
     [SerializeField] Button toggleButton;
     [SerializeField] Button closeButton;
     [SerializeField] TMP_Text powerText;
@@ -98,9 +99,18 @@ public class InventoryUI : MonoBehaviour
 
     void WireReferences(Transform root)
     {
+        if (bottomBar == null)
+        {
+            Transform bar = root.Find("BottomBar");
+            if (bar != null)
+                bottomBar = bar.gameObject;
+        }
+
         if (toggleButton == null)
         {
-            Transform toggle = root.Find("ToggleButton");
+            Transform toggle = root.Find("BottomBar/ToggleButton");
+            if (toggle == null)
+                toggle = root.Find("ToggleButton");
             if (toggle != null)
                 toggleButton = toggle.GetComponent<Button>();
         }
@@ -231,7 +241,9 @@ public class InventoryUI : MonoBehaviour
         _open = open;
         if (contentPanel != null)
             contentPanel.SetActive(open);
-        if (toggleButton != null)
+        if (bottomBar != null)
+            bottomBar.SetActive(!open);
+        else if (toggleButton != null)
             toggleButton.gameObject.SetActive(!open);
         if (open)
         {
