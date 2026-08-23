@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: StingerWeapon
   m_EditorClassIdentifier: Assembly-CSharp::WeaponDefinition
   displayName: Stinger
+  icon: {fileID: 21300000, guid: 9253f2f689be14f49aa82284799a6196, type: 3}
   prefab: {fileID: 540212191312792610, guid: fa3056935ba76dd4f820202c099579a3, type: 3}
   attackDamage: 8
   attackSpeed: 2
