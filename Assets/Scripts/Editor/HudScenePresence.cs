@@ -26,6 +26,24 @@ public static class HudScenePresence
         RunSafe();
     }
 
+    [MenuItem("BackHome/Rebuild Casual HUD")]
+    public static void RebuildCasualHud()
+    {
+        EquipmentPanelSetup.Build(force: true);
+        DeathPanelSetup.Build(force: true);
+        RunSafe();
+        if (!Application.isBatchMode)
+            EditorUtility.DisplayDialog("Casual HUD", "Rebuilt HUD panels from GUI Pro-CasualGame.", "OK");
+    }
+
+    /// <summary>Unity batchmode: -executeMethod HudScenePresence.BuildBatch</summary>
+    public static void BuildBatch()
+    {
+        EquipmentPanelSetup.Build(force: true);
+        DeathPanelSetup.Build(force: true);
+        RunSafe();
+    }
+
     static void RunSafe()
     {
         if (EditorApplication.isPlayingOrWillChangePlaymode)
@@ -36,6 +54,8 @@ public static class HudScenePresence
             return;
         }
 
+        EquipmentPanelSetup.EnsureBuilt();
+        DeathPanelSetup.EnsureBuilt();
         SetupHudPrefab();
         PlaceHudInLoadedScenes();
     }
@@ -57,6 +77,7 @@ public static class HudScenePresence
 
             Transform canvasTransform = canvas.transform;
             bool changed = false;
+            changed |= EnableTmpChannels(canvas);
 
             GameObject inventory = FindChild(canvasTransform, "InventoryPanel");
             if (inventory == null)
@@ -90,9 +111,15 @@ public static class HudScenePresence
                 if (panelProp != null && panelProp.objectReferenceValue != inventory)
                 {
                     panelProp.objectReferenceValue = inventory;
-                    so.ApplyModifiedPropertiesWithoutUndo();
                     changed = true;
                 }
+
+                Sprite gem = CasualHudKit.Item("Gem01_Blue");
+                if (gem == null)
+                    gem = CasualHudKit.Picto("Gem_Diamond");
+                changed |= AssignIfDifferent(so, "fallbackResourceIcon", gem);
+                if (so.hasModifiedProperties)
+                    so.ApplyModifiedPropertiesWithoutUndo();
             }
 
             if (EnsureLowHpOnHud(root, canvasTransform))
@@ -100,6 +127,8 @@ public static class HudScenePresence
             if (EnsureLowOxygenOnHud(root, canvasTransform))
                 changed = true;
             if (EnsureDamageOverlayOnHud(root))
+                changed = true;
+            if (RestyleJoystick(canvasTransform))
                 changed = true;
 
             if (changed)
@@ -213,6 +242,25 @@ public static class HudScenePresence
         if (labelTransform != null)
             label = labelTransform.GetComponent<Text>();
 
+        if (panel.transform.Find("Frame") == null)
+        {
+            Sprite frameSprite = CasualHudKit.ActionFrameBlue();
+            if (frameSprite != null)
+            {
+                var frameGo = new GameObject("Frame", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                frameGo.transform.SetParent(panel.transform, false);
+                frameGo.transform.SetSiblingIndex(labelTransform != null ? labelTransform.GetSiblingIndex() : 1);
+                var frameRt = frameGo.GetComponent<RectTransform>();
+                frameRt.anchorMin = new Vector2(0.5f, 0.5f);
+                frameRt.anchorMax = new Vector2(0.5f, 0.5f);
+                frameRt.pivot = new Vector2(0.5f, 0.5f);
+                frameRt.anchoredPosition = Vector2.zero;
+                frameRt.sizeDelta = new Vector2(920f, 180f);
+                CasualHudKit.Apply(frameGo.GetComponent<Image>(), frameSprite, Color.white, false);
+                changed = true;
+            }
+        }
+
         Image white = null;
         Transform whiteTransform = panel.transform.Find("WhiteScreen");
         if (whiteTransform != null)
@@ -254,6 +302,20 @@ public static class HudScenePresence
         group.blocksRaycasts = false;
         group.interactable = false;
         group.alpha = 1f;
+
+        Sprite frameSprite = CasualHudKit.ActionFrameBlue();
+        if (frameSprite != null)
+        {
+            var frameGo = new GameObject("Frame", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            frameGo.transform.SetParent(panel.transform, false);
+            var frameRt = frameGo.GetComponent<RectTransform>();
+            frameRt.anchorMin = new Vector2(0.5f, 0.5f);
+            frameRt.anchorMax = new Vector2(0.5f, 0.5f);
+            frameRt.pivot = new Vector2(0.5f, 0.5f);
+            frameRt.anchoredPosition = Vector2.zero;
+            frameRt.sizeDelta = new Vector2(920f, 180f);
+            CasualHudKit.Apply(frameGo.GetComponent<Image>(), frameSprite, Color.white, false);
+        }
 
         var textGo = new GameObject("Label", typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
         textGo.transform.SetParent(panel.transform, false);
@@ -307,6 +369,109 @@ public static class HudScenePresence
 
         prop.objectReferenceValue = value;
         return true;
+    }
+
+    static bool EnableTmpChannels(Canvas canvas)
+    {
+        AdditionalCanvasShaderChannels needed =
+            AdditionalCanvasShaderChannels.TexCoord1
+            | AdditionalCanvasShaderChannels.Normal
+            | AdditionalCanvasShaderChannels.Tangent;
+        if ((canvas.additionalShaderChannels & needed) == needed)
+            return false;
+
+        canvas.additionalShaderChannels |= needed;
+        return true;
+    }
+
+    static bool RestyleJoystick(Transform canvasTransform)
+    {
+        bool changed = RestyleJoystickPrefab();
+        Transform joystick = FindNamed(canvasTransform, "UI_Virtual_Joystick_Move");
+        if (joystick == null)
+            joystick = FindNamed(canvasTransform, "UI_Virtual_Joystick");
+        if (joystick == null)
+            return changed;
+
+        return ApplyJoystickSprites(joystick.gameObject) || changed;
+    }
+
+    static bool RestyleJoystickPrefab()
+    {
+        const string path = "Assets/AssetStore/UnityTechnologies/StarterAssets/Mobile/Prefabs/VirtualInputs/UI_Virtual_Joystick.prefab";
+        GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        if (prefab == null)
+            return false;
+
+        Sprite bg = CasualHudKit.JoystickBg();
+        Image bgImage = prefab.GetComponent<Image>();
+        if (bg == null || bgImage == null || bgImage.sprite == bg)
+            return false;
+
+        GameObject root = PrefabUtility.LoadPrefabContents(path);
+        try
+        {
+            if (!ApplyJoystickSprites(root))
+                return false;
+            PrefabUtility.SaveAsPrefabAsset(root, path);
+            return true;
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(root);
+        }
+    }
+
+    static bool ApplyJoystickSprites(GameObject joystick)
+    {
+        Sprite bg = CasualHudKit.JoystickBg();
+        Sprite handle = CasualHudKit.JoystickHandle();
+        if (bg == null || handle == null)
+            return false;
+
+        bool changed = false;
+        Image bgImage = joystick.GetComponent<Image>();
+        if (bgImage != null && bgImage.sprite != bg)
+        {
+            CasualHudKit.Apply(bgImage, bg, Color.white, true);
+            changed = true;
+        }
+
+        Transform handleTransform = joystick.transform.Find("Image_Handle");
+        if (handleTransform != null)
+        {
+            Image handleImage = handleTransform.GetComponent<Image>();
+            if (handleImage != null && handleImage.sprite != handle)
+            {
+                CasualHudKit.Apply(handleImage, handle, Color.white, false);
+                handleImage.preserveAspect = true;
+                changed = true;
+            }
+
+            Transform icon = handleTransform.Find("Image_Icon");
+            if (icon != null && icon.gameObject.activeSelf)
+            {
+                icon.gameObject.SetActive(false);
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    static Transform FindNamed(Transform parent, string childName)
+    {
+        if (parent.name == childName)
+            return parent;
+
+        for (int i = 0; i < parent.childCount; i++)
+        {
+            Transform found = FindNamed(parent.GetChild(i), childName);
+            if (found != null)
+                return found;
+        }
+
+        return null;
     }
 
     static GameObject FindChild(Transform parent, string childName)

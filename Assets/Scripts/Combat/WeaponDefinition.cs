@@ -15,6 +15,7 @@ public enum WeaponHitEffectKind
 public class WeaponDefinition : ScriptableObject
 {
     [SerializeField] string displayName = "Weapon";
+    [SerializeField] Sprite icon;
     [SerializeField] GameObject prefab;
 
     [Header("Combat")]
@@ -38,6 +39,7 @@ public class WeaponDefinition : ScriptableObject
     [SerializeField] Vector3 debuffEuler = new Vector3(90f, 0f, 0f);
 
     public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? name : displayName;
+    public Sprite Icon => icon;
     public GameObject Prefab => prefab;
     public CombatStats Combat => new CombatStats(attackDamage, attackSpeed, attackRange);
     public WeaponHitEffectKind HitEffect => hitEffect;

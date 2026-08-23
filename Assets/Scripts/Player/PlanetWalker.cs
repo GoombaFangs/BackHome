@@ -53,6 +53,7 @@ public class PlanetWalker : MonoBehaviour
     int _animIDMotionSpeed;
 
     public bool IsWalkingOnPlanet => _ownsControl && _planet != null;
+    public float WalkSpeed => walkSpeed;
 
     /// <summary>Intended tangent velocity (units/sec). Drives motion-aware camera framing.</summary>
     public Vector3 PlanarVelocity { get; private set; }

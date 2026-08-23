@@ -45,6 +45,8 @@ public class TouchController : MonoBehaviour
     Vector3 _clickTarget;
     bool _hasClickTarget;
 
+    public float WalkSpeed => walkSpeed;
+
     int _animIDSpeed;
     int _animIDGrounded;
     int _animIDJump;
