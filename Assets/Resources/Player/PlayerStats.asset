@@ -17,6 +17,6 @@ MonoBehaviour:
   attackSpeed: 3
   attackRange: 2.7
   weapons:
-  - {fileID: 11400000, guid: f55f6fe0c557be24881116fa6d6bab6b, type: 2}
+  - {fileID: 11400000, guid: 730ad14fac185dd4580c60932d14fd20, type: 2}
   maxHealth: 800
   oxygenTank: 90

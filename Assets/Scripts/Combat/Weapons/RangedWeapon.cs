@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.Serialization;
 
@@ -30,12 +31,99 @@ public class RangedWeapon : EquippedWeapon
     [SerializeField, Min(0.1f)] float bulletLifetime = 1.5f;
     [SerializeField] Vector3 bulletEuler = Vector3.zero;
 
+    [Header("Sky Strike (optional)")]
+    [Tooltip("When enabled, the bullet drops from high above the target instead of leaving this weapon's muzzle — like a bolt of lightning striking from the sky.")]
+    [SerializeField] bool bulletFromSky = false;
+    [Tooltip("Meters above the target the bullet starts falling from.")]
+    [SerializeField, Min(0.5f)] float skyDropHeight = 15f;
+
+    [Header("Charge (optional - mortar/turret style weapons)")]
+    [Tooltip("Seconds this weapon must charge up before the shot actually fires. 0 fires immediately (default).")]
+    [SerializeField, Min(0f)] float chargeTime = 0f;
+    [Tooltip("Seconds after firing before this weapon is willing to start charging its next shot.")]
+    [SerializeField, Min(0f)] float recoverTime = 0f;
+    [Tooltip("Optional VFX played at the muzzle for the whole charge, then removed the instant the shot fires.")]
+    [SerializeField] GameObject chargeVFX;
+
+    bool _busy;
+
+    public override bool IsReady => !_busy;
+
+    void OnDisable()
+    {
+        _busy = false;
+    }
+
     public override void Fire(Creature target, float damage, Vector3 muzzle, Transform muzzleParent, Vector3 knockFrom)
+    {
+        if (target == null || !target.IsAlive || damage <= 0f)
+            return;
+        if (_busy)
+            return;
+
+        if (chargeTime <= 0f && recoverTime <= 0f)
+        {
+            FireNow(target, damage, muzzle, muzzleParent, knockFrom);
+            return;
+        }
+
+        _busy = true;
+        StartCoroutine(ChargeThenFire(target, damage, muzzle, muzzleParent, knockFrom));
+    }
+
+    IEnumerator ChargeThenFire(Creature target, float damage, Vector3 muzzle, Transform muzzleParent, Vector3 knockFrom)
+    {
+        GameObject chargeFx = null;
+        if (chargeVFX != null)
+        {
+            chargeFx = Instantiate(chargeVFX, muzzle, Quaternion.identity, muzzleParent);
+            chargeFx.name = chargeVFX.name;
+        }
+
+        float charge = chargeTime;
+        while (charge > 0f)
+        {
+            charge -= Time.deltaTime;
+            yield return null;
+        }
+
+        if (chargeFx != null)
+            Destroy(chargeFx);
+
+        if (target != null && target.IsAlive)
+            FireNow(target, damage, ResolveMuzzle(muzzle), muzzleParent, knockFrom);
+
+        float recover = recoverTime;
+        while (recover > 0f)
+        {
+            recover -= Time.deltaTime;
+            yield return null;
+        }
+
+        _busy = false;
+    }
+
+    Vector3 ResolveMuzzle(Vector3 fallback)
+    {
+        return MuzzleAnchor != null ? MuzzleAnchor.position : fallback;
+    }
+
+    void FireNow(Creature target, float damage, Vector3 muzzle, Transform muzzleParent, Vector3 knockFrom)
     {
         if (target == null || !target.IsAlive || damage <= 0f)
             return;
 
         Vector3 hit = AimPoint(target);
+
+        if (bullets != null && bulletFromSky)
+        {
+            Vector3 skyOrigin = SkyPoint(target.transform.position);
+            Vector3 skyDelta = hit - skyOrigin;
+            Vector3 skyDir = skyDelta.sqrMagnitude > 0.0001f ? skyDelta.normalized : -PlanetUp(target.transform.position);
+            SpawnBullet(target, damage, skyOrigin, skyDir, knockFrom);
+            return;
+        }
+
         Vector3 delta = hit - muzzle;
         float distance = delta.magnitude;
         Vector3 dir = distance > 0.0001f ? delta / distance : transform.forward;
@@ -50,6 +138,18 @@ public class RangedWeapon : EquippedWeapon
         PlayMuzzle(muzzle, muzzleParent, dir, distance);
         PlayHit(target, hit, dir);
         DealHit(target, damage, knockFrom);
+    }
+
+    static Vector3 PlanetUp(Vector3 position)
+    {
+        return SphericalPlanet.Instance != null
+            ? SphericalPlanet.Instance.GetUpAt(position)
+            : Vector3.up;
+    }
+
+    Vector3 SkyPoint(Vector3 groundPosition)
+    {
+        return groundPosition + PlanetUp(groundPosition) * skyDropHeight;
     }
 
     internal Vector3 GetBulletAim(Creature creature)

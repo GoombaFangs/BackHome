@@ -94,6 +94,9 @@ public class PlayerRangeCombat : MonoBehaviour
             if (_tickCooldown[i] > 0f)
                 continue;
 
+            if (_weapon != null && !_weapon.IsSlotReady(i))
+                continue;
+
             _tickCooldown[i] = 1f / combat.AttackSpeed;
             Strike(i, _aimTarget[i], combat.AttackDamage, range);
         }

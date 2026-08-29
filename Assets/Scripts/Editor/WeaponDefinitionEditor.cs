@@ -21,6 +21,15 @@ public class WeaponDefinitionEditor : Editor
         "chainDamageMultiplier",
         "chainVFX"
     };
+    static readonly string[] AreaBlastFields =
+    {
+        "areaBlastRadius",
+        "areaBlastDamageMultiplier",
+        "areaBlastVFX",
+        "areaBlastVfxLifetime",
+        "areaBlastVfxRadius",
+        "areaBlastDamageDelay"
+    };
 
     public override void OnInspectorGUI()
     {
@@ -31,12 +40,16 @@ public class WeaponDefinitionEditor : Editor
             && hitEffect.enumValueIndex == (int)WeaponHitEffectKind.RepeatedHitDoT;
         bool showChain = hitEffect != null
             && hitEffect.enumValueIndex == (int)WeaponHitEffectKind.ChainJump;
+        bool showAreaBlast = hitEffect != null
+            && hitEffect.enumValueIndex == (int)WeaponHitEffectKind.AreaBlast;
 
         List<string> hidden = new List<string> { "m_Script" };
         if (!showDot)
             hidden.AddRange(DotFields);
         if (!showChain)
             hidden.AddRange(ChainFields);
+        if (!showAreaBlast)
+            hidden.AddRange(AreaBlastFields);
 
         DrawPropertiesExcluding(serializedObject, hidden.ToArray());
         serializedObject.ApplyModifiedProperties();

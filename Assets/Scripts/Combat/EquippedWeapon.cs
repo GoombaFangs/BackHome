@@ -28,6 +28,9 @@ public abstract class EquippedWeapon : MonoBehaviour
     public Transform MuzzleAnchor => muzzleAnchor;
     public WeaponDefinition Definition { get; private set; }
 
+    /// <summary>False while this weapon is mid-shot (for example charging up) and cannot start another one yet.</summary>
+    public virtual bool IsReady => true;
+
     public void Bind(WeaponDefinition definition)
     {
         Definition = definition;
@@ -39,6 +42,13 @@ public abstract class EquippedWeapon : MonoBehaviour
     {
         if (target == null || !target.IsAlive || damage <= 0f)
             return;
+
+        // Area blasts telegraph with a VFX before anyone actually takes damage — see AreaBlastEffect.
+        if (Definition != null && Definition.HitEffect == WeaponHitEffectKind.AreaBlast)
+        {
+            AreaBlastEffect.Trigger(this, target, Definition, damage, knockFrom);
+            return;
+        }
 
         target.TakeDamage(damage, knockFrom);
         if (target.IsAlive)

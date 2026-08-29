@@ -115,6 +115,16 @@ public class FloatingWeapon : MonoBehaviour
         return true;
     }
 
+    /// <summary>False while the weapon in this slot is mid-shot (for example charging up) and shouldn't be told to fire or advance its target queue yet.</summary>
+    public bool IsSlotReady(int slot)
+    {
+        if (slot < 0 || slot >= _slots.Count)
+            return true;
+
+        EquippedWeapon attack = _slots[slot].Attack;
+        return attack == null || attack.IsReady;
+    }
+
     public void SetVisible(bool visible)
     {
         _visible = visible;

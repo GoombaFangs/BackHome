@@ -15,10 +15,10 @@ MonoBehaviour:
   displayName: Stinger
   icon: {fileID: 21300000, guid: 9253f2f689be14f49aa82284799a6196, type: 3}
   prefab: {fileID: 540212191312792610, guid: fa3056935ba76dd4f820202c099579a3, type: 3}
-  attackDamage: 8
-  attackSpeed: 2
-  attackRange: 6
-  hitEffect: 0
+  attackDamage: 40
+  attackSpeed: 0.25
+  attackRange: 8
+  hitEffect: 3
   hitsToApplyDot: 3
   hitWindow: 2
   dotDuration: 2
@@ -26,3 +26,13 @@ MonoBehaviour:
   dotTickInterval: 0.5
   debuffVFX: {fileID: 0}
   debuffEuler: {x: 90, y: 0, z: 0}
+  chainJumps: 4
+  chainRadius: 5
+  chainDamageMultiplier: 1
+  chainVFX: {fileID: 0}
+  areaBlastRadius: 5
+  areaBlastDamageMultiplier: 2
+  areaBlastVFX: {fileID: 1703217192903793943, guid: b5cce2b1b398f2f46aa66bd49325ca53, type: 3}
+  areaBlastVfxLifetime: 2
+  areaBlastVfxRadius: 5
+  areaBlastDamageDelay: 0.8
