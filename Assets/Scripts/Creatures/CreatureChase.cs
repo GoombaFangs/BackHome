@@ -55,12 +55,16 @@ public class CreatureChase : MonoBehaviour
     Vector3 _knockDir;
     Vector3 _knockFaceTarget;
     float _nextKnockbackTime;
+    Vector3 _velocity;
 
     /// <summary>True while actively chasing / fighting the player.</summary>
     public bool IsAggroed => _state == State.Aggroed;
 
     /// <summary>True during the short hit-shove after taking damage.</summary>
     public bool IsKnockedBack => _knockActive;
+
+    /// <summary>Current surface movement (direction * speed), zero while stopped/attacking/knocked back — used to lead moving targets for slow or telegraphed attacks.</summary>
+    public Vector3 Velocity => _velocity;
 
     void Awake()
     {
@@ -82,12 +86,14 @@ public class CreatureChase : MonoBehaviour
     {
         if (_creature == null)
         {
+            _velocity = Vector3.zero;
             _anim?.ResetToIdle();
             return;
         }
 
         if (!_creature.IsAlive)
         {
+            _velocity = Vector3.zero;
             _anim?.ResetToIdle();
             return;
         }
@@ -97,15 +103,20 @@ public class CreatureChase : MonoBehaviour
 
         if (!TryResolvePlanet())
         {
+            _velocity = Vector3.zero;
             _anim?.SetMoving(false);
             return;
         }
 
         if (_knockActive)
         {
+            _velocity = Vector3.zero;
             _anim?.SetMoving(false);
             return;
         }
+
+        // Default to stationary; MoveToward() re-sets this below on the frames it actually runs.
+        _velocity = Vector3.zero;
 
         switch (_state)
         {
@@ -346,6 +357,7 @@ public class CreatureChase : MonoBehaviour
             return;
 
         Vector3 moveDir = toTarget.normalized;
+        _velocity = moveDir * moveSpeed;
         StepOnSurface(moveDir, moveSpeed * Time.deltaTime, out Vector3 next, out up);
 
         Vector3 faceDir = Vector3.ProjectOnPlane(moveDir, up);

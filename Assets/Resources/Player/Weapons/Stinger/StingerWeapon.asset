@@ -31,7 +31,7 @@ MonoBehaviour:
   chainDamageMultiplier: 1
   chainVFX: {fileID: 0}
   areaBlastRadius: 5
-  areaBlastDamageMultiplier: 2
+  areaBlastDamageMultiplier: 2.5
   areaBlastVFX: {fileID: 1703217192903793943, guid: b5cce2b1b398f2f46aa66bd49325ca53, type: 3}
   areaBlastVfxLifetime: 2
   areaBlastVfxRadius: 5

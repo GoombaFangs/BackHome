@@ -30,6 +30,9 @@ public class Creature : MonoBehaviour, IVitalsReadable
     public bool IsAlive => _currentHealth > 0f && !_dying;
     public bool HasStats => stats != null;
 
+    /// <summary>Current surface movement (direction * speed), zero while stationary — lets telegraphed attacks lead a moving target.</summary>
+    public Vector3 Velocity => _chase != null ? _chase.Velocity : Vector3.zero;
+
     public event Action VitalsChanged;
     public event Action<float> Damaged;
     public event Action<Creature> Died;

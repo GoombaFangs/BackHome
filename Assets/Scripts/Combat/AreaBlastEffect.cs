@@ -6,7 +6,9 @@ using UnityEngine;
 /// Replaces a weapon's normal instant damage with a telegraphed area blast: the VFX plays
 /// first, and everyone caught in the radius (the original target included) only actually
 /// loses health once the VFX's impact moment hits — see <see cref="WeaponDefinition.AreaBlastDamageDelay"/>
-/// and <see cref="WeaponDefinition.AreaBlastRadius"/>.
+/// and <see cref="WeaponDefinition.AreaBlastRadius"/>. The VFX itself spawns slightly ahead of the
+/// primary target, along its current movement, so it lands where the target will actually be
+/// once that delay elapses instead of where it stood when the shot fired.
 /// </summary>
 public static class AreaBlastEffect
 {
@@ -27,6 +29,11 @@ public static class AreaBlastEffect
 
         float blastDamage = hitDamage * weapon.AreaBlastDamageMultiplier;
         Vector3 impactPoint = sourceWeapon != null ? sourceWeapon.GetAimPoint(primaryTarget) : primaryTarget.transform.position;
+
+        // The target keeps moving during the delay between the VFX spawning and damage actually
+        // landing — lead the blast toward where it's heading so the impact lines up with the target
+        // instead of the empty ground it already walked past.
+        impactPoint += primaryTarget.Velocity * weapon.AreaBlastDamageDelay;
 
         GameObject vfx = SpawnBlastVfx(weapon, impactPoint, weapon.AreaBlastRadius);
         float delay = vfx != null ? weapon.AreaBlastDamageDelay : 0f;
