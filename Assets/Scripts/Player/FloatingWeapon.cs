@@ -315,6 +315,13 @@ public class FloatingWeapon : MonoBehaviour
             forward = bodyForward;
         forward.Normalize();
 
+        Transform anchor = held.Attack != null ? held.Attack.MuzzleAnchor : null;
+        if (anchor != null)
+        {
+            position = anchor.position;
+            return true;
+        }
+
         float muzzleOffset = held.Attack != null ? held.Attack.MuzzleOffset : 0f;
         position = held.Hover.position + forward * muzzleOffset;
         return true;

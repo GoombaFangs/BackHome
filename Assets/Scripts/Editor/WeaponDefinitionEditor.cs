@@ -1,12 +1,11 @@
+using System.Collections.Generic;
 using UnityEditor;
 
 [CustomEditor(typeof(WeaponDefinition))]
 public class WeaponDefinitionEditor : Editor
 {
-    static readonly string[] AlwaysHidden = { "m_Script" };
-    static readonly string[] HiddenWithoutDot =
+    static readonly string[] DotFields =
     {
-        "m_Script",
         "hitsToApplyDot",
         "hitWindow",
         "dotDuration",
@@ -14,6 +13,13 @@ public class WeaponDefinitionEditor : Editor
         "dotTickInterval",
         "debuffVFX",
         "debuffEuler"
+    };
+    static readonly string[] ChainFields =
+    {
+        "chainJumps",
+        "chainRadius",
+        "chainDamageMultiplier",
+        "chainVFX"
     };
 
     public override void OnInspectorGUI()
@@ -23,8 +29,16 @@ public class WeaponDefinitionEditor : Editor
         SerializedProperty hitEffect = serializedObject.FindProperty("hitEffect");
         bool showDot = hitEffect != null
             && hitEffect.enumValueIndex == (int)WeaponHitEffectKind.RepeatedHitDoT;
+        bool showChain = hitEffect != null
+            && hitEffect.enumValueIndex == (int)WeaponHitEffectKind.ChainJump;
 
-        DrawPropertiesExcluding(serializedObject, showDot ? AlwaysHidden : HiddenWithoutDot);
+        List<string> hidden = new List<string> { "m_Script" };
+        if (!showDot)
+            hidden.AddRange(DotFields);
+        if (!showChain)
+            hidden.AddRange(ChainFields);
+
+        DrawPropertiesExcluding(serializedObject, hidden.ToArray());
         serializedObject.ApplyModifiedProperties();
     }
 }

@@ -3,7 +3,8 @@ using UnityEngine;
 public enum WeaponHitEffectKind
 {
     None,
-    RepeatedHitDoT
+    RepeatedHitDoT,
+    ChainJump
 }
 
 /// <summary>
@@ -38,6 +39,15 @@ public class WeaponDefinition : ScriptableObject
     [SerializeField] GameObject debuffVFX;
     [SerializeField] Vector3 debuffEuler = new Vector3(90f, 0f, 0f);
 
+    [Tooltip("How many times the hit jumps to the nearest creature before stopping.")]
+    [SerializeField, Min(0)] int chainJumps = 4;
+    [Tooltip("Meters a jump can travel to reach the next creature. If none is in range, the chain stops.")]
+    [SerializeField, Min(0f)] float chainRadius = 5f;
+    [Tooltip("Damage dealt on each chain jump, as a multiplier of the original hit damage.")]
+    [SerializeField, Min(0f)] float chainDamageMultiplier = 1f;
+    [Tooltip("Optional beam effect (for example a LaserBeamVfx prefab) drawn between the two creatures on every chain jump.")]
+    [SerializeField] GameObject chainVFX;
+
     public string DisplayName => string.IsNullOrWhiteSpace(displayName) ? name : displayName;
     public Sprite Icon => icon;
     public GameObject Prefab => prefab;
@@ -48,14 +58,20 @@ public class WeaponDefinition : ScriptableObject
     public float DotDuration => dotDuration;
     public float DotDamagePerSecond => dotDamagePerSecond;
     public float DotTickInterval => dotTickInterval;
+    public int ChainJumps => chainJumps;
+    public float ChainRadius => chainRadius;
+    public float ChainDamageMultiplier => chainDamageMultiplier;
+    public GameObject ChainVFX => chainVFX;
 
-    public void ApplyHitEffect(Creature target, float hitDamage)
+    public void ApplyHitEffect(EquippedWeapon sourceWeapon, Creature target, float hitDamage)
     {
         if (target == null || !target.IsAlive || hitEffect == WeaponHitEffectKind.None)
             return;
 
         if (hitEffect == WeaponHitEffectKind.RepeatedHitDoT)
             CreatureAilments.RegisterRepeatedHit(target, this, hitDamage, debuffVFX, debuffEuler);
+        else if (hitEffect == WeaponHitEffectKind.ChainJump)
+            ChainHitEffect.Trigger(sourceWeapon, target, this, hitDamage);
     }
 
     void OnValidate()
@@ -68,5 +84,8 @@ public class WeaponDefinition : ScriptableObject
         dotDuration = Mathf.Max(0.05f, dotDuration);
         dotDamagePerSecond = Mathf.Max(0f, dotDamagePerSecond);
         dotTickInterval = Mathf.Max(0.05f, dotTickInterval);
+        chainJumps = Mathf.Max(0, chainJumps);
+        chainRadius = Mathf.Max(0f, chainRadius);
+        chainDamageMultiplier = Mathf.Max(0f, chainDamageMultiplier);
     }
 }

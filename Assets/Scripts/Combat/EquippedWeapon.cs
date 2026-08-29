@@ -12,8 +12,12 @@ public abstract class EquippedWeapon : MonoBehaviour
     [SerializeField] Vector3 visualEuler = Vector3.zero;
     [Tooltip("Longest world-axis size of the floating weapon.")]
     [SerializeField, Min(0.1f)] float targetSize = 1.05f;
-    [Tooltip("How far past the weapon center a shot starts, along the aim direction.")]
+    [Tooltip("How far past the weapon center a shot starts, along the aim direction. Ignored when Muzzle Anchor is set.")]
     [SerializeField, Min(0f)] float muzzleOffset = 0.9f;
+    [Tooltip("Exact muzzle point on the weapon model (for example the wand tip). Drag a child transform " +
+             "from the weapon's visual here and position it on the model in the Scene view; when set, this " +
+             "is used instead of the aim-direction offset above, so it tracks the model exactly at any angle.")]
+    [SerializeField] Transform muzzleAnchor;
     [Tooltip("Height above the creature pivot to aim at.")]
     [SerializeField] float aimHeight = 0.7f;
 
@@ -21,6 +25,7 @@ public abstract class EquippedWeapon : MonoBehaviour
     public Vector3 VisualEuler => visualEuler;
     public float TargetSize => targetSize;
     public float MuzzleOffset => muzzleOffset;
+    public Transform MuzzleAnchor => muzzleAnchor;
     public WeaponDefinition Definition { get; private set; }
 
     public void Bind(WeaponDefinition definition)
@@ -37,8 +42,27 @@ public abstract class EquippedWeapon : MonoBehaviour
 
         target.TakeDamage(damage, knockFrom);
         if (target.IsAlive)
-            Definition?.ApplyHitEffect(target, damage);
+            Definition?.ApplyHitEffect(this, target, damage);
     }
+
+    /// <summary>
+    /// Plays this weapon's hit VFX on <paramref name="target"/>. Used for the initial shot and
+    /// for follow-up on-hit effects (for example chain jumps) that strike additional creatures.
+    /// </summary>
+    public void PlayHitEffectVfx(Creature target, Vector3 dir)
+    {
+        if (target == null)
+            return;
+
+        PlayHitVfxCore(target, AimPoint(target), dir);
+    }
+
+    protected virtual void PlayHitVfxCore(Creature target, Vector3 position, Vector3 dir)
+    {
+    }
+
+    /// <summary>Public entry point for on-hit effects (outside this class hierarchy) that need the same aim height as normal shots.</summary>
+    public Vector3 GetAimPoint(Creature creature) => AimPoint(creature);
 
     protected Vector3 AimPoint(Creature creature)
     {
@@ -61,4 +85,37 @@ public abstract class EquippedWeapon : MonoBehaviour
             alt = Vector3.Cross(dir, Vector3.forward);
         return alt.normalized;
     }
+
+#if UNITY_EDITOR
+    /// <summary>
+    /// Editor-only helper: snaps the assigned Muzzle Anchor to the exact geometric center of this
+    /// weapon's visible model (the combined bounds of every renderer under it). Right-click this
+    /// component's header (or the gear icon) in the Inspector and pick this from the menu — no need
+    /// to eyeball local-space math by hand, especially on tilted/curled models.
+    /// </summary>
+    [ContextMenu("Center Muzzle Anchor On Model")]
+    void CenterMuzzleAnchorOnModel()
+    {
+        if (muzzleAnchor == null)
+        {
+            Debug.LogWarning($"{name}: assign a Muzzle Anchor transform before centering it.", this);
+            return;
+        }
+
+        Renderer[] renderers = GetComponentsInChildren<Renderer>();
+        if (renderers.Length == 0)
+        {
+            Debug.LogWarning($"{name}: no renderers found under this weapon to compute a center from.", this);
+            return;
+        }
+
+        Bounds bounds = renderers[0].bounds;
+        for (int i = 1; i < renderers.Length; i++)
+            bounds.Encapsulate(renderers[i].bounds);
+
+        muzzleAnchor.position = bounds.center;
+        UnityEditor.EditorUtility.SetDirty(muzzleAnchor);
+        Debug.Log($"{name}: centered Muzzle Anchor on model bounds at {bounds.center}.", this);
+    }
+#endif
 }

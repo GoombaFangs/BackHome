@@ -125,6 +125,11 @@ public class RangedWeapon : EquippedWeapon
         Destroy(fx, hitLifetime);
     }
 
+    protected override void PlayHitVfxCore(Creature target, Vector3 position, Vector3 dir)
+    {
+        PlayHit(target, position, dir);
+    }
+
     static void StripFlightPhysics(GameObject root)
     {
         Collider[] colliders = root.GetComponentsInChildren<Collider>(true);

@@ -1,5 +1,36 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2222222222222222221
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2222222222222222222}
+  m_Layer: 0
+  m_Name: MuzzlePoint
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2222222222222222222
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2222222222222222221}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.859, y: 0.544, z: 0.429}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1871415560454873581}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &9005750326231209856
 GameObject:
   m_ObjectHideFlags: 0
@@ -31,6 +62,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 3855195977548030007}
+  - {fileID: 2222222222222222222}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &5847392018473920184
@@ -49,13 +81,14 @@ MonoBehaviour:
   visualEuler: {x: 0, y: -90, z: 0}
   targetSize: 2
   muzzleOffset: 0.9
+  muzzleAnchor: {fileID: 2222222222222222222}
   aimHeight: 0.7
-  muzzleVFX: {fileID: 0}
+  muzzleVFX: {fileID: 2382011560598603708, guid: 06bdc2374a48ad24784e420e5438309c, type: 3}
   muzzleScale: 0.3
   muzzleLifetime: 0.45
   muzzleEuler: {x: 90, y: 0, z: 0}
-  hitVFX: {fileID: 0}
-  hitLifetime: 0.6
+  hitVFX: {fileID: 3998388474204853953, guid: 1fef3df478ebac445989c635443c9989, type: 3}
+  hitLifetime: 0.5
   bullets: {fileID: 0}
   bulletSpeed: 22
   bulletHitRadius: 0.5

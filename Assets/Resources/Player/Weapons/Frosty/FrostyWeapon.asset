@@ -15,10 +15,10 @@ MonoBehaviour:
   displayName: Frosty
   icon: {fileID: 21300000, guid: cb02cc3becb6a9d4cbbbff5536b877f4, type: 3}
   prefab: {fileID: 9005750326231209856, guid: e9ed112abe3166f41b4bed21919adee4, type: 3}
-  attackDamage: 5
-  attackSpeed: 4
-  attackRange: 8
-  hitEffect: 0
+  attackDamage: 0
+  attackSpeed: 0
+  attackRange: 3
+  hitEffect: 2
   hitsToApplyDot: 1
   hitWindow: 2
   dotDuration: 5
@@ -26,3 +26,7 @@ MonoBehaviour:
   dotTickInterval: 0.5
   debuffVFX: {fileID: 0}
   debuffEuler: {x: 90, y: 0, z: 0}
+  chainJumps: 4
+  chainRadius: 5
+  chainDamageMultiplier: 1
+  chainVFX: {fileID: 5551000000000001, guid: a4c7d1e9f2b6483d8a5c0e7b9f1d2a44, type: 3}
