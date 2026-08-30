@@ -1,18 +1,28 @@
+using System.Collections;
+using StarterAssets;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
-/// Placeholder death screen. Listens for <see cref="PlayerVitals.Died"/>,
-/// shows the DeathPanel prefab + Continue, then reloads the spaceship scene (full vitals).
+/// Death screen. Listens for <see cref="PlayerVitals.Died"/> and, the instant it fires:
+/// shows the DeathPanel, hard-stops player locomotion so nothing can be moved, and hands the
+/// camera to <see cref="PlayerDeathCameraLock"/> for a small scripted settle instead of letting
+/// the normal follow camera keep reacting to the death (which reads as it "going crazy").
+/// After a short beat time freezes and the camera fully locks with a dazed overlay - this is
+/// the single timer for that final step, so the freeze and the camera lock can never drift
+/// apart.
 /// </summary>
 public class PlayerDeathUI : MonoBehaviour
 {
     [SerializeField] string shipSceneName = "SpaceShip";
+    [Tooltip("Seconds after death before the camera fully locks, time freezes and stays frozen.")]
+    [SerializeField, Min(0f)] float freezeDelay = 2f;
     [Tooltip("DeathPanel prefab (You are dead + Continue). Instantiated under the UI canvas.")]
     [SerializeField] GameObject deathPanelPrefab;
 
     PlayerVitals _vitals;
+    PlayerDeathCameraLock _cameraLock;
     GameObject _deathPanelInstance;
     bool _shown;
     bool _loading;
@@ -73,7 +83,63 @@ public class PlayerDeathUI : MonoBehaviour
             return;
 
         _shown = true;
+
+        // Instant: panel + locomotion lock. Nothing here waits on the timer below.
         EnsurePanelInstance(active: true);
+        StopPlayerLocomotion();
+
+        if (_cameraLock == null)
+            _cameraLock = GetComponent<PlayerDeathCameraLock>();
+        if (_cameraLock != null)
+            _cameraLock.BeginDeathFall();
+
+        StartCoroutine(FreezeAfterDelay());
+    }
+
+    void StopPlayerLocomotion()
+    {
+        if (_vitals == null)
+            return;
+
+        Transform player = _vitals.transform;
+
+        StarterAssetsInputs input = player.GetComponent<StarterAssetsInputs>();
+        if (input != null)
+            input.move = Vector2.zero;
+
+        PlanetWalker walker = player.GetComponent<PlanetWalker>();
+        if (walker != null)
+            walker.enabled = false;
+
+        // PlanetWalker.OnDisable re-enables TouchController - turn it back off after that.
+        TouchController motor = player.GetComponent<TouchController>();
+        if (motor != null)
+            motor.enabled = false;
+
+        CharacterController controller = player.GetComponent<CharacterController>();
+        if (controller != null)
+        {
+            controller.Move(Vector3.zero);
+            controller.enabled = false;
+        }
+
+        Rigidbody body = player.GetComponent<Rigidbody>();
+        if (body != null)
+        {
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+            body.isKinematic = true;
+        }
+    }
+
+    IEnumerator FreezeAfterDelay()
+    {
+        if (freezeDelay > 0f)
+            yield return new WaitForSecondsRealtime(freezeDelay);
+
+        if (_cameraLock != null)
+            _cameraLock.Lock();
+
         Time.timeScale = 0f;
     }
 

@@ -49,12 +49,13 @@ MonoBehaviour:
   visualEuler: {x: 0, y: -90, z: 0}
   targetSize: 2
   muzzleOffset: 0.9
+  muzzleAnchor: {fileID: 0}
   aimHeight: 0.7
   muzzleVFX: {fileID: 6818450731999971250, guid: f627b9c8c33d91c408c8f1f53322e76e, type: 3}
   muzzleScale: 0.3
   muzzleLifetime: 0.45
   muzzleEuler: {x: 90, y: 0, z: 0}
-  hitVFX: {fileID: 4163985246729562549, guid: bbbe3e889f9c3244aa3e36ea4b5eb48b, type: 3}
+  hitVFX: {fileID: 7066404275642441887, guid: bbbe3e889f9c3244aa3e36ea4b5eb48b, type: 3}
   hitLifetime: 0.6
   delivery: 1
   projectile:

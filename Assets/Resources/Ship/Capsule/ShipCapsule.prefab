@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 729854375699818609}
   - component: {fileID: 21037242651716272}
   - component: {fileID: 3663641598283903252}
+  - component: {fileID: 5644116026302633902}
   m_Layer: 6
   m_Name: ShipCapsule
   m_TagString: Untagged
@@ -137,3 +138,15 @@ MonoBehaviour:
   cameraDollyFovDelta: -3.5
   cameraLiftDuration: 1
   cameraLiftDistance: 90
+--- !u!114 &5644116026302633902
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2522200988388235318}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6de96af5234641948a9a554f5db419ad, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ShipCapsuleBeacon

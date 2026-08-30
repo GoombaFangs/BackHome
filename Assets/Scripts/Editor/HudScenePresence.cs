@@ -128,6 +128,8 @@ public static class HudScenePresence
                 changed = true;
             if (EnsureDamageOverlayOnHud(root))
                 changed = true;
+            if (EnsureDeathCameraLockOnHud(root))
+                changed = true;
             if (RestyleJoystick(canvasTransform))
                 changed = true;
 
@@ -242,39 +244,54 @@ public static class HudScenePresence
         if (labelTransform != null)
             label = labelTransform.GetComponent<Text>();
 
-        if (panel.transform.Find("Frame") == null)
+        Image frame = null;
+        Transform frameTransform = panel.transform.Find("Frame");
+        if (frameTransform != null)
+            frame = frameTransform.GetComponent<Image>();
+
+        if (frame == null)
         {
-            Sprite frameSprite = CasualHudKit.ActionFrameBlue();
-            if (frameSprite != null)
-            {
-                var frameGo = new GameObject("Frame", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-                frameGo.transform.SetParent(panel.transform, false);
-                frameGo.transform.SetSiblingIndex(labelTransform != null ? labelTransform.GetSiblingIndex() : 1);
-                var frameRt = frameGo.GetComponent<RectTransform>();
-                frameRt.anchorMin = new Vector2(0.5f, 0.5f);
-                frameRt.anchorMax = new Vector2(0.5f, 0.5f);
-                frameRt.pivot = new Vector2(0.5f, 0.5f);
-                frameRt.anchoredPosition = Vector2.zero;
-                frameRt.sizeDelta = new Vector2(920f, 180f);
-                CasualHudKit.Apply(frameGo.GetComponent<Image>(), frameSprite, Color.white, false);
-                changed = true;
-            }
+            var frameGo = new GameObject("Frame", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            frameGo.transform.SetParent(panel.transform, false);
+            frameGo.transform.SetSiblingIndex(labelTransform != null ? labelTransform.GetSiblingIndex() : 1);
+            var frameRt = frameGo.GetComponent<RectTransform>();
+            frameRt.anchorMin = new Vector2(0.5f, 0.5f);
+            frameRt.anchorMax = new Vector2(0.5f, 0.5f);
+            frameRt.pivot = new Vector2(0.5f, 0.5f);
+            frameRt.anchoredPosition = Vector2.zero;
+            frameRt.sizeDelta = new Vector2(860f, 108f);
+            frame = frameGo.GetComponent<Image>();
+            changed = true;
         }
 
-        Image white = null;
-        Transform whiteTransform = panel.transform.Find("WhiteScreen");
-        if (whiteTransform != null)
-            white = whiteTransform.GetComponent<Image>();
-
-        if (white == null)
+        Sprite frameSprite = PlayerLowOxygenWarning.EnsureFrameSprite();
+        if (frameSprite != null && frame.sprite != frameSprite)
         {
-            var whiteGo = new GameObject("WhiteScreen", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            whiteGo.transform.SetParent(panel.transform, false);
-            whiteGo.transform.SetAsFirstSibling();
-            StretchFull(whiteGo.GetComponent<RectTransform>());
-            white = whiteGo.GetComponent<Image>();
-            white.color = new Color(1f, 1f, 1f, 0.05f);
-            white.raycastTarget = false;
+            CasualHudKit.Apply(frame, frameSprite, Color.white, false);
+            changed = true;
+        }
+
+        Image overlay = null;
+        Transform overlayTransform = panel.transform.Find("FrostOverlay");
+        if (overlayTransform != null)
+            overlay = overlayTransform.GetComponent<Image>();
+
+        if (overlay == null)
+        {
+            var overlayGo = new GameObject("FrostOverlay", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            overlayGo.transform.SetParent(panel.transform, false);
+            overlayGo.transform.SetAsFirstSibling();
+            StretchFull(overlayGo.GetComponent<RectTransform>());
+            overlay = overlayGo.GetComponent<Image>();
+            overlay.color = Color.white;
+            overlay.raycastTarget = false;
+            changed = true;
+        }
+
+        Material overlayMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Resources/HUD/LowOxygenOverlay.mat");
+        if (overlayMat != null && overlay.material != overlayMat)
+        {
+            overlay.material = overlayMat;
             changed = true;
         }
 
@@ -285,7 +302,9 @@ public static class HudScenePresence
         changed |= AssignIfDifferent(so, "panel", panel);
         changed |= AssignIfDifferent(so, "label", label);
         changed |= AssignIfDifferent(so, "canvasGroup", group);
-        changed |= AssignIfDifferent(so, "whiteScreen", white);
+        changed |= AssignIfDifferent(so, "overlayMaterial", overlayMat);
+        changed |= AssignIfDifferent(so, "overlay", overlay);
+        changed |= AssignIfDifferent(so, "frame", frame);
         if (changed)
             so.ApplyModifiedPropertiesWithoutUndo();
 
@@ -303,7 +322,7 @@ public static class HudScenePresence
         group.interactable = false;
         group.alpha = 1f;
 
-        Sprite frameSprite = CasualHudKit.ActionFrameBlue();
+        Sprite frameSprite = PlayerLowOxygenWarning.EnsureFrameSprite();
         if (frameSprite != null)
         {
             var frameGo = new GameObject("Frame", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
@@ -313,7 +332,7 @@ public static class HudScenePresence
             frameRt.anchorMax = new Vector2(0.5f, 0.5f);
             frameRt.pivot = new Vector2(0.5f, 0.5f);
             frameRt.anchoredPosition = Vector2.zero;
-            frameRt.sizeDelta = new Vector2(920f, 180f);
+            frameRt.sizeDelta = new Vector2(860f, 108f);
             CasualHudKit.Apply(frameGo.GetComponent<Image>(), frameSprite, Color.white, false);
         }
 
@@ -321,22 +340,23 @@ public static class HudScenePresence
         textGo.transform.SetParent(panel.transform, false);
 
         var text = textGo.GetComponent<Text>();
-        text.text = "LOW OXYGEN WARNING";
         text.alignment = TextAnchor.MiddleCenter;
-        text.fontSize = 44;
+        text.fontSize = 36;
         text.fontStyle = FontStyle.Bold;
-        text.color = new Color(0.28f, 0.72f, 1f, 1f);
+        text.color = new Color(0.92f, 0.95f, 1f, 1f);
         text.raycastTarget = false;
+        text.supportRichText = true;
         text.horizontalOverflow = HorizontalWrapMode.Overflow;
         text.verticalOverflow = VerticalWrapMode.Overflow;
         text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.text = PlayerLowOxygenWarning.BuildSmallCapsRichText("WARNING - OXYGEN LEVEL CRITICAL", text.fontSize);
 
         var textRect = text.rectTransform;
         textRect.anchorMin = new Vector2(0f, 0.5f);
         textRect.anchorMax = new Vector2(1f, 0.5f);
         textRect.pivot = new Vector2(0.5f, 0.5f);
         textRect.anchoredPosition = Vector2.zero;
-        textRect.sizeDelta = new Vector2(0f, 120f);
+        textRect.sizeDelta = new Vector2(0f, 90f);
 
         var outline = textGo.AddComponent<Outline>();
         outline.effectColor = new Color(0.02f, 0.08f, 0.16f, 0.92f);
@@ -359,6 +379,25 @@ public static class HudScenePresence
 
         root.AddComponent<PlayerDamageOverlay>();
         return true;
+    }
+
+    static bool EnsureDeathCameraLockOnHud(GameObject root)
+    {
+        bool changed = false;
+        var cameraLock = root.GetComponent<PlayerDeathCameraLock>();
+        if (cameraLock == null)
+        {
+            cameraLock = root.AddComponent<PlayerDeathCameraLock>();
+            changed = true;
+        }
+
+        Material overlayMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Resources/Player/Shaders/DeathDazedOverlay.mat");
+        var so = new SerializedObject(cameraLock);
+        changed |= AssignIfDifferent(so, "overlayMaterial", overlayMat);
+        if (so.hasModifiedProperties)
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+        return changed;
     }
 
     static bool AssignIfDifferent(SerializedObject so, string propertyName, Object value)

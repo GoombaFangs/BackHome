@@ -7,10 +7,13 @@ Shader "BackHome/Hud/VitalsBarUnlit"
 
     SubShader
     {
+        // Rendered after the default Transparent queue so full-screen effects (low-HP red
+        // vignette, low-oxygen frost/vignette, damage flash) never wash out these readable
+        // player/creature stat bars - they should always stay crisp on top.
         Tags
         {
             "RenderType" = "Transparent"
-            "Queue" = "Transparent"
+            "Queue" = "Overlay+100"
             "RenderPipeline" = "UniversalPipeline"
             "IgnoreProjector" = "True"
         }
