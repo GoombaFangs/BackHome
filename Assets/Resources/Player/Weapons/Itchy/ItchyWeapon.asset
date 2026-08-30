@@ -25,7 +25,7 @@ MonoBehaviour:
     duration: 5
     damagePerSecond: 1
     tickInterval: 0.5
-    debuffVFX: {fileID: 6692867938163089439, guid: 23e6f02f2e0cc59468dd81c7118c75ef, type: 3}
+    debuffVFX: {fileID: 6928450691667753579, guid: 23e6f02f2e0cc59468dd81c7118c75ef, type: 3}
     debuffEuler: {x: 90, y: 0, z: 0}
   chainSettings:
     maxJumps: 4

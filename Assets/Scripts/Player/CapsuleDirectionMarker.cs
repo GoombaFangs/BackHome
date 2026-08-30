@@ -1,57 +1,64 @@
 using UnityEngine;
 
 /// <summary>
-/// Ground arrow marker, physically in the world — not UI. Lies flat on the planet surface near
-/// the player's feet and continuously yaws to point toward the ship capsule. Same ground-alignment
-/// approach as the old attack-range ring (a Plane mesh aligned to the planet's up vector), except
-/// this one also yaws to face a direction instead of just sitting flat.
-/// Hidden outside the planet scene, or once the player is already close to the capsule.
+/// Two floating billboard icons near the player that point toward the ship capsule — a "home"
+/// badge close to the player and an arrow further out along the same direction, both always
+/// facing the camera (the arrow also rolls in-plane to point at the capsule).
+/// Physically in the world, not UI. Hidden outside the planet scene, or once the player is
+/// already close to the capsule.
 /// </summary>
-[DisallowMultipleComponent]
-[RequireComponent(typeof(MeshRenderer))]
 public class CapsuleDirectionMarker : MonoBehaviour
 {
-    // Unity default Plane is 10x10 centered, lying flat with normal +Y and V (texture-up) along +Z —
-    // exactly the axis LookRotation's "forward" maps to, so forward = ground heading, up = surface normal.
-    const float PlaneFullExtent = 10f;
+    [Header("Icons")]
+    [SerializeField] SpriteRenderer homeIcon;
+    [SerializeField] SpriteRenderer arrowIcon;
 
-    static readonly int ColorId = Shader.PropertyToID("_BaseColor");
-
-    [Header("Look")]
-    [SerializeField, Min(0.1f)] float worldSize = 1.6f;
-    [SerializeField] float groundOffset = 0.04f;
-    [SerializeField] Color color = new Color(1f, 1f, 1f, 0.92f);
+    [Header("Placement")]
+    [Tooltip("How far from the player (toward the capsule) the home badge floats.")]
+    [SerializeField, Min(0f)] float homeOffset = 4.5f;
+    [Tooltip("How far from the player (toward the capsule, beyond the home badge) the arrow floats.")]
+    [SerializeField, Min(0f)] float arrowOffset = 5.3f;
+    [SerializeField] float floatHeight = 1.5f;
+    [SerializeField, Min(0.05f)] float homeWorldSize = 0.5f;
+    [SerializeField, Min(0.05f)] float arrowWorldSize = 0.4f;
     [SerializeField] float fadeSpeed = 6f;
+    [Range(0f, 1f)] [SerializeField] float maxAlpha = 0.5f;
 
     [Header("Hide")]
     [Tooltip("Hide once the player is within this world distance of the capsule.")]
-    [SerializeField, Min(0.1f)] float hideRadius = 6f;
+    [SerializeField, Min(0.1f)] float hideRadius = 8f;
 
-    MeshRenderer _renderer;
-    MaterialPropertyBlock _block;
     Transform _owner;
     Transform _capsule;
+    Camera _camera;
     float _alpha;
 
     void OnEnable()
     {
-        _renderer = GetComponent<MeshRenderer>();
-        _block = new MaterialPropertyBlock();
         _owner = transform.parent != null ? transform.parent : transform;
         _alpha = 0f;
-        ApplyMaterial();
+        FitToSize(homeIcon, homeWorldSize);
+        FitToSize(arrowIcon, arrowWorldSize);
+        ApplyAlpha();
     }
 
     void LateUpdate()
     {
+        if (_camera == null)
+            _camera = Camera.main;
+
         float targetAlpha = 0f;
-        if (SceneRoles.IsPlanetScene() && TryResolveCapsule() && TryOrient())
-            targetAlpha = 1f;
+        if (_camera != null && SceneRoles.IsPlanetScene() && TryResolveCapsule() && TryPlace())
+            targetAlpha = maxAlpha;
 
         _alpha = Mathf.MoveTowards(_alpha, targetAlpha, fadeSpeed * Time.deltaTime);
-        ApplyMaterial();
-        if (_renderer != null)
-            _renderer.enabled = _alpha > 0.01f;
+        ApplyAlpha();
+
+        bool visible = _alpha > 0.01f;
+        if (homeIcon != null)
+            homeIcon.enabled = visible;
+        if (arrowIcon != null)
+            arrowIcon.enabled = visible;
     }
 
     bool TryResolveCapsule()
@@ -61,7 +68,7 @@ public class CapsuleDirectionMarker : MonoBehaviour
         return _owner != null && _capsule != null;
     }
 
-    bool TryOrient()
+    bool TryPlace()
     {
         Vector3 ownerPos = _owner.position;
         Vector3 up = SphericalPlanet.Instance != null
@@ -73,27 +80,63 @@ public class CapsuleDirectionMarker : MonoBehaviour
             return false;
 
         Vector3 dir = toCapsule.normalized;
-        transform.position = ownerPos + up * groundOffset;
-        transform.rotation = Quaternion.LookRotation(dir, up);
+        Vector3 basePos = ownerPos + up * floatHeight;
 
-        float worldScale = worldSize / PlaneFullExtent;
-        Vector3 parentLossy = _owner.lossyScale;
-        float sx = Mathf.Max(0.0001f, Mathf.Abs(parentLossy.x));
-        float sy = Mathf.Max(0.0001f, Mathf.Abs(parentLossy.y));
-        float sz = Mathf.Max(0.0001f, Mathf.Abs(parentLossy.z));
-        transform.localScale = new Vector3(worldScale / sx, worldScale / sy, worldScale / sz);
+        if (homeIcon != null)
+            PlaceBillboard(homeIcon.transform, basePos + dir * homeOffset, dir, roll: false);
+        if (arrowIcon != null)
+            PlaceBillboard(arrowIcon.transform, basePos + dir * arrowOffset, dir, roll: true);
+
         return true;
     }
 
-    void ApplyMaterial()
+    void PlaceBillboard(Transform t, Vector3 worldPos, Vector3 dir, bool roll)
     {
-        if (_renderer == null || _block == null)
+        t.position = worldPos;
+
+        Vector3 fwd = worldPos - _camera.transform.position;
+        if (fwd.sqrMagnitude < 0.0001f)
+            fwd = _camera.transform.forward;
+        Quaternion billboard = Quaternion.LookRotation(fwd.normalized, _camera.transform.up);
+
+        if (!roll)
+        {
+            t.rotation = billboard;
+            return;
+        }
+
+        // Roll around the camera-facing axis so the arrow (which points along local -X by
+        // default) points toward the capsule as projected onto the screen plane.
+        float screenX = Vector3.Dot(dir, _camera.transform.right);
+        float screenY = Vector3.Dot(dir, _camera.transform.up);
+        float angle = Mathf.Atan2(screenY, screenX) * Mathf.Rad2Deg + 180f;
+        t.rotation = billboard * Quaternion.Euler(0f, 0f, angle);
+    }
+
+    void ApplyAlpha()
+    {
+        SetAlpha(homeIcon, _alpha);
+        SetAlpha(arrowIcon, _alpha);
+    }
+
+    static void SetAlpha(SpriteRenderer renderer, float alpha)
+    {
+        if (renderer == null)
             return;
 
-        _renderer.GetPropertyBlock(_block);
-        Color c = color;
-        c.a *= _alpha;
-        _block.SetColor(ColorId, c);
-        _renderer.SetPropertyBlock(_block);
+        Color c = renderer.color;
+        c.a = alpha;
+        renderer.color = c;
+    }
+
+    static void FitToSize(SpriteRenderer renderer, float worldSize)
+    {
+        if (renderer == null || renderer.sprite == null)
+            return;
+
+        Vector2 boundsSize = renderer.sprite.bounds.size;
+        float largest = Mathf.Max(boundsSize.x, boundsSize.y, 0.0001f);
+        float scale = worldSize / largest;
+        renderer.transform.localScale = new Vector3(scale, scale, scale);
     }
 }
