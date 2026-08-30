@@ -31,12 +31,11 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
+    - _BlurRadius: 0.019
     - _ColorMask: 15
     - _FrostAmount: 0
-    - _FrostScale: 3.2
-    - _FrostSoftness: 0.42
+    - _FrostTintStrength: 0.22
     - _Pulse: 0
-    - _ScrollSpeed: 0.045
     - _Stencil: 0
     - _StencilComp: 8
     - _StencilOp: 0
@@ -47,7 +46,7 @@ Material:
     - _VignetteSoftness: 0.6
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
-    - _FrostColor: {r: 0.78, g: 0.92, b: 1, a: 1}
+    - _FrostColor: {r: 0.85, g: 0.93, b: 1, a: 1}
     - _VignetteColor: {r: 0, g: 0, b: 0, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

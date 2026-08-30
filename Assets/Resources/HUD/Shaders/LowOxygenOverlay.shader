@@ -5,11 +5,10 @@ Shader "BackHome/Hud/LowOxygenOverlay"
         [PerRendererData] _MainTex("Texture", 2D) = "white" {}
         _Color("Tint", Color) = (1, 1, 1, 1)
 
-        _FrostColor("Frost Color", Color) = (0.78, 0.92, 1, 1)
-        _FrostAmount("Frost Amount", Range(0, 1)) = 0
-        _FrostScale("Frost Scale", Float) = 3.2
-        _FrostSoftness("Frost Softness", Range(0.05, 1)) = 0.42
-        _ScrollSpeed("Scroll Speed", Float) = 0.045
+        _FrostColor("Frost Tint", Color) = (0.85, 0.93, 1, 1)
+        _FrostAmount("Frost / Blur Amount", Range(0, 1)) = 0
+        _FrostTintStrength("Frost Tint Strength", Range(0, 1)) = 0.22
+        _BlurRadius("Blur Radius (screen-UV)", Range(0, 0.05)) = 0.019
         _Pulse("Pulse", Range(0, 1)) = 0
 
         _VignetteColor("Vignette Color", Color) = (0, 0, 0, 1)
@@ -70,11 +69,15 @@ Shader "BackHome/Hud/LowOxygenOverlay"
             fixed4 _Color;
             float4 _ClipRect;
 
+            // Populated by URP each frame (requires "Opaque Texture" enabled on the URP asset,
+            // which this project already has); lets us blur the real frame behind the HUD
+            // instead of faking it with a tinted noise pattern.
+            sampler2D _CameraOpaqueTexture;
+
             fixed4 _FrostColor;
             half _FrostAmount;
-            half _FrostScale;
-            half _FrostSoftness;
-            half _ScrollSpeed;
+            half _FrostTintStrength;
+            half _BlurRadius;
             half _Pulse;
 
             fixed4 _VignetteColor;
@@ -98,25 +101,6 @@ Shader "BackHome/Hud/LowOxygenOverlay"
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
-            float Hash21(float2 p)
-            {
-                float3 p3 = frac(float3(p.xyx) * 0.1031);
-                p3 += dot(p3, p3.yzx + 33.33);
-                return frac((p3.x + p3.y) * p3.z);
-            }
-
-            float ValueNoise(float2 p)
-            {
-                float2 i = floor(p);
-                float2 f = frac(p);
-                f = f * f * (3.0 - 2.0 * f);
-                float a = Hash21(i);
-                float b = Hash21(i + float2(1, 0));
-                float c = Hash21(i + float2(0, 1));
-                float d = Hash21(i + float2(1, 1));
-                return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
-            }
-
             Varyings Vert(Attributes input)
             {
                 Varyings output;
@@ -129,28 +113,44 @@ Shader "BackHome/Hud/LowOxygenOverlay"
                 return output;
             }
 
+            // Cheap two-ring disc blur of the real frame behind the HUD - a genuine
+            // "camera out of focus" softening rather than a flat tinted haze.
+            half3 SampleBlurredScene(float2 uv, float radius, float aspect)
+            {
+                half3 sum = tex2D(_CameraOpaqueTexture, uv).rgb;
+                half total = 1.0;
+
+                const int taps = 8;
+                UNITY_UNROLL
+                for (int i = 0; i < taps; i++)
+                {
+                    float angle = (i / (float)taps) * 6.2831853 + 0.3927; // 22.5 degree offset between rings
+                    float2 dir = float2(cos(angle), sin(angle));
+                    float2 aspectDir = float2(dir.x / max(aspect, 0.0001), dir.y);
+
+                    sum += tex2D(_CameraOpaqueTexture, uv + aspectDir * radius).rgb;
+                    total += 1.0;
+
+                    sum += tex2D(_CameraOpaqueTexture, uv + aspectDir * radius * 0.5).rgb;
+                    total += 1.0;
+                }
+
+                return sum / total;
+            }
+
             fixed4 Frag(Varyings input) : SV_Target
             {
                 float2 uv = input.texcoord;
-                float t = _Time.y;
-
                 float coverage = tex2D(_MainTex, uv).a;
+                float aspect = _ScreenParams.x / max(_ScreenParams.y, 1.0);
 
-                // Frost: soft drifting cloud patches (breath fogging the glass), not a flat tint.
-                float2 scroll = float2(t * _ScrollSpeed, t * _ScrollSpeed * -0.6);
-                float2 nUv = uv * max(_FrostScale, 0.5);
-                float n1 = ValueNoise(nUv + scroll);
-                float n2 = ValueNoise(nUv * 2.3 + scroll * 1.7 + 11.0);
-                float n3 = ValueNoise(nUv * 0.55 - scroll * 0.6 + 33.0);
-                float clouds = saturate(n1 * 0.5 + n2 * 0.32 + n3 * 0.18);
-                // _FrostSoftness is a contrast control here: low = even haze, high = clumpy patches.
-                float sharpness = lerp(0.15, 3.0, saturate((float)_FrostSoftness));
-                float shaped = saturate((clouds - 0.5) * sharpness + 0.5);
-                float frostAlpha = saturate(shaped * _FrostAmount * (0.85 + _Pulse * 0.15));
+                float breath = 1.0 + _Pulse * 0.12;
+                half3 blurred = SampleBlurredScene(uv, _BlurRadius * _FrostAmount * breath, aspect);
+                half3 frostColor = lerp(blurred, blurred * _FrostColor.rgb + _FrostColor.rgb * 0.08, _FrostTintStrength);
+                float frostAlpha = saturate(_FrostAmount * (0.92 + _Pulse * 0.08));
 
                 // Vignette: darkens toward the edges, tightening as danger grows.
                 float2 centered = uv * 2.0 - 1.0;
-                float aspect = _ScreenParams.x / max(_ScreenParams.y, 1.0);
                 centered.x *= aspect;
                 float dist = length(centered);
                 float outer = lerp(1.75, 0.55, (float)_VignetteAmount);
@@ -159,7 +159,7 @@ Shader "BackHome/Hud/LowOxygenOverlay"
 
                 // Composite frost over vignette (standard alpha-over), then un-premultiply for UI blending.
                 float outAlpha = saturate(frostAlpha + vignetteMask * (1.0 - frostAlpha));
-                half3 outColor = _FrostColor.rgb * frostAlpha + _VignetteColor.rgb * vignetteMask * (1.0 - frostAlpha);
+                half3 outColor = frostColor * frostAlpha + _VignetteColor.rgb * vignetteMask * (1.0 - frostAlpha);
                 outColor /= max(outAlpha, 0.0001);
 
                 half alpha = outAlpha * coverage * input.color.a;

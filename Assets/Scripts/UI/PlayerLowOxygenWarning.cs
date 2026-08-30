@@ -51,19 +51,19 @@ public class PlayerLowOxygenWarning : MonoBehaviour
     [SerializeField, Range(0f, 1f)] float coolTint = 0.32f;
 
     [Header("Frost Overlay")]
-    [Tooltip("Screen-space frost that fogs up like breath on cold glass, instead of a flat white flash.")]
+    [Tooltip("Blurs the real screen behind the HUD (camera going out of focus), instead of a flat white flash or a fake fog texture.")]
     [SerializeField, Range(0f, 1f)] float frostAmountMin = 0.28f;
-    [SerializeField, Range(0f, 1f)] float frostAmountMax = 0.85f;
+    [SerializeField, Range(0f, 1f)] float frostAmountMax = 0.95f;
     [SerializeField, Min(0.05f)] float overlayFadeSpeed = 1.1f;
     [Tooltip("Overlay image alpha at zero danger (warning just started).")]
     [SerializeField, Range(0f, 1f)] float overlayColorAlphaMin = 0f;
     [Tooltip("Overlay image alpha at max danger (no oxygen left).")]
-    [SerializeField, Range(0f, 1f)] float overlayColorAlphaMax = 0.25f;
+    [SerializeField, Range(0f, 1f)] float overlayColorAlphaMax = 0.32f;
 
     [Header("Vignette")]
     [Tooltip("Dark edge falloff that tightens as oxygen drops, for a tunnel-vision suffocation feel.")]
     [SerializeField, Range(0f, 1f)] float vignetteAmountMin = 0.22f;
-    [SerializeField, Range(0f, 1f)] float vignetteAmountMax = 0.85f;
+    [SerializeField, Range(0f, 1f)] float vignetteAmountMax = 0.92f;
 
     [Header("HUD")]
     [SerializeField] Material textMaterial;

@@ -384,12 +384,12 @@ MonoBehaviour:
   lightDim: 0.28
   coolTint: 0.32
   frostAmountMin: 0.28
-  frostAmountMax: 0.85
+  frostAmountMax: 0.95
   overlayFadeSpeed: 1.1
   overlayColorAlphaMin: 0
-  overlayColorAlphaMax: 0.25
+  overlayColorAlphaMax: 0.32
   vignetteAmountMin: 0.22
-  vignetteAmountMax: 0.85
+  vignetteAmountMax: 0.92
   textMaterial: {fileID: 2100000, guid: f8b2d5c03e7e4f29b4d6e9f1c2a35847, type: 2}
   panel: {fileID: 5977301898467866376}
   label: {fileID: 0}
