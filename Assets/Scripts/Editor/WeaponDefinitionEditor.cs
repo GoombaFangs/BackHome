@@ -1,55 +1,27 @@
 using System.Collections.Generic;
 using UnityEditor;
 
+/// <summary>
+/// Shows only the on-hit-effect settings block that matches the selected <see cref="WeaponHitEffectKind"/>,
+/// instead of every effect's fields at once.
+/// </summary>
 [CustomEditor(typeof(WeaponDefinition))]
 public class WeaponDefinitionEditor : Editor
 {
-    static readonly string[] DotFields =
-    {
-        "hitsToApplyDot",
-        "hitWindow",
-        "dotDuration",
-        "dotDamagePerSecond",
-        "dotTickInterval",
-        "debuffVFX",
-        "debuffEuler"
-    };
-    static readonly string[] ChainFields =
-    {
-        "chainJumps",
-        "chainRadius",
-        "chainDamageMultiplier",
-        "chainVFX"
-    };
-    static readonly string[] AreaBlastFields =
-    {
-        "areaBlastRadius",
-        "areaBlastDamageMultiplier",
-        "areaBlastVFX",
-        "areaBlastVfxLifetime",
-        "areaBlastVfxRadius",
-        "areaBlastDamageDelay"
-    };
-
     public override void OnInspectorGUI()
     {
         serializedObject.UpdateIfRequiredOrScript();
 
         SerializedProperty hitEffect = serializedObject.FindProperty("hitEffect");
-        bool showDot = hitEffect != null
-            && hitEffect.enumValueIndex == (int)WeaponHitEffectKind.RepeatedHitDoT;
-        bool showChain = hitEffect != null
-            && hitEffect.enumValueIndex == (int)WeaponHitEffectKind.ChainJump;
-        bool showAreaBlast = hitEffect != null
-            && hitEffect.enumValueIndex == (int)WeaponHitEffectKind.AreaBlast;
+        var kind = hitEffect != null ? (WeaponHitEffectKind)hitEffect.enumValueIndex : WeaponHitEffectKind.None;
 
         List<string> hidden = new List<string> { "m_Script" };
-        if (!showDot)
-            hidden.AddRange(DotFields);
-        if (!showChain)
-            hidden.AddRange(ChainFields);
-        if (!showAreaBlast)
-            hidden.AddRange(AreaBlastFields);
+        if (kind != WeaponHitEffectKind.Dot)
+            hidden.Add("dotSettings");
+        if (kind != WeaponHitEffectKind.ChainJump)
+            hidden.Add("chainSettings");
+        if (kind != WeaponHitEffectKind.AreaBlast)
+            hidden.Add("areaBlastSettings");
 
         DrawPropertiesExcluding(serializedObject, hidden.ToArray());
         serializedObject.ApplyModifiedProperties();

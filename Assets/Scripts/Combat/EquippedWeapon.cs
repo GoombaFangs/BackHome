@@ -46,7 +46,7 @@ public abstract class EquippedWeapon : MonoBehaviour
         // Area blasts telegraph with a VFX before anyone actually takes damage — see AreaBlastEffect.
         if (Definition != null && Definition.HitEffect == WeaponHitEffectKind.AreaBlast)
         {
-            AreaBlastEffect.Trigger(this, target, Definition, damage, knockFrom);
+            AreaBlastEffect.Trigger(this, target, Definition.AreaBlastSettings, damage, knockFrom);
             return;
         }
 

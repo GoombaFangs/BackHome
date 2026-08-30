@@ -57,16 +57,19 @@ MonoBehaviour:
   muzzleEuler: {x: 90, y: 0, z: 0}
   hitVFX: {fileID: 0}
   hitLifetime: 0.6
-  bullets: {fileID: 0}
-  bulletSpeed: 7
-  bulletHitRadius: 0.6
-  bulletLifetime: 4
-  bulletEuler: {x: 0, y: 0, z: 0}
-  bulletFromSky: 0
-  skyDropHeight: 15
-  chargeTime: 1
-  recoverTime: 1
-  chargeVFX: {fileID: 5812184850976753062, guid: ebd5dd9ce5a321b4fb2b1505e42d0dea, type: 3}
+  delivery: 0
+  projectile:
+    bulletPrefab: {fileID: 0}
+    bulletSpeed: 22
+    bulletHitRadius: 0.5
+    bulletLifetime: 1.5
+    bulletEuler: {x: 0, y: 0, z: 0}
+    fireFromSky: 0
+    skyDropHeight: 15
+  charge:
+    chargeTime: 1
+    recoverTime: 1
+    chargeVFX: {fileID: 5812184850976753062, guid: ebd5dd9ce5a321b4fb2b1505e42d0dea, type: 3}
 --- !u!1001 &8217618432356761658
 PrefabInstance:
   m_ObjectHideFlags: 0

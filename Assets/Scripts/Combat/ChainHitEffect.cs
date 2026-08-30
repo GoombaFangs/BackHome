@@ -3,29 +3,29 @@ using UnityEngine;
 
 /// <summary>
 /// On-hit proc that bounces a hit from the struck creature to the nearest other creature,
-/// repeating for a fixed number of jumps (see <see cref="WeaponDefinition.ChainJumps"/>).
-/// Before every jump the nearest not-yet-hit creature within <see cref="WeaponDefinition.ChainRadius"/>
+/// repeating for a fixed number of jumps (see <see cref="WeaponChainSettings.MaxJumps"/>).
+/// Before every jump the nearest not-yet-hit creature within <see cref="WeaponChainSettings.JumpRadius"/>
 /// of the current one is looked up; if none exists the chain stops immediately.
 /// </summary>
 public static class ChainHitEffect
 {
-    public static void Trigger(EquippedWeapon sourceWeapon, Creature initialTarget, WeaponDefinition weapon, float hitDamage)
+    public static void Trigger(EquippedWeapon sourceWeapon, Creature initialTarget, WeaponChainSettings settings, float hitDamage)
     {
-        if (initialTarget == null || weapon == null)
+        if (initialTarget == null || settings == null)
             return;
-        if (weapon.ChainJumps <= 0 || weapon.ChainRadius <= 0f)
+        if (settings.MaxJumps <= 0 || settings.JumpRadius <= 0f)
             return;
 
-        float jumpDamage = hitDamage * weapon.ChainDamageMultiplier;
+        float jumpDamage = hitDamage * settings.JumpDamageMultiplier;
         if (jumpDamage <= 0f)
             return;
 
         HashSet<Creature> visited = new HashSet<Creature> { initialTarget };
         Creature current = initialTarget;
 
-        for (int i = 0; i < weapon.ChainJumps; i++)
+        for (int i = 0; i < settings.MaxJumps; i++)
         {
-            Creature next = FindNearestCreature(current.transform.position, weapon.ChainRadius, visited);
+            Creature next = FindNearestCreature(current.transform.position, settings.JumpRadius, visited);
             if (next == null)
                 break;
 
@@ -34,7 +34,7 @@ public static class ChainHitEffect
             Vector3 delta = next.transform.position - sourcePosition;
             Vector3 dir = delta.sqrMagnitude > 0.0001f ? delta.normalized : Vector3.forward;
 
-            SpawnBeam(sourceWeapon, weapon.ChainVFX, current, next);
+            SpawnBeam(sourceWeapon, settings.BeamVFX, current, next);
             sourceWeapon?.PlayHitEffectVfx(next, dir);
             next.TakeDamage(jumpDamage, sourcePosition);
 

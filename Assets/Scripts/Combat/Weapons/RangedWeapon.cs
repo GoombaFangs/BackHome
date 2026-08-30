@@ -1,49 +1,32 @@
 using System.Collections;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 /// <summary>
-/// Shared ranged attack: muzzle flash, flying bullet, and hit VFX.
-/// Put this on every ranged weapon prefab. Optional on-hit procs live on <see cref="WeaponDefinition"/>.
+/// Shared ranged attack: muzzle flash, hit VFX, and a pluggable <see cref="WeaponDeliveryKind"/>
+/// (instant hitscan or a travelling bullet). Put this on every ranged weapon prefab. Optional
+/// on-hit procs live on <see cref="WeaponDefinition"/>.
 /// </summary>
 public class RangedWeapon : EquippedWeapon
 {
     const float MuzzleFlashLength = 0.45f;
 
     [Header("Muzzle")]
-    [FormerlySerializedAs("shotPrefab")]
     [SerializeField] GameObject muzzleVFX;
-    [FormerlySerializedAs("shotScale")]
     [SerializeField, Min(0.05f)] float muzzleScale = 0.3f;
-    [FormerlySerializedAs("lifetime")]
     [SerializeField, Min(0.05f)] float muzzleLifetime = 0.45f;
-    [FormerlySerializedAs("emitEuler")]
     [SerializeField] Vector3 muzzleEuler = new Vector3(90f, 0f, 0f);
 
     [Header("Hit")]
     [SerializeField] GameObject hitVFX;
     [SerializeField, Min(0.05f)] float hitLifetime = 0.6f;
 
-    [Header("Bullets")]
-    [SerializeField] GameObject bullets;
-    [SerializeField, Min(1f)] float bulletSpeed = 22f;
-    [SerializeField, Min(0.05f)] float bulletHitRadius = 0.5f;
-    [SerializeField, Min(0.1f)] float bulletLifetime = 1.5f;
-    [SerializeField] Vector3 bulletEuler = Vector3.zero;
-
-    [Header("Sky Strike (optional)")]
-    [Tooltip("When enabled, the bullet drops from high above the target instead of leaving this weapon's muzzle — like a bolt of lightning striking from the sky.")]
-    [SerializeField] bool bulletFromSky = false;
-    [Tooltip("Meters above the target the bullet starts falling from.")]
-    [SerializeField, Min(0.5f)] float skyDropHeight = 15f;
+    [Header("Delivery")]
+    [Tooltip("Hitscan = instant beam straight to the target. Projectile = a physical bullet travels there (see below).")]
+    [SerializeField] WeaponDeliveryKind delivery = WeaponDeliveryKind.Hitscan;
+    [SerializeField] WeaponProjectileSettings projectile = new();
 
     [Header("Charge (optional - mortar/turret style weapons)")]
-    [Tooltip("Seconds this weapon must charge up before the shot actually fires. 0 fires immediately (default).")]
-    [SerializeField, Min(0f)] float chargeTime = 0f;
-    [Tooltip("Seconds after firing before this weapon is willing to start charging its next shot.")]
-    [SerializeField, Min(0f)] float recoverTime = 0f;
-    [Tooltip("Optional VFX played at the muzzle for the whole charge, then removed the instant the shot fires.")]
-    [SerializeField] GameObject chargeVFX;
+    [SerializeField] WeaponChargeSettings charge = new();
 
     bool _busy;
 
@@ -54,6 +37,12 @@ public class RangedWeapon : EquippedWeapon
         _busy = false;
     }
 
+    void OnValidate()
+    {
+        projectile?.OnValidate();
+        charge?.OnValidate();
+    }
+
     public override void Fire(Creature target, float damage, Vector3 muzzle, Transform muzzleParent, Vector3 knockFrom)
     {
         if (target == null || !target.IsAlive || damage <= 0f)
@@ -61,7 +50,7 @@ public class RangedWeapon : EquippedWeapon
         if (_busy)
             return;
 
-        if (chargeTime <= 0f && recoverTime <= 0f)
+        if (!charge.IsActive)
         {
             FireNow(target, damage, muzzle, muzzleParent, knockFrom);
             return;
@@ -74,16 +63,16 @@ public class RangedWeapon : EquippedWeapon
     IEnumerator ChargeThenFire(Creature target, float damage, Vector3 muzzle, Transform muzzleParent, Vector3 knockFrom)
     {
         GameObject chargeFx = null;
-        if (chargeVFX != null)
+        if (charge.ChargeVFX != null)
         {
-            chargeFx = Instantiate(chargeVFX, muzzle, Quaternion.identity, muzzleParent);
-            chargeFx.name = chargeVFX.name;
+            chargeFx = Instantiate(charge.ChargeVFX, muzzle, Quaternion.identity, muzzleParent);
+            chargeFx.name = charge.ChargeVFX.name;
         }
 
-        float charge = chargeTime;
-        while (charge > 0f)
+        float remainingCharge = charge.ChargeTime;
+        while (remainingCharge > 0f)
         {
-            charge -= Time.deltaTime;
+            remainingCharge -= Time.deltaTime;
             yield return null;
         }
 
@@ -93,10 +82,10 @@ public class RangedWeapon : EquippedWeapon
         if (target != null && target.IsAlive)
             FireNow(target, damage, ResolveMuzzle(muzzle), muzzleParent, knockFrom);
 
-        float recover = recoverTime;
-        while (recover > 0f)
+        float remainingRecovery = charge.RecoverTime;
+        while (remainingRecovery > 0f)
         {
-            recover -= Time.deltaTime;
+            remainingRecovery -= Time.deltaTime;
             yield return null;
         }
 
@@ -113,9 +102,10 @@ public class RangedWeapon : EquippedWeapon
         if (target == null || !target.IsAlive || damage <= 0f)
             return;
 
+        bool isProjectile = delivery == WeaponDeliveryKind.Projectile && projectile.BulletPrefab != null;
         Vector3 hit = AimPoint(target);
 
-        if (bullets != null && bulletFromSky)
+        if (isProjectile && projectile.FireFromSky)
         {
             Vector3 skyOrigin = SkyPoint(target.transform.position);
             Vector3 skyDelta = hit - skyOrigin;
@@ -128,7 +118,7 @@ public class RangedWeapon : EquippedWeapon
         float distance = delta.magnitude;
         Vector3 dir = distance > 0.0001f ? delta / distance : transform.forward;
 
-        if (bullets != null)
+        if (isProjectile)
         {
             PlayMuzzle(muzzle, muzzleParent, dir, Mathf.Min(MuzzleFlashLength, distance));
             SpawnBullet(target, damage, muzzle, dir, knockFrom);
@@ -149,7 +139,7 @@ public class RangedWeapon : EquippedWeapon
 
     Vector3 SkyPoint(Vector3 groundPosition)
     {
-        return groundPosition + PlanetUp(groundPosition) * skyDropHeight;
+        return groundPosition + PlanetUp(groundPosition) * projectile.SkyDropHeight;
     }
 
     internal Vector3 GetBulletAim(Creature creature)
@@ -173,20 +163,24 @@ public class RangedWeapon : EquippedWeapon
 
     void SpawnBullet(Creature target, float damage, Vector3 origin, Vector3 dir, Vector3 knockFrom)
     {
+        GameObject bulletPrefab = projectile.BulletPrefab;
+        if (bulletPrefab == null)
+            return;
+
         Vector3 up = ResolveUp(origin, dir);
         GameObject instance = Instantiate(
-            bullets,
+            bulletPrefab,
             origin,
-            Quaternion.LookRotation(dir, up) * Quaternion.Euler(bulletEuler));
-        instance.name = bullets.name;
+            Quaternion.LookRotation(dir, up) * Quaternion.Euler(projectile.BulletEuler));
+        instance.name = bulletPrefab.name;
         StripFlightPhysics(instance);
         PlayBurst(instance);
 
-        RangedBullet projectile = instance.GetComponent<RangedBullet>();
-        if (projectile == null)
-            projectile = instance.AddComponent<RangedBullet>();
+        RangedBullet bullet = instance.GetComponent<RangedBullet>();
+        if (bullet == null)
+            bullet = instance.AddComponent<RangedBullet>();
 
-        projectile.Launch(this, target, damage, knockFrom, bulletSpeed, bulletHitRadius, bulletLifetime, bulletEuler);
+        bullet.Launch(this, target, damage, knockFrom, projectile.BulletSpeed, projectile.BulletHitRadius, projectile.BulletLifetime, projectile.BulletEuler);
     }
 
     void PlayMuzzle(Vector3 origin, Transform parent, Vector3 dir, float distance)

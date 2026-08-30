@@ -19,10 +19,23 @@ MonoBehaviour:
   attackSpeed: 6
   attackRange: 5
   hitEffect: 1
-  hitsToApplyDot: 1
-  hitWindow: 2
-  dotDuration: 5
-  dotDamagePerSecond: 1
-  dotTickInterval: 0.5
-  debuffVFX: {fileID: 6692867938163089439, guid: 23e6f02f2e0cc59468dd81c7118c75ef, type: 3}
-  debuffEuler: {x: 90, y: 0, z: 0}
+  dotSettings:
+    hitsToApply: 1
+    hitWindow: 2
+    duration: 5
+    damagePerSecond: 1
+    tickInterval: 0.5
+    debuffVFX: {fileID: 6692867938163089439, guid: 23e6f02f2e0cc59468dd81c7118c75ef, type: 3}
+    debuffEuler: {x: 90, y: 0, z: 0}
+  chainSettings:
+    maxJumps: 4
+    jumpRadius: 5
+    jumpDamageMultiplier: 1
+    beamVFX: {fileID: 0}
+  areaBlastSettings:
+    radius: 4
+    damageMultiplier: 1
+    blastVFX: {fileID: 0}
+    vfxLifetime: 2
+    vfxRadius: 4
+    damageDelay: 0.8

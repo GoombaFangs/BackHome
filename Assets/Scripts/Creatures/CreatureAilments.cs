@@ -11,14 +11,14 @@ public class CreatureAilments : MonoBehaviour
 
     sealed class HitBuildup
     {
-        public WeaponDefinition Weapon;
+        public WeaponDotSettings Settings;
         public int Hits;
         public float LastHitAt;
     }
 
     sealed class ActiveDot
     {
-        public WeaponDefinition Weapon;
+        public WeaponDotSettings Settings;
         public float DamagePerSecond;
         public float TickInterval;
         public float TickTimer;
@@ -30,17 +30,17 @@ public class CreatureAilments : MonoBehaviour
     readonly List<ActiveDot> _dots = new();
     Creature _creature;
 
-    public static void RegisterRepeatedHit(Creature creature, WeaponDefinition weapon, float hitDamage, GameObject debuffVfx, Vector3 debuffEuler)
+    public static void RegisterRepeatedHit(Creature creature, WeaponDotSettings settings, float hitDamage)
     {
-        if (creature == null || weapon == null || !creature.IsAlive)
+        if (creature == null || settings == null || !creature.IsAlive)
             return;
-        if (weapon.DotDamagePerSecond <= 0f && hitDamage <= 0f)
+        if (settings.DamagePerSecond <= 0f && hitDamage <= 0f)
             return;
 
         CreatureAilments host = creature.GetComponent<CreatureAilments>();
         if (host == null)
             host = creature.gameObject.AddComponent<CreatureAilments>();
-        host.OnRepeatedHit(weapon, hitDamage, debuffVfx, debuffEuler);
+        host.OnRepeatedHit(settings, hitDamage);
     }
 
     void Awake()
@@ -92,62 +92,62 @@ public class CreatureAilments : MonoBehaviour
         }
     }
 
-    void OnRepeatedHit(WeaponDefinition weapon, float hitDamage, GameObject debuffVfx, Vector3 debuffEuler)
+    void OnRepeatedHit(WeaponDotSettings settings, float hitDamage)
     {
-        HitBuildup buildup = FindBuildup(weapon);
+        HitBuildup buildup = FindBuildup(settings);
         if (buildup == null)
         {
-            buildup = new HitBuildup { Weapon = weapon };
+            buildup = new HitBuildup { Settings = settings };
             _hits.Add(buildup);
         }
 
-        if (Time.time - buildup.LastHitAt > weapon.HitWindow)
+        if (Time.time - buildup.LastHitAt > settings.HitWindow)
             buildup.Hits = 0;
 
         buildup.Hits++;
         buildup.LastHitAt = Time.time;
 
-        if (buildup.Hits < weapon.HitsToApplyDot)
+        if (buildup.Hits < settings.HitsToApply)
             return;
 
-        float dps = weapon.DotDamagePerSecond > 0f ? weapon.DotDamagePerSecond : hitDamage * 0.25f;
-        ApplyDot(weapon, dps, debuffVfx, debuffEuler);
+        float dps = settings.DamagePerSecond > 0f ? settings.DamagePerSecond : hitDamage * 0.25f;
+        ApplyDot(settings, dps);
     }
 
-    void ApplyDot(WeaponDefinition weapon, float dps, GameObject debuffVfx, Vector3 debuffEuler)
+    void ApplyDot(WeaponDotSettings settings, float dps)
     {
-        ActiveDot dot = FindDot(weapon);
+        ActiveDot dot = FindDot(settings);
         if (dot == null)
         {
-            dot = new ActiveDot { Weapon = weapon };
+            dot = new ActiveDot { Settings = settings };
             _dots.Add(dot);
-            dot.Vfx = SpawnVfx(debuffVfx, debuffEuler);
+            dot.Vfx = SpawnVfx(settings.DebuffVFX, settings.DebuffEuler);
         }
 
         dot.DamagePerSecond = dps;
-        dot.TickInterval = weapon.DotTickInterval;
-        dot.TickTimer = weapon.DotTickInterval;
-        dot.Remaining = weapon.DotDuration;
+        dot.TickInterval = settings.TickInterval;
+        dot.TickTimer = settings.TickInterval;
+        dot.Remaining = settings.Duration;
         if (dot.Vfx == null)
-            dot.Vfx = SpawnVfx(debuffVfx, debuffEuler);
+            dot.Vfx = SpawnVfx(settings.DebuffVFX, settings.DebuffEuler);
     }
 
-    HitBuildup FindBuildup(WeaponDefinition weapon)
+    HitBuildup FindBuildup(WeaponDotSettings settings)
     {
         for (int i = 0; i < _hits.Count; i++)
         {
-            if (_hits[i].Weapon == weapon)
+            if (_hits[i].Settings == settings)
                 return _hits[i];
         }
 
         return null;
     }
 
-    ActiveDot FindDot(WeaponDefinition weapon)
+    ActiveDot FindDot(WeaponDotSettings settings)
     {
         for (int i = 0; i < _dots.Count; i++)
         {
-            if (_dots[i].Weapon == weapon)
+            if (_dots[i].Settings == settings)
                 return _dots[i];
         }
 

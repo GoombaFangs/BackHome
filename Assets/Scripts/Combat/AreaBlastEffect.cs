@@ -5,8 +5,8 @@ using UnityEngine;
 /// <summary>
 /// Replaces a weapon's normal instant damage with a telegraphed area blast: the VFX plays
 /// first, and everyone caught in the radius (the original target included) only actually
-/// loses health once the VFX's impact moment hits — see <see cref="WeaponDefinition.AreaBlastDamageDelay"/>
-/// and <see cref="WeaponDefinition.AreaBlastRadius"/>. The VFX itself spawns slightly ahead of the
+/// loses health once the VFX's impact moment hits — see <see cref="WeaponAreaBlastSettings.DamageDelay"/>
+/// and <see cref="WeaponAreaBlastSettings.Radius"/>. The VFX itself spawns slightly ahead of the
 /// primary target, along its current movement, so it lands where the target will actually be
 /// once that delay elapses instead of where it stood when the shot fired.
 /// </summary>
@@ -20,28 +20,28 @@ public static class AreaBlastEffect
         public bool PlayHitVfx;
     }
 
-    public static void Trigger(EquippedWeapon sourceWeapon, Creature primaryTarget, WeaponDefinition weapon, float hitDamage, Vector3 knockFrom)
+    public static void Trigger(EquippedWeapon sourceWeapon, Creature primaryTarget, WeaponAreaBlastSettings settings, float hitDamage, Vector3 knockFrom)
     {
-        if (primaryTarget == null || weapon == null)
+        if (primaryTarget == null || settings == null)
             return;
-        if (weapon.AreaBlastRadius <= 0f)
+        if (settings.Radius <= 0f)
             return;
 
-        float blastDamage = hitDamage * weapon.AreaBlastDamageMultiplier;
+        float blastDamage = hitDamage * settings.DamageMultiplier;
         Vector3 impactPoint = sourceWeapon != null ? sourceWeapon.GetAimPoint(primaryTarget) : primaryTarget.transform.position;
 
         // The target keeps moving during the delay between the VFX spawning and damage actually
         // landing — lead the blast toward where it's heading so the impact lines up with the target
         // instead of the empty ground it already walked past.
-        impactPoint += primaryTarget.Velocity * weapon.AreaBlastDamageDelay;
+        impactPoint += primaryTarget.Velocity * settings.DamageDelay;
 
-        GameObject vfx = SpawnBlastVfx(weapon, impactPoint, weapon.AreaBlastRadius);
-        float delay = vfx != null ? weapon.AreaBlastDamageDelay : 0f;
+        GameObject vfx = SpawnBlastVfx(settings, impactPoint, settings.Radius);
+        float delay = vfx != null ? settings.DamageDelay : 0f;
 
         if (blastDamage <= 0f)
             return;
 
-        List<BlastHit> hits = CollectHits(impactPoint, weapon.AreaBlastRadius, primaryTarget, knockFrom);
+        List<BlastHit> hits = CollectHits(impactPoint, settings.Radius, primaryTarget, knockFrom);
 
         if (delay <= 0f || sourceWeapon == null)
         {
@@ -105,9 +105,9 @@ public static class AreaBlastEffect
         }
     }
 
-    static GameObject SpawnBlastVfx(WeaponDefinition weapon, Vector3 position, float radius)
+    static GameObject SpawnBlastVfx(WeaponAreaBlastSettings settings, Vector3 position, float radius)
     {
-        GameObject prefab = weapon.AreaBlastVFX;
+        GameObject prefab = settings.BlastVFX;
         if (prefab == null)
             return null;
 
@@ -121,7 +121,7 @@ public static class AreaBlastEffect
 
         // Scale the VFX so its ring always matches the actual hit radius — whatever it visually
         // covers is exactly what takes damage, instead of a fixed size unrelated to the radius.
-        float referenceRadius = weapon.AreaBlastVfxRadius > 0f ? weapon.AreaBlastVfxRadius : 1f;
+        float referenceRadius = settings.VfxRadius > 0f ? settings.VfxRadius : 1f;
         float scale = radius / referenceRadius;
         fx.transform.localScale = Vector3.one * scale;
 
@@ -134,7 +134,7 @@ public static class AreaBlastEffect
                 systems[i].Play(true);
         }
 
-        Object.Destroy(fx, weapon.AreaBlastVfxLifetime);
+        Object.Destroy(fx, settings.VfxLifetime);
         return fx;
     }
 }

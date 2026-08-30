@@ -19,20 +19,23 @@ MonoBehaviour:
   attackSpeed: 0.25
   attackRange: 8
   hitEffect: 3
-  hitsToApplyDot: 3
-  hitWindow: 2
-  dotDuration: 2
-  dotDamagePerSecond: 10
-  dotTickInterval: 0.5
-  debuffVFX: {fileID: 0}
-  debuffEuler: {x: 90, y: 0, z: 0}
-  chainJumps: 4
-  chainRadius: 5
-  chainDamageMultiplier: 1
-  chainVFX: {fileID: 0}
-  areaBlastRadius: 5
-  areaBlastDamageMultiplier: 2.5
-  areaBlastVFX: {fileID: 1703217192903793943, guid: b5cce2b1b398f2f46aa66bd49325ca53, type: 3}
-  areaBlastVfxLifetime: 2
-  areaBlastVfxRadius: 5
-  areaBlastDamageDelay: 0.8
+  dotSettings:
+    hitsToApply: 3
+    hitWindow: 2
+    duration: 2
+    damagePerSecond: 10
+    tickInterval: 0.5
+    debuffVFX: {fileID: 0}
+    debuffEuler: {x: 90, y: 0, z: 0}
+  chainSettings:
+    maxJumps: 4
+    jumpRadius: 5
+    jumpDamageMultiplier: 1
+    beamVFX: {fileID: 0}
+  areaBlastSettings:
+    radius: 5
+    damageMultiplier: 2.5
+    blastVFX: {fileID: 1703217192903793943, guid: b5cce2b1b398f2f46aa66bd49325ca53, type: 3}
+    vfxLifetime: 2
+    vfxRadius: 5
+    damageDelay: 0.8
