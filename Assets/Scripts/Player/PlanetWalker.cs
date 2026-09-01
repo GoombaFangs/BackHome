@@ -21,6 +21,8 @@ public class PlanetWalker : MonoBehaviour
     [SerializeField] float alignSpeed = 12f;
     [Tooltip("How far above the collider surface to place the character pivot (usually at the feet).")]
     [SerializeField] float footOffset = 0.02f;
+    [Tooltip("Extra clearance added above the surface while running. The run animation dips lower than idle/walk, so without this the character visually sinks into the ground/planet while running.")]
+    [SerializeField] float runFootHoverBoost = 0.08f;
     [SerializeField] float gravityStrength = 18f;
     [SerializeField] float groundProbeDistance = 12f;
     [SerializeField] LayerMask groundLayer;
@@ -45,6 +47,7 @@ public class PlanetWalker : MonoBehaviour
     bool _sceneAllowsPlanetWalk;
     bool _pendingFootResnap;
     float _footDropBelowPivot = -1f;
+    float _runHoverBlend;
 
     int _animIDSpeed;
     int _animIDGrounded;
@@ -235,6 +238,9 @@ public class PlanetWalker : MonoBehaviour
         MotionAmount = inputMagnitude > 0.01f
             ? Mathf.Clamp01(inputMagnitude / runInputThreshold)
             : 0f;
+
+        bool wantsRun = inputMagnitude >= runInputThreshold;
+        _runHoverBlend = Mathf.MoveTowards(_runHoverBlend, wantsRun ? 1f : 0f, Time.deltaTime * 4f);
 
         float step = targetSpeed * Time.deltaTime;
         Vector3 moveDelta = moveDir.sqrMagnitude > 0.001f ? moveDir * step : Vector3.zero;
@@ -455,7 +461,12 @@ public class PlanetWalker : MonoBehaviour
         if (footDrop > clearance + 0.02f)
             _pendingFootResnap = true;
 
-        return Mathf.Max(clearance, footDrop + footOffset * scale, 0.02f);
+        // The run animation's foot bob dips lower than idle/walk, but foot drop above is sampled
+        // once (not re-measured every frame of the cycle), so add extra headroom while running
+        // to keep the character from visually sinking into the ground/planet.
+        float runBoost = runFootHoverBoost * _runHoverBlend * scale;
+
+        return Mathf.Max(clearance, footDrop + footOffset * scale + runBoost, 0.02f);
     }
 
     float GetFootDropBelowPivot()
