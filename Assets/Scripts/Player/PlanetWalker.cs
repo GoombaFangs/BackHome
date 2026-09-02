@@ -54,6 +54,11 @@ public class PlanetWalker : MonoBehaviour
     int _animIDJump;
     int _animIDFreeFall;
     int _animIDMotionSpeed;
+    int _animIDMoving;
+    int _animIDIdleVariant;
+
+    // Starts true so the very first Update (player not moving yet) rolls the initial 50/50 idle pick.
+    bool _wasMoving = true;
 
     public bool IsWalkingOnPlanet => _ownsControl && _planet != null;
     public float WalkSpeed => walkSpeed;
@@ -83,6 +88,8 @@ public class PlanetWalker : MonoBehaviour
         _animIDJump = Animator.StringToHash("Jump");
         _animIDFreeFall = Animator.StringToHash("FreeFall");
         _animIDMotionSpeed = Animator.StringToHash("MotionSpeed");
+        _animIDMoving = Animator.StringToHash("Moving");
+        _animIDIdleVariant = Animator.StringToHash("IdleVariant");
     }
 
     void Start()
@@ -701,5 +708,13 @@ public class PlanetWalker : MonoBehaviour
         _animator.SetBool(_animIDFreeFall, !_grounded);
         _animator.SetFloat(_animIDSpeed, _animBlend);
         _animator.SetFloat(_animIDMotionSpeed, Mathf.Max(inputMagnitude, 0.01f) * animationSpeedScale);
+
+        // Every time the character comes to a stop, re-roll which idle animation starts first
+        // (50/50). The AnimatorController then alternates Idle1/Idle2 on its own every 4 loops.
+        bool moving = inputMagnitude > 0.05f;
+        if (!moving && _wasMoving)
+            _animator.SetInteger(_animIDIdleVariant, Random.Range(0, 2));
+        _wasMoving = moving;
+        _animator.SetBool(_animIDMoving, moving);
     }
 }

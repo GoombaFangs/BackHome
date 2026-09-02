@@ -49,6 +49,26 @@ public static class PlayerModelSwapTool
     const string RunOnPlanetClipName = "Run";
     const string RunInPlaceClipPath = "Assets/Resources/Player/Animator/RunInPlace.anim";
 
+    // Two idle variants (same "Little Starbot" rig/skeleton as the run model above) that the
+    // Animator alternates between while the player stands still: 50/50 random pick of which one
+    // starts, then swap to the other every 4 loops, back and forth indefinitely.
+    //
+    // These two FBX files were exported with their skeleton root bone named "Armature" instead of
+    // "target_character" (the name the Run On Planet model - and therefore the live Player
+    // hierarchy - uses for that same bone), even though every bone *below* the root matches
+    // exactly (Hips, LeftUpLeg, Spine02, etc.). Mecanim's Generic-avatar retargeting binds curves
+    // by walking this exact name chain from wherever it finds "target_character" under the
+    // Animator, so a clip rooted at "Armature" silently matches zero bones and plays nothing
+    // visible - see RemapClipRootBoneName, applied to both baked clips below.
+    const string IdleSourceRootBoneName = "Armature";
+    const string IdleTargetRootBoneName = "target_character";
+    const string Idle1ModelPath = "Assets/Resources/Player/Model/Starbot_Animation_Idel1.fbx";
+    const string Idle2ModelPath = "Assets/Resources/Player/Model/Starbot_Animation_Idel2.fbx";
+    const string Idle1ClipName = "Idle1";
+    const string Idle2ClipName = "Idle2";
+    const string Idle1InPlaceClipPath = "Assets/Resources/Player/Animator/Idle1InPlace.anim";
+    const string Idle2InPlaceClipPath = "Assets/Resources/Player/Animator/Idle2InPlace.anim";
+
     // Material shared by every Meshy AI export in Model/ (they were all authored with a single
     // "Material_1" slot). The shader wired into it isn't actually URP/Lit despite the guid's
     // original comment - it's the project's own custom "BackHome/CasualToon" shader (same one
@@ -57,6 +77,9 @@ public static class PlayerModelSwapTool
     // the combined map built for the old URP/Lit path are unused by this shader.
     const string CharacterMaterialPath = "Assets/Resources/Player/Model/Material_1.mat";
     static readonly string SetupRunOnPlanetTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeSetupRunOnPlanet.trigger");
+    static readonly string SetupIdleAnimationsTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeSetupIdleAnimations.trigger");
+    static readonly string DumpLivePlayerHierarchyTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeDumpLivePlayerHierarchy.trigger");
+    static readonly string DumpBoneTransformsTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeDumpBoneTransforms.trigger");
     static readonly string CloseIsolationStageTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeCloseIsolationStage.trigger");
     static readonly string FixCharacterTextureTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeFixCharacterTexture.trigger");
 
@@ -114,6 +137,29 @@ public static class PlayerModelSwapTool
             try { System.IO.File.Delete(SwapPlanetRunTriggerFilePath); } catch { /* ignore */ }
             Debug.Log("[BackHome] Swap-planet-run trigger detected - swapping in the planet running animation.");
             SwapRunAnimationToPlanetClip();
+        }
+
+        if (System.IO.File.Exists(SetupIdleAnimationsTriggerFilePath))
+        {
+            try { System.IO.File.Delete(SetupIdleAnimationsTriggerFilePath); } catch { /* ignore */ }
+            Debug.Log("[BackHome] Setup-idle-animations trigger detected - wiring up the Idle1/Idle2 idle animations.");
+            SetupPlayerIdleAnimations();
+        }
+
+        if (System.IO.File.Exists(DumpLivePlayerHierarchyTriggerFilePath))
+        {
+            try { System.IO.File.Delete(DumpLivePlayerHierarchyTriggerFilePath); } catch { /* ignore */ }
+            Debug.Log("[BackHome] Dump-live-player-hierarchy trigger detected - dumping the live Player's transform hierarchy.");
+            DumpLivePlayerHierarchy();
+        }
+
+        if (System.IO.File.Exists(DumpBoneTransformsTriggerFilePath))
+        {
+            try { System.IO.File.Delete(DumpBoneTransformsTriggerFilePath); } catch { /* ignore */ }
+            Debug.Log("[BackHome] Dump-bone-transforms trigger detected - comparing rig scales.");
+            DumpModelBoneTransforms(RunOnPlanetModelPath);
+            DumpModelBoneTransforms(Idle1ModelPath);
+            DumpModelBoneTransforms(Idle2ModelPath);
         }
 
         if (System.IO.File.Exists(RebuildAvatarTriggerFilePath))
@@ -268,6 +314,70 @@ public static class PlayerModelSwapTool
     }
 
     static readonly string FrameLivePlayerTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeFrameLivePlayer.trigger");
+
+    /// <summary>
+    /// Prints each bone's local position/scale for the given model asset's skeleton - used to
+    /// compare the Idle1/Idle2 rig's bone offsets against the Run On Planet rig's to check for a
+    /// unit-scale mismatch (e.g. one rig authored in centimeters, the other in meters).
+    /// </summary>
+    static void DumpModelBoneTransforms(string modelPath)
+    {
+        var modelAsset = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
+        if (modelAsset == null)
+        {
+            Debug.LogError($"[BackHome] Could not load model asset at {modelPath}");
+            return;
+        }
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"[BackHome] === Bone local position/scale for '{modelPath}' ===");
+        AppendBoneTransforms(modelAsset.transform, sb, 0);
+        Debug.Log(sb.ToString());
+    }
+
+    static void AppendBoneTransforms(Transform t, System.Text.StringBuilder sb, int depth)
+    {
+        sb.AppendLine($"{new string(' ', depth * 2)}{t.name}  pos={t.localPosition:F4}  scale={t.localScale:F4}");
+        for (int i = 0; i < t.childCount; i++)
+            AppendBoneTransforms(t.GetChild(i), sb, depth + 1);
+    }
+
+    static void DumpLivePlayerHierarchy()
+    {
+        GameObject playerGo = GameObject.FindWithTag("Player");
+        bool fromPrefabAsset = false;
+        if (playerGo == null)
+        {
+            // Not in Play mode (or no live Player instance) - fall back to the Player.prefab
+            // source asset itself, loaded read-only, which has the exact same hierarchy the
+            // Animator plays against at runtime.
+            playerGo = PrefabUtility.LoadPrefabContents(PlayerPrefabPath);
+            fromPrefabAsset = true;
+        }
+
+        try
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine(fromPrefabAsset
+                ? "[BackHome] === Player.prefab transform hierarchy (paths relative to the Animator's GameObject) ==="
+                : "[BackHome] === Live Player transform hierarchy (paths relative to the Animator's GameObject) ===");
+            AppendHierarchyWithPaths(playerGo.transform, playerGo.transform, sb);
+            Debug.Log(sb.ToString());
+        }
+        finally
+        {
+            if (fromPrefabAsset)
+                PrefabUtility.UnloadPrefabContents(playerGo);
+        }
+    }
+
+    static void AppendHierarchyWithPaths(Transform root, Transform t, System.Text.StringBuilder sb)
+    {
+        string relativePath = t == root ? "<root>" : AnimationUtility.CalculateTransformPath(t, root);
+        sb.AppendLine(relativePath);
+        for (int i = 0; i < t.childCount; i++)
+            AppendHierarchyWithPaths(root, t.GetChild(i), sb);
+    }
 
     static void FrameLivePlayerInSceneView()
     {
@@ -1024,7 +1134,7 @@ public static class PlayerModelSwapTool
     {
         try
         {
-            AnimationClip runClip = ConfigureModelAsHumanoidAndExtractLoopingClip(RunOnPlanetModelPath, RunOnPlanetClipName);
+            AnimationClip runClip = ConfigureModelAsHumanoidAndExtractLoopingClip(RunOnPlanetModelPath, RunOnPlanetClipName, RunInPlaceClipPath);
             if (runClip == null)
                 return;
 
@@ -1045,13 +1155,219 @@ public static class PlayerModelSwapTool
     }
 
     /// <summary>
+    /// Extracts looping in-place clips from Starbot_Animation_Idel1.fbx / Idel2.fbx (same rig as
+    /// the Run On Planet model, same treatment: Generic rig, uncompressed, hips-locked, seam-
+    /// smoothed - see <see cref="ConfigureModelAsHumanoidAndExtractLoopingClip"/>) and wires them
+    /// into the shared AnimatorController as two new states, "Idle1" and "Idle2", that play while
+    /// the player is standing still: a 50/50 random pick of which one starts, then the state
+    /// machine itself alternates to the other one every 4 loops, back and forth forever, purely
+    /// via built-in "Exit Time" transitions (no runtime scripting needed for the alternation).
+    /// PlanetWalker/TouchController set the "Moving" bool each frame and roll a fresh 50/50
+    /// "IdleVariant" (0 or 1) every time the player comes to a stop.
+    /// </summary>
+    [MenuItem("BackHome/Player/Setup Player Idle Animations")]
+    public static void SetupPlayerIdleAnimations()
+    {
+        try
+        {
+            AnimationClip idle1Clip = ConfigureModelAsHumanoidAndExtractLoopingClip(Idle1ModelPath, Idle1ClipName, Idle1InPlaceClipPath, IdleSourceRootBoneName);
+            if (idle1Clip == null)
+                return;
+
+            AnimationClip idle2Clip = ConfigureModelAsHumanoidAndExtractLoopingClip(Idle2ModelPath, Idle2ClipName, Idle2InPlaceClipPath, IdleSourceRootBoneName);
+            if (idle2Clip == null)
+                return;
+
+            RemapClipRootBoneName(idle1Clip, IdleSourceRootBoneName, IdleTargetRootBoneName);
+            RemapClipRootBoneName(idle2Clip, IdleSourceRootBoneName, IdleTargetRootBoneName);
+
+            if (!WireIdleStatesIntoController(idle1Clip, idle2Clip))
+                return;
+
+            AssetDatabase.SaveAssets();
+            Debug.Log("[BackHome] Player idle animations wired up: 50/50 random start between Idle1/Idle2, alternating every 4 loops while standing still.");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            Debug.LogError("[BackHome] Setup-Player-Idle-Animations aborted due to the exception above.");
+        }
+    }
+
+    /// <summary>
+    /// Rewrites every curve (and object-reference curve) in <paramref name="clip"/> whose path is
+    /// exactly <paramref name="oldRootName"/> or starts with "<paramref name="oldRootName"/>/" so
+    /// that leading path segment becomes <paramref name="newRootName"/> instead - i.e. re-roots
+    /// the whole clip onto a differently-named top bone without touching anything below it.
+    /// </summary>
+    static void RemapClipRootBoneName(AnimationClip clip, string oldRootName, string newRootName)
+    {
+        string oldPrefix = oldRootName + "/";
+
+        string Remap(string path) => path == oldRootName
+            ? newRootName
+            : newRootName + path.Substring(oldRootName.Length);
+
+        bool IsRootItself(string path) => path == oldRootName;
+        bool IsChildOfRoot(string path) => path.StartsWith(oldPrefix, System.StringComparison.Ordinal);
+
+        // Curves keyed directly on the root bone (not its children) encode this source rig's own
+        // export-time axis/position convention (e.g. a baked -90 degree tilt some exporters add to
+        // the armature object). The live "target_character" root is never animated by the Run clip -
+        // its orientation/position is owned by the Player's own transform (which PlanetWalker aligns
+        // to the planet surface) - so keeping the source rig's root curves here would fight that and
+        // visibly tip/sink the character into the ground. Drop them entirely; only remap the children.
+        int remapped = 0;
+        int dropped = 0;
+        foreach (var binding in AnimationUtility.GetCurveBindings(clip))
+        {
+            if (IsRootItself(binding.path))
+            {
+                AnimationUtility.SetEditorCurve(clip, binding, null);
+                dropped++;
+                continue;
+            }
+            if (!IsChildOfRoot(binding.path))
+                continue;
+
+            var curve = AnimationUtility.GetEditorCurve(clip, binding);
+            var newBinding = binding;
+            newBinding.path = Remap(binding.path);
+
+            AnimationUtility.SetEditorCurve(clip, binding, null);
+            AnimationUtility.SetEditorCurve(clip, newBinding, curve);
+            remapped++;
+        }
+
+        foreach (var binding in AnimationUtility.GetObjectReferenceCurveBindings(clip))
+        {
+            if (IsRootItself(binding.path))
+            {
+                AnimationUtility.SetObjectReferenceCurve(clip, binding, null);
+                dropped++;
+                continue;
+            }
+            if (!IsChildOfRoot(binding.path))
+                continue;
+
+            var curve = AnimationUtility.GetObjectReferenceCurve(clip, binding);
+            var newBinding = binding;
+            newBinding.path = Remap(binding.path);
+
+            AnimationUtility.SetObjectReferenceCurve(clip, binding, null);
+            AnimationUtility.SetObjectReferenceCurve(clip, newBinding, curve);
+            remapped++;
+        }
+
+        EditorUtility.SetDirty(clip);
+        Debug.Log($"[BackHome] Re-rooted {remapped} curve(s) in '{clip.name}' from '{oldRootName}' to '{newRootName}' (dropped {dropped} root-level curve(s) to avoid fighting the Player's own orientation/position).");
+    }
+
+    /// <summary>
+    /// Adds/refreshes the "Idle1"/"Idle2" states and the "Moving"/"IdleVariant" parameters on the
+    /// shared locomotion AnimatorController. Safe to re-run: existing Idle1/Idle2 states and any
+    /// transitions touching Run/Idle1/Idle2 are rebuilt from scratch each time.
+    /// </summary>
+    static bool WireIdleStatesIntoController(AnimationClip idle1Clip, AnimationClip idle2Clip)
+    {
+        var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
+        if (controller == null)
+        {
+            Debug.LogError($"[BackHome] Could not load AnimatorController at {ControllerPath}");
+            return false;
+        }
+
+        AnimatorStateMachine rootStateMachine = controller.layers[0].stateMachine;
+
+        AnimatorState runState = rootStateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == "Run");
+        if (runState == null)
+        {
+            Debug.LogError("[BackHome] Could not find the 'Run' state in the AnimatorController - run 'Setup Player To Run On Planet Model' first.");
+            return false;
+        }
+
+        if (!controller.parameters.Any(p => p.name == "Moving"))
+            controller.AddParameter("Moving", AnimatorControllerParameterType.Bool);
+        if (!controller.parameters.Any(p => p.name == "IdleVariant"))
+            controller.AddParameter("IdleVariant", AnimatorControllerParameterType.Int);
+
+        AnimatorState idle1State = rootStateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == "Idle1")
+            ?? rootStateMachine.AddState("Idle1", new Vector3(400, -60, 0));
+        idle1State.motion = idle1Clip;
+        idle1State.speedParameterActive = false;
+        idle1State.speed = 1f;
+
+        AnimatorState idle2State = rootStateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == "Idle2")
+            ?? rootStateMachine.AddState("Idle2", new Vector3(400, 160, 0));
+        idle2State.motion = idle2Clip;
+        idle2State.speedParameterActive = false;
+        idle2State.speed = 1f;
+
+        // Rebuild every transition touching Run/Idle1/Idle2 from scratch so re-running this tool
+        // never leaves stale/duplicate transitions behind.
+        foreach (var t in rootStateMachine.anyStateTransitions
+                     .Where(t => t.destinationState == runState || t.destinationState == idle1State || t.destinationState == idle2State)
+                     .ToList())
+            rootStateMachine.RemoveAnyStateTransition(t);
+        foreach (var t in idle1State.transitions.ToList())
+            idle1State.RemoveTransition(t);
+        foreach (var t in idle2State.transitions.ToList())
+            idle2State.RemoveTransition(t);
+
+        const float switchDuration = 0.15f;
+
+        AnimatorStateTransition toIdle1 = rootStateMachine.AddAnyStateTransition(idle1State);
+        toIdle1.hasExitTime = false;
+        toIdle1.hasFixedDuration = true;
+        toIdle1.duration = switchDuration;
+        toIdle1.canTransitionToSelf = false;
+        toIdle1.AddCondition(AnimatorConditionMode.IfNot, 0, "Moving");
+        toIdle1.AddCondition(AnimatorConditionMode.Equals, 0, "IdleVariant");
+
+        AnimatorStateTransition toIdle2 = rootStateMachine.AddAnyStateTransition(idle2State);
+        toIdle2.hasExitTime = false;
+        toIdle2.hasFixedDuration = true;
+        toIdle2.duration = switchDuration;
+        toIdle2.canTransitionToSelf = false;
+        toIdle2.AddCondition(AnimatorConditionMode.IfNot, 0, "Moving");
+        toIdle2.AddCondition(AnimatorConditionMode.Equals, 1, "IdleVariant");
+
+        AnimatorStateTransition toRun = rootStateMachine.AddAnyStateTransition(runState);
+        toRun.hasExitTime = false;
+        toRun.hasFixedDuration = true;
+        toRun.duration = switchDuration;
+        toRun.canTransitionToSelf = false;
+        toRun.AddCondition(AnimatorConditionMode.If, 0, "Moving");
+
+        // The actual "every 4 loops, swap to the other idle" alternation - no scripting needed,
+        // an exit time > 1 on a looping state fires after that many full loops (integer part =
+        // loop count, .0 = right at the loop boundary).
+        AnimatorStateTransition idle1ToIdle2 = idle1State.AddTransition(idle2State);
+        idle1ToIdle2.hasExitTime = true;
+        idle1ToIdle2.exitTime = 4f;
+        idle1ToIdle2.hasFixedDuration = true;
+        idle1ToIdle2.duration = switchDuration;
+
+        AnimatorStateTransition idle2ToIdle1 = idle2State.AddTransition(idle1State);
+        idle2ToIdle1.hasExitTime = true;
+        idle2ToIdle1.exitTime = 4f;
+        idle2ToIdle1.hasFixedDuration = true;
+        idle2ToIdle1.duration = switchDuration;
+
+        EditorUtility.SetDirty(controller);
+        Debug.Log("[BackHome] Added/refreshed Idle1 <-> Idle2 states, Moving/IdleVariant parameters, and their transitions in the AnimatorController.");
+        return true;
+    }
+
+    /// <summary>
     /// Configures the model at <paramref name="modelPath"/> as a Generic-rig model (its own
     /// skeleton, no Humanoid muscle retargeting - Humanoid retargeting was visibly distorting the
     /// pose away from how Meshy's own preview renders it) with animation compression disabled (so
     /// Unity doesn't lossily reduce keyframes on import), then extracts its (single) embedded take
-    /// as a looping AnimationClip named <paramref name="clipName"/>.
+    /// as a looping AnimationClip named <paramref name="clipName"/>, baked in-place at
+    /// <paramref name="inPlaceOutputPath"/> (see <see cref="MakeInPlaceCopy"/>).
     /// </summary>
-    static AnimationClip ConfigureModelAsHumanoidAndExtractLoopingClip(string modelPath, string clipName)
+    static AnimationClip ConfigureModelAsHumanoidAndExtractLoopingClip(string modelPath, string clipName, string inPlaceOutputPath, string rootBoneNameForRotationAbsorb = null)
     {
         var importer = AssetImporter.GetAtPath(modelPath) as ModelImporter;
         if (importer == null)
@@ -1103,7 +1419,217 @@ public static class PlayerModelSwapTool
         }
 
         Debug.Log($"[BackHome] Extracted '{clipName}' clip ({newClip.length:0.00}s) from {modelPath} (Generic rig, uncompressed).");
-        return MakeInPlaceCopy(newClip, RunInPlaceClipPath);
+
+        if (!string.IsNullOrEmpty(rootBoneNameForRotationAbsorb))
+        {
+            // This source rig's bones are authored at "real" scale (its own root has no
+            // compensating scale), but the live Player skeleton's root ("target_character") has a
+            // small local scale baked into its bind pose to normalize a different rig convention
+            // (see FindTargetCharacterScale). Every bone in this clip needs its position curves
+            // scaled up by the inverse of that so they land at the correct size once the live
+            // root's scale is applied on top at playback - otherwise the whole pose collapses
+            // toward the root's origin (the character appears to sink into the ground).
+            float liveRootScale = FindTargetCharacterScale(IdleTargetRootBoneName);
+            if (liveRootScale > 0f && Mathf.Abs(liveRootScale - 1f) > 0.0001f)
+                ScaleAllPositionCurves(newClip, 1f / liveRootScale);
+
+            AbsorbRootRotationIntoHips(newClip, rootBoneNameForRotationAbsorb);
+        }
+
+        return MakeInPlaceCopy(newClip, inPlaceOutputPath);
+    }
+
+    /// <summary>
+    /// Reads the live Player skeleton's root bone local scale (e.g. "target_character"), used to
+    /// figure out how much a differently-scaled source rig's position curves need to be corrected
+    /// by before they're transplanted onto that skeleton. Returns 1 (no-op) if it can't be found.
+    /// </summary>
+    static float FindTargetCharacterScale(string rootBoneName)
+    {
+        GameObject playerGo = PrefabUtility.LoadPrefabContents(PlayerPrefabPath);
+        try
+        {
+            Transform found = FindDescendant(playerGo.transform, rootBoneName);
+            if (found == null)
+            {
+                Debug.LogWarning($"[BackHome] Could not find '{rootBoneName}' under {PlayerPrefabPath} to read its scale - skipping position rescale.");
+                return 1f;
+            }
+            return found.localScale.x;
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(playerGo);
+        }
+    }
+
+    static Transform FindDescendant(Transform root, string name)
+    {
+        if (root.name == name) return root;
+        for (int i = 0; i < root.childCount; i++)
+        {
+            var found = FindDescendant(root.GetChild(i), name);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    // Multiplies every m_LocalPosition.x/y/z curve in the clip (regardless of bone path) by a
+    // fixed factor. Uniform scaling is linear, so tangents scale the same way values do.
+    static void ScaleAllPositionCurves(AnimationClip clip, float factor)
+    {
+        int scaled = 0;
+        foreach (var binding in AnimationUtility.GetCurveBindings(clip))
+        {
+            if (binding.type != typeof(Transform) || !binding.propertyName.StartsWith("m_LocalPosition."))
+                continue;
+
+            var curve = AnimationUtility.GetEditorCurve(clip, binding);
+            var keys = curve.keys;
+            for (int i = 0; i < keys.Length; i++)
+            {
+                keys[i].value *= factor;
+                keys[i].inTangent *= factor;
+                keys[i].outTangent *= factor;
+            }
+            curve.keys = keys;
+            AnimationUtility.SetEditorCurve(clip, binding, curve);
+            scaled++;
+        }
+        Debug.Log($"[BackHome] Rescaled {scaled} position curve(s) in '{clip.name}' by x{factor:0.###} to match the live skeleton's scale.");
+    }
+
+    /// <summary>
+    /// Some source rigs (this project's Idle1/Idle2 FBX exports) bake a static reorientation
+    /// (a -90 degree tilt, likely a Z-up-to-Y-up compensation from the authoring tool) directly
+    /// onto the root bone itself instead of into the mesh's bind pose. Left as a live curve on the
+    /// shared "target_character" root, that rotation would tip the whole shared skeleton/mesh over
+    /// every time the clip plays - the Run clip never touches the root at all, so the shared bind
+    /// pose assumes an identity root rotation, and the root's own orientation is otherwise owned by
+    /// the Player's transform (which aligns it to the planet surface). This absorbs that fixed
+    /// rotation into the single bone directly beneath the root (this project's rigs are all
+    /// single-rooted at "Hips") by pre-rotating its position/rotation keys with the same transform,
+    /// then discards the root's own curves - the resulting pose is identical, but the shared root
+    /// is left untouched. No-ops if the root isn't actually animated (e.g. when called on Run).
+    /// </summary>
+    static void AbsorbRootRotationIntoHips(AnimationClip clip, string rootBoneName, string childBoneName = "Hips")
+    {
+        var bindings = AnimationUtility.GetCurveBindings(clip).ToList();
+
+        EditorCurveBinding? Find(string path, string prop) =>
+            bindings.Where(b => b.path == path && b.propertyName == prop)
+                    .Select(b => (EditorCurveBinding?)b)
+                    .FirstOrDefault();
+
+        var rxB = Find(rootBoneName, "m_LocalRotation.x");
+        var ryB = Find(rootBoneName, "m_LocalRotation.y");
+        var rzB = Find(rootBoneName, "m_LocalRotation.z");
+        var rwB = Find(rootBoneName, "m_LocalRotation.w");
+        if (rxB == null || ryB == null || rzB == null || rwB == null)
+            return; // Root isn't animated at all (e.g. Run's rig) - nothing to absorb.
+
+        var rxCurve = AnimationUtility.GetEditorCurve(clip, rxB.Value);
+        var ryCurve = AnimationUtility.GetEditorCurve(clip, ryB.Value);
+        var rzCurve = AnimationUtility.GetEditorCurve(clip, rzB.Value);
+        var rwCurve = AnimationUtility.GetEditorCurve(clip, rwB.Value);
+        var rootRotation = new Quaternion(rxCurve.keys[0].value, ryCurve.keys[0].value, rzCurve.keys[0].value, rwCurve.keys[0].value).normalized;
+
+        if (Quaternion.Angle(Quaternion.identity, rootRotation) < 0.01f)
+            return; // Effectively identity - nothing to do.
+
+        string childPath = rootBoneName + "/" + childBoneName;
+
+        var posX = Find(childPath, "m_LocalPosition.x");
+        var posY = Find(childPath, "m_LocalPosition.y");
+        var posZ = Find(childPath, "m_LocalPosition.z");
+        if (posX != null && posY != null && posZ != null)
+        {
+            var cx = AnimationUtility.GetEditorCurve(clip, posX.Value);
+            var cy = AnimationUtility.GetEditorCurve(clip, posY.Value);
+            var cz = AnimationUtility.GetEditorCurve(clip, posZ.Value);
+            RotatePositionCurves(cx, cy, cz, rootRotation);
+            AnimationUtility.SetEditorCurve(clip, posX.Value, cx);
+            AnimationUtility.SetEditorCurve(clip, posY.Value, cy);
+            AnimationUtility.SetEditorCurve(clip, posZ.Value, cz);
+        }
+
+        var rotX = Find(childPath, "m_LocalRotation.x");
+        var rotY = Find(childPath, "m_LocalRotation.y");
+        var rotZ = Find(childPath, "m_LocalRotation.z");
+        var rotW = Find(childPath, "m_LocalRotation.w");
+        if (rotX != null && rotY != null && rotZ != null && rotW != null)
+        {
+            var cx = AnimationUtility.GetEditorCurve(clip, rotX.Value);
+            var cy = AnimationUtility.GetEditorCurve(clip, rotY.Value);
+            var cz = AnimationUtility.GetEditorCurve(clip, rotZ.Value);
+            var cw = AnimationUtility.GetEditorCurve(clip, rotW.Value);
+            PreMultiplyRotationCurves(cx, cy, cz, cw, rootRotation);
+            AnimationUtility.SetEditorCurve(clip, rotX.Value, cx);
+            AnimationUtility.SetEditorCurve(clip, rotY.Value, cy);
+            AnimationUtility.SetEditorCurve(clip, rotZ.Value, cz);
+            AnimationUtility.SetEditorCurve(clip, rotW.Value, cw);
+        }
+
+        foreach (var b in bindings.Where(b => b.path == rootBoneName))
+            AnimationUtility.SetEditorCurve(clip, b, null);
+
+        Debug.Log($"[BackHome] Absorbed a {Quaternion.Angle(Quaternion.identity, rootRotation):0} degree root rotation baked onto " +
+            $"'{rootBoneName}' into '{childPath}' instead, so the shared skeleton's root stays untouched during '{clip.name}'.");
+    }
+
+    // Rotates a Vector3 curve (split across 3 float curves) by a fixed rotation. Since the rotation
+    // is constant (not time-varying), tangents transform the same linear way as the values do.
+    static void RotatePositionCurves(AnimationCurve cx, AnimationCurve cy, AnimationCurve cz, Quaternion rotation)
+    {
+        var kx = cx.keys;
+        var ky = cy.keys;
+        var kz = cz.keys;
+        int n = kx.Length;
+        if (ky.Length != n || kz.Length != n) return;
+
+        for (int i = 0; i < n; i++)
+        {
+            var v = rotation * new Vector3(kx[i].value, ky[i].value, kz[i].value);
+            var tIn = rotation * new Vector3(kx[i].inTangent, ky[i].inTangent, kz[i].inTangent);
+            var tOut = rotation * new Vector3(kx[i].outTangent, ky[i].outTangent, kz[i].outTangent);
+
+            kx[i].value = v.x; ky[i].value = v.y; kz[i].value = v.z;
+            kx[i].inTangent = tIn.x; ky[i].inTangent = tIn.y; kz[i].inTangent = tIn.z;
+            kx[i].outTangent = tOut.x; ky[i].outTangent = tOut.y; kz[i].outTangent = tOut.z;
+        }
+
+        cx.keys = kx;
+        cy.keys = ky;
+        cz.keys = kz;
+    }
+
+    // Pre-multiplies a quaternion curve (split across 4 float curves) by a fixed rotation.
+    // Left-multiplication by a constant quaternion is a linear map on the 4 components, so
+    // tangents transform the same way the values do (same reasoning as RotatePositionCurves).
+    static void PreMultiplyRotationCurves(AnimationCurve cx, AnimationCurve cy, AnimationCurve cz, AnimationCurve cw, Quaternion rotation)
+    {
+        var kx = cx.keys;
+        var ky = cy.keys;
+        var kz = cz.keys;
+        var kw = cw.keys;
+        int n = kx.Length;
+        if (ky.Length != n || kz.Length != n || kw.Length != n) return;
+
+        for (int i = 0; i < n; i++)
+        {
+            var q = rotation * new Quaternion(kx[i].value, ky[i].value, kz[i].value, kw[i].value);
+            var tIn = rotation * new Quaternion(kx[i].inTangent, ky[i].inTangent, kz[i].inTangent, kw[i].inTangent);
+            var tOut = rotation * new Quaternion(kx[i].outTangent, ky[i].outTangent, kz[i].outTangent, kw[i].outTangent);
+
+            kx[i].value = q.x; ky[i].value = q.y; kz[i].value = q.z; kw[i].value = q.w;
+            kx[i].inTangent = tIn.x; ky[i].inTangent = tIn.y; kz[i].inTangent = tIn.z; kw[i].inTangent = tIn.w;
+            kx[i].outTangent = tOut.x; ky[i].outTangent = tOut.y; kz[i].outTangent = tOut.z; kw[i].outTangent = tOut.w;
+        }
+
+        cx.keys = kx;
+        cy.keys = ky;
+        cz.keys = kz;
+        cw.keys = kw;
     }
 
     /// <summary>
@@ -1310,6 +1836,16 @@ public static class PlayerModelSwapTool
         foreach (var binding in allBindings)
         {
             if (handled.Contains(binding)) continue;
+
+            // Some source rigs bake a near-constant ~1.0 scale track onto every bone (floating
+            // point noise from the authoring tool, not an intentional squash/stretch). Left in,
+            // that overrides the bind pose's actual rest scale on playback - most importantly the
+            // rig-normalizing scale baked onto the skeleton's root bone (e.g. 0.01 to convert a
+            // centimeter-authored rig down to meters) - making the whole character balloon up to
+            // ~100x size for as long as the clip is active. Scale isn't meant to be animated here,
+            // so drop these curves entirely and let the bind pose's scale stand untouched.
+            if (binding.type == typeof(Transform) && binding.propertyName.StartsWith("m_LocalScale."))
+                continue;
 
             var curve = GetTruncatedCurve(binding);
             bool isHipsHorizontalPosition = binding.path.EndsWith("Hips", System.StringComparison.Ordinal)

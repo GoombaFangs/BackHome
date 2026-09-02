@@ -52,6 +52,11 @@ public class TouchController : MonoBehaviour
     int _animIDJump;
     int _animIDFreeFall;
     int _animIDMotionSpeed;
+    int _animIDMoving;
+    int _animIDIdleVariant;
+
+    // Starts true so the very first Move (player not moving yet) rolls the initial 50/50 idle pick.
+    bool _wasMoving = true;
 
     void Reset()
     {
@@ -91,6 +96,8 @@ public class TouchController : MonoBehaviour
         _animIDJump = Animator.StringToHash("Jump");
         _animIDFreeFall = Animator.StringToHash("FreeFall");
         _animIDMotionSpeed = Animator.StringToHash("MotionSpeed");
+        _animIDMoving = Animator.StringToHash("Moving");
+        _animIDIdleVariant = Animator.StringToHash("IdleVariant");
     }
 
     void Update()
@@ -248,6 +255,14 @@ public class TouchController : MonoBehaviour
         {
             _animator.SetFloat(_animIDSpeed, _animationBlend);
             _animator.SetFloat(_animIDMotionSpeed, Mathf.Max(inputMagnitude, 0.01f));
+
+            // Every time the character comes to a stop, re-roll which idle animation starts first
+            // (50/50). The AnimatorController then alternates Idle1/Idle2 on its own every 4 loops.
+            bool moving = inputMagnitude > 0.05f;
+            if (!moving && _wasMoving)
+                _animator.SetInteger(_animIDIdleVariant, Random.Range(0, 2));
+            _wasMoving = moving;
+            _animator.SetBool(_animIDMoving, moving);
         }
     }
 
