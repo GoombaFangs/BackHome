@@ -47,6 +47,11 @@ public class TouchController : MonoBehaviour
 
     public float WalkSpeed => walkSpeed;
 
+    /// <summary>0..1 move intensity from stick magnitude, clamped to 1 at the run threshold (same
+    /// semantics as <see cref="PlanetWalker.MotionAmount"/>) - lets other systems (e.g. DustTrailVfx)
+    /// detect "is running" without duplicating runInputThreshold.</summary>
+    public float MotionAmount { get; private set; }
+
     int _animIDSpeed;
     int _animIDGrounded;
     int _animIDJump;
@@ -55,8 +60,11 @@ public class TouchController : MonoBehaviour
     int _animIDMoving;
     int _animIDIdleVariant;
 
-    // Starts true so the very first Move (player not moving yet) rolls the initial 50/50 idle pick.
+    // Starts true so the very first Move (player not moving yet) rolls the initial idle pick.
     bool _wasMoving = true;
+
+    // Chance that Idle1 (rather than Idle2) is picked whenever the player comes to a stop.
+    const float Idle1Chance = 0.8f;
 
     void Reset()
     {
@@ -205,6 +213,8 @@ public class TouchController : MonoBehaviour
             }
         }
 
+        MotionAmount = inputMagnitude > 0.01f ? Mathf.Clamp01(inputMagnitude / runInputThreshold) : 0f;
+
         // Soft push = walk, hard push = run. No sprint button.
         float targetSpeed = 0f;
         if (inputMagnitude > 0.01f)
@@ -257,10 +267,11 @@ public class TouchController : MonoBehaviour
             _animator.SetFloat(_animIDMotionSpeed, Mathf.Max(inputMagnitude, 0.01f));
 
             // Every time the character comes to a stop, re-roll which idle animation starts first
-            // (50/50). The AnimatorController then alternates Idle1/Idle2 on its own every 4 loops.
+            // (80% Idle1 / 20% Idle2). The AnimatorController then alternates Idle1/Idle2 on its
+            // own every 4 loops.
             bool moving = inputMagnitude > 0.05f;
             if (!moving && _wasMoving)
-                _animator.SetInteger(_animIDIdleVariant, Random.Range(0, 2));
+                _animator.SetInteger(_animIDIdleVariant, Random.value < Idle1Chance ? 0 : 1);
             _wasMoving = moving;
             _animator.SetBool(_animIDMoving, moving);
         }

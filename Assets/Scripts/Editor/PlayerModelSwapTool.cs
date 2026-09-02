@@ -1339,9 +1339,11 @@ public static class PlayerModelSwapTool
         toRun.canTransitionToSelf = false;
         toRun.AddCondition(AnimatorConditionMode.If, 0, "Moving");
 
-        // The actual "every 4 loops, swap to the other idle" alternation - no scripting needed,
-        // an exit time > 1 on a looping state fires after that many full loops (integer part =
-        // loop count, .0 = right at the loop boundary).
+        // The actual "loop N times, then swap to the other idle" alternation - no scripting
+        // needed, an exit time > 1 on a looping state fires after that many full loops (integer
+        // part = loop count, .0 = right at the loop boundary). Idle2 is the "rare" variant, so
+        // even when it does get picked it only plays once before falling back to Idle1 - it never
+        // repeats 4 times in a row the way Idle1 does.
         AnimatorStateTransition idle1ToIdle2 = idle1State.AddTransition(idle2State);
         idle1ToIdle2.hasExitTime = true;
         idle1ToIdle2.exitTime = 4f;
@@ -1350,7 +1352,7 @@ public static class PlayerModelSwapTool
 
         AnimatorStateTransition idle2ToIdle1 = idle2State.AddTransition(idle1State);
         idle2ToIdle1.hasExitTime = true;
-        idle2ToIdle1.exitTime = 4f;
+        idle2ToIdle1.exitTime = 1f;
         idle2ToIdle1.hasFixedDuration = true;
         idle2ToIdle1.duration = switchDuration;
 

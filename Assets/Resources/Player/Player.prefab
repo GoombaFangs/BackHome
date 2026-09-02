@@ -309,7 +309,7 @@ Transform:
   m_GameObject: {fileID: 7594552319720850513}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0.7071068, z: 0, w: 0.7071068}
-  m_LocalPosition: {x: -22.599998, y: -0.8000001, z: -5.7400002}
+  m_LocalPosition: {x: -22.38, y: -0.8000001, z: -5.7400002}
   m_LocalScale: {x: 1.5, y: 1.5, z: 1.5}
   m_ConstrainProportionsScale: 1
   m_Children:
@@ -771,6 +771,10 @@ PrefabInstance:
     - target: {fileID: 74555492584475897, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7258748583119482853, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+      propertyPath: InitialModule.startColor.maxColor.a
+      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 9027828195079308390, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
       propertyPath: m_Name
