@@ -33,6 +33,7 @@ public class TouchController : MonoBehaviour
     StarterAssetsInputs _input;
     Animator _animator;
     Camera _camera;
+    PlayerVitals _vitals;
 
     float _speed;
     float _animationBlend;
@@ -45,7 +46,11 @@ public class TouchController : MonoBehaviour
     Vector3 _clickTarget;
     bool _hasClickTarget;
 
-    public float WalkSpeed => walkSpeed;
+    /// <summary>Base walk speed scaled by <see cref="PlayerStats.MoveSpeedMultiplier"/>.</summary>
+    public float WalkSpeed => walkSpeed * MoveSpeedMultiplier;
+
+    /// <summary>Multiplies walk/run speed. Comes from <see cref="PlayerStats"/> via <see cref="PlayerVitals"/> (1 = normal).</summary>
+    float MoveSpeedMultiplier => _vitals != null && _vitals.Stats != null ? _vitals.Stats.MoveSpeedMultiplier : 1f;
 
     /// <summary>0..1 move intensity from stick magnitude, clamped to 1 at the run threshold (same
     /// semantics as <see cref="PlanetWalker.MotionAmount"/>) - lets other systems (e.g. DustTrailVfx)
@@ -77,6 +82,7 @@ public class TouchController : MonoBehaviour
         _input = GetComponent<StarterAssetsInputs>();
         _hasAnimator = TryGetComponent(out _animator);
         _camera = Camera.main;
+        _vitals = GetComponent<PlayerVitals>();
 
         if (groundLayer.value == 0)
             groundLayer = LayerMask.GetMask("Ground");
@@ -216,12 +222,14 @@ public class TouchController : MonoBehaviour
         MotionAmount = inputMagnitude > 0.01f ? Mathf.Clamp01(inputMagnitude / runInputThreshold) : 0f;
 
         // Soft push = walk, hard push = run. No sprint button.
+        float speedMultiplier = MoveSpeedMultiplier;
         float targetSpeed = 0f;
         if (inputMagnitude > 0.01f)
         {
             targetSpeed = inputMagnitude >= runInputThreshold
                 ? runSpeed
                 : Mathf.Lerp(walkSpeed * 0.5f, walkSpeed, inputMagnitude / runInputThreshold);
+            targetSpeed *= speedMultiplier;
         }
 
         float currentHorizontalSpeed = new Vector3(_controller.velocity.x, 0f, _controller.velocity.z).magnitude;

@@ -37,6 +37,7 @@ public class PlanetWalker : MonoBehaviour
     TouchController _flatMotor;
     Animator _animator;
     Camera _camera;
+    PlayerVitals _vitals;
     Rigidbody _body;
     CapsuleCollider _triggerBody;
 
@@ -64,7 +65,12 @@ public class PlanetWalker : MonoBehaviour
     const float Idle1Chance = 0.8f;
 
     public bool IsWalkingOnPlanet => _ownsControl && _planet != null;
-    public float WalkSpeed => walkSpeed;
+
+    /// <summary>Base walk speed scaled by <see cref="PlayerStats.MoveSpeedMultiplier"/>.</summary>
+    public float WalkSpeed => walkSpeed * MoveSpeedMultiplier;
+
+    /// <summary>Multiplies walk/run speed. Comes from <see cref="PlayerStats"/> via <see cref="PlayerVitals"/> (1 = normal).</summary>
+    float MoveSpeedMultiplier => _vitals != null && _vitals.Stats != null ? _vitals.Stats.MoveSpeedMultiplier : 1f;
 
     /// <summary>Intended tangent velocity (units/sec). Drives motion-aware camera framing.</summary>
     public Vector3 PlanarVelocity { get; private set; }
@@ -82,6 +88,7 @@ public class PlanetWalker : MonoBehaviour
         _flatMotor = GetComponent<TouchController>();
         _animator = GetComponent<Animator>();
         _camera = Camera.main;
+        _vitals = GetComponent<PlayerVitals>();
 
         if (groundLayer.value == 0)
             groundLayer = LayerMask.GetMask("Ground");
@@ -235,12 +242,14 @@ public class PlanetWalker : MonoBehaviour
         Vector3 up = _planet.GetUpAt(transform.position);
         Vector2 moveInput = _input.move;
         float inputMagnitude = Mathf.Clamp01(moveInput.magnitude);
+        float speedMultiplier = MoveSpeedMultiplier;
         float targetSpeed = 0f;
         if (inputMagnitude > 0.01f)
         {
             targetSpeed = inputMagnitude >= runInputThreshold
                 ? runSpeed
                 : walkSpeed * Mathf.Clamp01(inputMagnitude / runInputThreshold);
+            targetSpeed *= speedMultiplier;
         }
 
         Vector3 moveDir = GetTangentMoveDirection(moveInput, up);
