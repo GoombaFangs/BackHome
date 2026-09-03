@@ -568,7 +568,7 @@ MonoBehaviour:
   fallDrop: 0.5
   fallTiltDegrees: 3.5
   fadeIn: 0.9
-  overlayMaterial: {fileID: 2100000, guid: 5c5c6038823740e8abb599f556c5b97c, type: 2}
+  overlayMaterial: {fileID: 0}
 --- !u!1 &8601041975751530378
 GameObject:
   m_ObjectHideFlags: 0

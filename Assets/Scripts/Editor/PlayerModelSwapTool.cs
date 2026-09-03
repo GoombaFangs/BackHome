@@ -88,6 +88,7 @@ public static class PlayerModelSwapTool
     static readonly string SetupRunOnPlanetTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeSetupRunOnPlanet.trigger");
     static readonly string SetupIdleAnimationsTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeSetupIdleAnimations.trigger");
     static readonly string SetupDyingAnimationTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeSetupDyingAnimation.trigger");
+    static readonly string SetupHitReactionTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeSetupHitReaction.trigger");
     static readonly string DumpLivePlayerHierarchyTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeDumpLivePlayerHierarchy.trigger");
     static readonly string DumpBoneTransformsTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeDumpBoneTransforms.trigger");
     static readonly string CloseIsolationStageTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeCloseIsolationStage.trigger");
@@ -154,6 +155,13 @@ public static class PlayerModelSwapTool
             try { System.IO.File.Delete(SetupIdleAnimationsTriggerFilePath); } catch { /* ignore */ }
             Debug.Log("[BackHome] Setup-idle-animations trigger detected - wiring up the Idle1/Idle2 idle animations.");
             SetupPlayerIdleAnimations();
+        }
+
+        if (System.IO.File.Exists(SetupHitReactionTriggerFilePath))
+        {
+            try { System.IO.File.Delete(SetupHitReactionTriggerFilePath); } catch { /* ignore */ }
+            Debug.Log("[BackHome] Setup-hit-reaction trigger detected - wiring up the Hit damage-flinch state.");
+            SetupPlayerHitReaction();
         }
 
         if (System.IO.File.Exists(SetupDyingAnimationTriggerFilePath))
@@ -1247,6 +1255,58 @@ public static class PlayerModelSwapTool
     }
 
     /// <summary>
+    /// Wires up a quick damage-flinch reaction that reuses the very same Dying clip (no new asset
+    /// needed - see <see cref="WireHitStateIntoController"/>) but only ever plays a short 0.5s-0.65s
+    /// slice of it: <c>PlayerHitReaction</c> sets the new "Hit" bool true the instant <c>PlayerVitals.Damaged</c>
+    /// fires, then clears it again after that short window from script, at which point the
+    /// (already-present) Run/Idle1/Idle2 Any State transitions - now rebuilt with an added
+    /// "Hit == false" guard - immediately resume normal locomotion on their own. "Dead" always
+    /// wins over "Hit" so a killing blow's flinch can never fight the death animation. Run this
+    /// after "Setup Player Dying Animation" (needs the "Dying" state/clip to already exist).
+    /// </summary>
+    [MenuItem("BackHome/Player/Setup Player Hit Reaction")]
+    public static void SetupPlayerHitReaction()
+    {
+        try
+        {
+            if (!WireHitStateIntoController())
+                return;
+
+            AddPlayerHitReactionComponent();
+
+            AssetDatabase.SaveAssets();
+            Debug.Log("[BackHome] Player hit-reaction wired up: 'Hit' bool parameter added, Any State -> Hit transition added (reuses the Dying clip; PlayerHitReaction.cs trims it to its 0.5s-0.65s slice at runtime), and PlayerHitReaction attached to Player.prefab.");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            Debug.LogError("[BackHome] Setup-Player-Hit-Reaction aborted due to the exception above.");
+        }
+    }
+
+    /// <summary>
+    /// Adds a <see cref="PlayerHitReaction"/> component to Player.prefab's root (the same
+    /// GameObject as the Animator and PlayerVitals) if it isn't already there. No-op otherwise.
+    /// </summary>
+    static void AddPlayerHitReactionComponent()
+    {
+        GameObject root = PrefabUtility.LoadPrefabContents(PlayerPrefabPath);
+        try
+        {
+            if (root.GetComponent<PlayerHitReaction>() == null)
+            {
+                root.AddComponent<PlayerHitReaction>();
+                PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefabPath);
+                Debug.Log("[BackHome] Added PlayerHitReaction to Player.prefab.");
+            }
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(root);
+        }
+    }
+
+    /// <summary>
     /// Rewrites every curve (and object-reference curve) in <paramref name="clip"/> whose path is
     /// exactly <paramref name="oldRootName"/> or starts with "<paramref name="oldRootName"/>/" so
     /// that leading path segment becomes <paramref name="newRootName"/> instead - i.e. re-roots
@@ -1368,12 +1428,14 @@ public static class PlayerModelSwapTool
 
         const float switchDuration = 0.15f;
 
-        // If the Dying state/parameter has already been wired up (see WireDyingStateIntoController),
-        // guard every locomotion transition below with "Dead == false" too, so re-running this tool
-        // after death is wired up can never leave a way for Moving/IdleVariant to pull the character
-        // back out of its death pose. No-op (no condition added) the first time this ever runs, since
-        // the "Dead" parameter won't exist yet.
+        // If the Dying/Hit state(s)/parameter(s) have already been wired up (see
+        // WireDyingStateIntoController / WireHitStateIntoController), guard every locomotion
+        // transition below with "Dead == false" / "Hit == false" too, so re-running this tool
+        // after either is wired up can never leave a way for Moving/IdleVariant to pull the
+        // character back out of its death pose or damage flinch. No-op (no condition added) the
+        // first time this ever runs, since neither parameter exists yet.
         bool hasDeadParameter = controller.parameters.Any(p => p.name == "Dead");
+        bool hasHitParameter = controller.parameters.Any(p => p.name == "Hit");
 
         AnimatorStateTransition toIdle1 = rootStateMachine.AddAnyStateTransition(idle1State);
         toIdle1.hasExitTime = false;
@@ -1384,6 +1446,8 @@ public static class PlayerModelSwapTool
         toIdle1.AddCondition(AnimatorConditionMode.Equals, 0, "IdleVariant");
         if (hasDeadParameter)
             toIdle1.AddCondition(AnimatorConditionMode.IfNot, 0, "Dead");
+        if (hasHitParameter)
+            toIdle1.AddCondition(AnimatorConditionMode.IfNot, 0, "Hit");
 
         AnimatorStateTransition toIdle2 = rootStateMachine.AddAnyStateTransition(idle2State);
         toIdle2.hasExitTime = false;
@@ -1394,6 +1458,8 @@ public static class PlayerModelSwapTool
         toIdle2.AddCondition(AnimatorConditionMode.Equals, 1, "IdleVariant");
         if (hasDeadParameter)
             toIdle2.AddCondition(AnimatorConditionMode.IfNot, 0, "Dead");
+        if (hasHitParameter)
+            toIdle2.AddCondition(AnimatorConditionMode.IfNot, 0, "Hit");
 
         AnimatorStateTransition toRun = rootStateMachine.AddAnyStateTransition(runState);
         toRun.hasExitTime = false;
@@ -1403,6 +1469,8 @@ public static class PlayerModelSwapTool
         toRun.AddCondition(AnimatorConditionMode.If, 0, "Moving");
         if (hasDeadParameter)
             toRun.AddCondition(AnimatorConditionMode.IfNot, 0, "Dead");
+        if (hasHitParameter)
+            toRun.AddCondition(AnimatorConditionMode.IfNot, 0, "Hit");
 
         // The actual "loop N times, then swap to the other idle" alternation - no scripting
         // needed, an exit time > 1 on a looping state fires after that many full loops (integer
@@ -1472,6 +1540,7 @@ public static class PlayerModelSwapTool
             rootStateMachine.RemoveAnyStateTransition(t);
 
         const float switchDuration = 0.15f;
+        bool hasHitParameter = controller.parameters.Any(p => p.name == "Hit");
 
         foreach (var state in new[] { runState, idle1State, idle2State })
         {
@@ -1484,6 +1553,8 @@ public static class PlayerModelSwapTool
             t.duration = switchDuration;
             t.canTransitionToSelf = false;
             t.AddCondition(AnimatorConditionMode.IfNot, 0, "Dead");
+            if (hasHitParameter)
+                t.AddCondition(AnimatorConditionMode.IfNot, 0, "Hit");
 
             if (state == runState)
                 t.AddCondition(AnimatorConditionMode.If, 0, "Moving");
@@ -1512,6 +1583,124 @@ public static class PlayerModelSwapTool
 
         EditorUtility.SetDirty(controller);
         Debug.Log("[BackHome] Added/refreshed the 'Dying' state and 'Dead' parameter, and guarded every Run/Idle1/Idle2 Any State transition with 'Dead == false' so death can't be interrupted.");
+        return true;
+    }
+
+    /// <summary>
+    /// Adds/refreshes the "Hit" state and "Hit" bool parameter on the shared locomotion
+    /// AnimatorController - a quick damage flinch that reuses the exact same clip as "Dying"
+    /// (no new asset needed) but only ever plays a short 0.5s-0.65s slice of it: <c>PlayerHitReaction</c> sets
+    /// "Hit" true the instant <c>PlayerVitals.Damaged</c> fires, then clears it again after that
+    /// short window from script - at which point the (now unblocked) Run/Idle1/Idle2 Any State
+    /// transitions immediately resume normal locomotion on their own, so Hit needs no outgoing
+    /// transition of its own. "Dead" always wins over "Hit" (the Any State -> Hit transition
+    /// requires "Dead == false"), so a killing blow's flinch can never fight the death animation.
+    /// Rebuilds every Any State transition touching Run/Idle1/Idle2/Dying/Hit from scratch
+    /// (mirroring <see cref="WireDyingStateIntoController"/>) so re-running this tool never leaves
+    /// a stale/missing guard behind. Requires the "Dying" state to already exist - run
+    /// "Setup Player Dying Animation" first.
+    /// </summary>
+    static bool WireHitStateIntoController()
+    {
+        var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
+        if (controller == null)
+        {
+            Debug.LogError($"[BackHome] Could not load AnimatorController at {ControllerPath}");
+            return false;
+        }
+
+        AnimatorStateMachine rootStateMachine = controller.layers[0].stateMachine;
+
+        AnimatorState runState = rootStateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == "Run");
+        AnimatorState idle1State = rootStateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == "Idle1");
+        AnimatorState idle2State = rootStateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == "Idle2");
+        AnimatorState dyingState = rootStateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == "Dying");
+        if (runState == null || dyingState == null)
+        {
+            Debug.LogError("[BackHome] Could not find the 'Run'/'Dying' states in the AnimatorController - run 'Setup Player Dying Animation' first.");
+            return false;
+        }
+
+        Motion dyingClip = dyingState.motion;
+
+        // The clip's very first frames (the character starting to stumble) don't read well as a
+        // quick damage flinch - later in the clip (a sharper recoil) looks much better. PlayerHitReaction
+        // still only holds "Hit" true for hitDuration seconds, so starting the state at a normalized
+        // offset here is what actually selects *which* window of the clip plays (currently 0.5s-0.65s).
+        const float hitWindowStartSeconds = 0.5f;
+        AnimationClip dyingAnimClip = dyingClip as AnimationClip;
+        float dyingClipLength = dyingAnimClip != null && dyingAnimClip.length > 0.001f ? dyingAnimClip.length : 1f;
+        float hitStartNormalized = Mathf.Clamp01(hitWindowStartSeconds / dyingClipLength);
+
+        if (!controller.parameters.Any(p => p.name == "Hit"))
+            controller.AddParameter("Hit", AnimatorControllerParameterType.Bool);
+
+        AnimatorState hitState = rootStateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == "Hit")
+            ?? rootStateMachine.AddState("Hit", new Vector3(700, 360, 0));
+        hitState.motion = dyingClip;
+        hitState.speedParameterActive = false;
+        hitState.speed = 1f;
+
+        // Rebuild every Any State transition touching Run/Idle1/Idle2/Dying/Hit from scratch so
+        // re-running this tool never leaves a stale/duplicate transition (or a locomotion
+        // transition missing the "Hit == false" guard) behind.
+        var locomotionStates = new[] { runState, idle1State, idle2State, dyingState, hitState }.Where(s => s != null).ToList();
+        foreach (var t in rootStateMachine.anyStateTransitions.Where(t => locomotionStates.Contains(t.destinationState)).ToList())
+            rootStateMachine.RemoveAnyStateTransition(t);
+
+        const float switchDuration = 0.15f;
+
+        foreach (var state in new[] { runState, idle1State, idle2State })
+        {
+            if (state == null)
+                continue;
+
+            AnimatorStateTransition t = rootStateMachine.AddAnyStateTransition(state);
+            t.hasExitTime = false;
+            t.hasFixedDuration = true;
+            t.duration = switchDuration;
+            t.canTransitionToSelf = false;
+            t.AddCondition(AnimatorConditionMode.IfNot, 0, "Dead");
+            t.AddCondition(AnimatorConditionMode.IfNot, 0, "Hit");
+
+            if (state == runState)
+                t.AddCondition(AnimatorConditionMode.If, 0, "Moving");
+            else if (state == idle1State)
+            {
+                t.AddCondition(AnimatorConditionMode.IfNot, 0, "Moving");
+                t.AddCondition(AnimatorConditionMode.Equals, 0, "IdleVariant");
+            }
+            else if (state == idle2State)
+            {
+                t.AddCondition(AnimatorConditionMode.IfNot, 0, "Moving");
+                t.AddCondition(AnimatorConditionMode.Equals, 1, "IdleVariant");
+            }
+        }
+
+        // Dying keeps its unconditioned (besides "Dead") priority over everything, Hit included.
+        AnimatorStateTransition toDying = rootStateMachine.AddAnyStateTransition(dyingState);
+        toDying.hasExitTime = false;
+        toDying.hasFixedDuration = true;
+        toDying.duration = 0.1f;
+        toDying.canTransitionToSelf = false;
+        toDying.AddCondition(AnimatorConditionMode.If, 0, "Dead");
+
+        // Hit: fires the instant "Hit" becomes true, unless already dying/dead (which always
+        // wins). Enters the clip already offset to hitStartNormalized (~0.5s in, see above)
+        // instead of the clip's start. No outgoing transition of its own - PlayerHitReaction
+        // clears "Hit" after ~0.15s (see hitDuration there), at which point the (now unblocked)
+        // locomotion transitions above immediately take back over on their own.
+        AnimatorStateTransition toHit = rootStateMachine.AddAnyStateTransition(hitState);
+        toHit.hasExitTime = false;
+        toHit.hasFixedDuration = true;
+        toHit.duration = 0.05f;
+        toHit.offset = hitStartNormalized;
+        toHit.canTransitionToSelf = false;
+        toHit.AddCondition(AnimatorConditionMode.If, 0, "Hit");
+        toHit.AddCondition(AnimatorConditionMode.IfNot, 0, "Dead");
+
+        EditorUtility.SetDirty(controller);
+        Debug.Log($"[BackHome] Added/refreshed the 'Hit' state and 'Hit' parameter (now starting {hitWindowStartSeconds:0.0}s into the clip, normalized offset {hitStartNormalized:0.000}), guarded every Run/Idle1/Idle2 Any State transition with 'Hit == false' too, and made 'Dead' always win over 'Hit'.");
         return true;
     }
 

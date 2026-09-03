@@ -293,6 +293,7 @@ GameObject:
   - component: {fileID: 8234567890123456793}
   - component: {fileID: 8234567890123456794}
   - component: {fileID: 8234567890123456795}
+  - component: {fileID: 9087509891297419740}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -318,7 +319,8 @@ Transform:
   - {fileID: 1531970140092890744}
   - {fileID: 4501980631242158009}
   - {fileID: 3882775739667957177}
-  - {fileID: 694182561815150705}
+  - {fileID: 6681206608808221964}
+  - {fileID: 3542005289461901743}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
 --- !u!95 &7542673191595131398
@@ -650,6 +652,22 @@ MonoBehaviour:
   yawSway: 7
   rollSway: 5
   scalePulse: 0.018
+--- !u!114 &9087509891297419740
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7594552319720850513}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce17ce9acdb5b884aaf2fa71339d1632, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerHitReaction
+  hitDuration: 0.15
+  hitCooldown: 0.4
+  vfxHeight: 1
+  vfxLifetime: 2
 --- !u!1001 &910000200
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -723,7 +741,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f1a2b3c4d5e6f7081920a3b4c5d6e7f8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VitalsBarsView
---- !u!1001 &624562805433830536
+--- !u!1001 &3472104716826256726
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
@@ -771,24 +789,42 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 7258748583119482853, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
-      propertyPath: InitialModule.startColor.maxColor.a
-      value: 0.2
-      objectReference: {fileID: 0}
     - target: {fileID: 9027828195079308390, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
       propertyPath: m_Name
-      value: DustTrail
+      value: DustTrail_RightFoot
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 9027828195079308390, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7071898096945863242}
   m_SourcePrefab: {fileID: 100100000, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
---- !u!4 &694182561815150705 stripped
+--- !u!4 &3542005289461901743 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 74555492584475897, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
-  m_PrefabInstance: {fileID: 624562805433830536}
+  m_PrefabInstance: {fileID: 3472104716826256726}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &5577194879061483824 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 9027828195079308390, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+  m_PrefabInstance: {fileID: 3472104716826256726}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &7071898096945863242
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5577194879061483824}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fca297510129fe84fa6215d1d0313777, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DustTrailFootFollower
+  foot: 6
+  localOffset: {x: 0, y: 0, z: 0}
 --- !u!1001 &3632393393764868690
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -920,4 +956,88 @@ PrefabInstance:
 Transform:
   m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: f1f9aae48e8eda24cb1cbd9fae334a5c, type: 3}
   m_PrefabInstance: {fileID: 4174985243148535890}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1001 &6751095747704050165
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 5319693474325473463}
+    m_Modifications:
+    - target: {fileID: 74555492584475897, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 74555492584475897, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 74555492584475897, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 74555492584475897, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 74555492584475897, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 74555492584475897, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 74555492584475897, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 74555492584475897, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 74555492584475897, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 74555492584475897, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 9027828195079308390, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+      propertyPath: m_Name
+      value: DustTrail_LeftFoot
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 9027828195079308390, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2831543729434087081}
+  m_SourcePrefab: {fileID: 100100000, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+--- !u!1 &2376207601139029395 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 9027828195079308390, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+  m_PrefabInstance: {fileID: 6751095747704050165}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &2831543729434087081
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2376207601139029395}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fca297510129fe84fa6215d1d0313777, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DustTrailFootFollower
+  foot: 5
+  localOffset: {x: 0, y: 0, z: 0}
+--- !u!4 &6681206608808221964 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 74555492584475897, guid: 12494a932f1d21e4698ed1509b137053, type: 3}
+  m_PrefabInstance: {fileID: 6751095747704050165}
   m_PrefabAsset: {fileID: 0}
