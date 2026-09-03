@@ -2,24 +2,24 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 /// <summary>
-/// Fiery re-entry trail for the ShipCapsule crash cinematic (see <see cref="ShipCrashIntro"/>):
+/// Fiery re-entry trail for the player capsule crash cinematic (see <see cref="PlayerCrashIntro"/>):
 /// a bright core streak (TrailRenderer), a flickering fire Line (hot core + orange envelope),
 /// plus optional flame puffs, a sooty smoke fringe, and outward-flying sparks - together reading
 /// as a proper meteor fireball.
 ///
 /// Authored as a normal child ("FireTrail", with FlameBody/Smoke/Sparks/FireEmbers underneath it)
-/// inside the CapsuleTrailVfx prefab, so every particle system here is directly editable in
+/// inside the capsule's nested "TrailVfx", so every particle system here is directly editable in
 /// the Inspector/Scene view like any hand-authored effect. If any of those children are missing
-/// (e.g. this component ends up on a capsule that doesn't use that prefab), it falls back to
+/// (e.g. this component ends up on a capsule that doesn't have that nested), it falls back to
 /// building them procedurally in code so it still works as a drop-in component with nothing to
 /// wire up - see <see cref="ConfigureFlameBody"/> etc.
 ///
 /// Usage: <see cref="Play"/> when the fall starts, <see cref="Stop"/> on impact. If the
-/// GameObject doesn't already have this component, <see cref="ShipCrashIntro"/> adds it
+/// GameObject doesn't already have this component, <see cref="PlayerCrashIntro"/> adds it
 /// automatically with sensible defaults.
 /// </summary>
 [RequireComponent(typeof(TrailRenderer))]
-public class ShipFireTrail : MonoBehaviour
+public class PlayerFireTrail : MonoBehaviour
 {
     [Header("Trail Shape (bright core streak)")]
     [SerializeField, Min(0.05f)] float trailTime = 0.6f;
@@ -196,7 +196,7 @@ public class ShipFireTrail : MonoBehaviour
 
         ParticleSystem.ColorOverLifetimeModule colorOverLifetime = _flameBody.colorOverLifetime;
         colorOverLifetime.enabled = true;
-        colorOverLifetime.color = ShipVfxUtility.BuildFadeGradient(true);
+        colorOverLifetime.color = PlayerVfxUtility.BuildFadeGradient(true);
 
         ParticleSystem.RotationOverLifetimeModule rotationOverLifetime = _flameBody.rotationOverLifetime;
         rotationOverLifetime.enabled = true;
@@ -301,7 +301,7 @@ public class ShipFireTrail : MonoBehaviour
 
         ParticleSystem.ColorOverLifetimeModule colorOverLifetime = _sparks.colorOverLifetime;
         colorOverLifetime.enabled = true;
-        colorOverLifetime.color = ShipVfxUtility.BuildFadeGradient(true);
+        colorOverLifetime.color = PlayerVfxUtility.BuildFadeGradient(true);
 
         ParticleSystem.SizeOverLifetimeModule sizeOverLifetime = _sparks.sizeOverLifetime;
         sizeOverLifetime.enabled = true;
@@ -342,7 +342,7 @@ public class ShipFireTrail : MonoBehaviour
 
         ParticleSystem.ColorOverLifetimeModule colorOverLifetime = _embers.colorOverLifetime;
         colorOverLifetime.enabled = true;
-        colorOverLifetime.color = ShipVfxUtility.BuildFadeGradient(true);
+        colorOverLifetime.color = PlayerVfxUtility.BuildFadeGradient(true);
 
         ParticleSystem.SizeOverLifetimeModule sizeOverLifetime = _embers.sizeOverLifetime;
         sizeOverLifetime.enabled = true;
@@ -390,7 +390,7 @@ public class ShipFireTrail : MonoBehaviour
             Material source = _trail != null && _trail.sharedMaterial != null
                 ? _trail.sharedMaterial
                 : GetTrailMaterial();
-            _lineMaterial = new Material(source) { name = "ShipFireTrail_Line" };
+            _lineMaterial = new Material(source) { name = "PlayerFireTrail_Line" };
         }
 
         ApplyFireLineStyle(_lineCore, lineCoreWidth, 3, BuildFireLineGradient(true));
@@ -445,7 +445,7 @@ public class ShipFireTrail : MonoBehaviour
 
         ParticleSystem.ColorOverLifetimeModule colorOverLifetime = _lineTongues.colorOverLifetime;
         colorOverLifetime.enabled = true;
-        colorOverLifetime.color = ShipVfxUtility.BuildFadeGradient(true);
+        colorOverLifetime.color = PlayerVfxUtility.BuildFadeGradient(true);
 
         ParticleSystem.SizeOverLifetimeModule sizeOverLifetime = _lineTongues.sizeOverLifetime;
         sizeOverLifetime.enabled = true;
@@ -603,8 +603,8 @@ public class ShipFireTrail : MonoBehaviour
             Destroy(_lineMaterial);
     }
 
-    /// <summary>Looks for an already-authored child (e.g. baked into the CapsuleTrailVfx
-    /// prefab) so Awake() can reuse it as-is instead of stomping hand-tuned values with the
+    /// <summary>Looks for an already-authored child (e.g. baked into the capsule's nested
+    /// "TrailVfx") so Awake() can reuse it as-is instead of stomping hand-tuned values with the
     /// procedural defaults below.</summary>
     bool TryGetExistingChild(string name, out ParticleSystem ps)
     {
@@ -621,10 +621,10 @@ public class ShipFireTrail : MonoBehaviour
     }
 
     /// <summary>Re-parents FlameBody/Smoke/Sparks/FireEmbers under <paramref name="parent"/> (e.g.
-    /// ShipReentryGlow.EffectRoot, "CapsuleTrailVfx") purely for a tidy hierarchy - all of
+    /// PlayerReentryGlow.EffectRoot, "TrailVfx") purely for a tidy hierarchy - all of
     /// them simulate in world space, so moving them in the hierarchy has no effect on where the
     /// particles actually appear. Only meaningful for the procedural fallback path (no authored
-    /// "FireTrail" child was found, see ShipCrashIntro.ResolveFireTrail) - when the children are
+    /// "FireTrail" child was found, see PlayerCrashIntro.ResolveFireTrail) - when the children are
     /// reused from the prefab they're already correctly nested. Safe no-op if <paramref
     /// name="parent"/> is null.</summary>
     public void SetEffectParent(Transform parent)
@@ -741,9 +741,9 @@ public class ShipFireTrail : MonoBehaviour
     {
         if (_trailMaterial == null)
         {
-            _trailMaterial = Resources.Load<Material>("Ship/Capsule/Materials/ReentryFlame");
+            _trailMaterial = Resources.Load<Material>("Player/Capsule/Materials/ReentryFlame");
             if (_trailMaterial == null)
-                _trailMaterial = ShipVfxUtility.BuildParticleMaterial(Texture2D.whiteTexture, true, "ShipFireTrail_Streak (Generated)", TrailHdrBoost);
+                _trailMaterial = PlayerVfxUtility.BuildParticleMaterial(Texture2D.whiteTexture, true, "PlayerFireTrail_Streak (Generated)", TrailHdrBoost);
         }
         return _trailMaterial;
     }
@@ -751,28 +751,28 @@ public class ShipFireTrail : MonoBehaviour
     static Material GetFlameMaterial()
     {
         if (_flameMaterial == null)
-            _flameMaterial = ShipVfxUtility.BuildParticleMaterial(ShipVfxUtility.GetFireGlowTexture(), true, "ShipFireTrail_Flame (Generated)", FlameHdrBoost);
+            _flameMaterial = PlayerVfxUtility.BuildParticleMaterial(PlayerVfxUtility.GetFireGlowTexture(), true, "PlayerFireTrail_Flame (Generated)", FlameHdrBoost);
         return _flameMaterial;
     }
 
     static Material GetSmokeMaterial()
     {
         if (_smokeMaterial == null)
-            _smokeMaterial = ShipVfxUtility.BuildParticleMaterial(ShipVfxUtility.GetFireSmokeTexture(), false, "ShipFireTrail_Smoke (Generated)");
+            _smokeMaterial = PlayerVfxUtility.BuildParticleMaterial(PlayerVfxUtility.GetFireSmokeTexture(), false, "PlayerFireTrail_Smoke (Generated)");
         return _smokeMaterial;
     }
 
     static Material GetSparkMaterial()
     {
         if (_sparkMaterial == null)
-            _sparkMaterial = ShipVfxUtility.BuildParticleMaterial(ShipVfxUtility.GetSoftDotTexture(), true, "ShipFireTrail_Spark (Generated)", SparkHdrBoost);
+            _sparkMaterial = PlayerVfxUtility.BuildParticleMaterial(PlayerVfxUtility.GetSoftDotTexture(), true, "PlayerFireTrail_Spark (Generated)", SparkHdrBoost);
         return _sparkMaterial;
     }
 
     static Material GetEmberMaterial()
     {
         if (_emberMaterial == null)
-            _emberMaterial = ShipVfxUtility.BuildParticleMaterial(ShipVfxUtility.GetSoftDotTexture(), true, "ShipFireTrail_Ember (Generated)", EmberHdrBoost);
+            _emberMaterial = PlayerVfxUtility.BuildParticleMaterial(PlayerVfxUtility.GetSoftDotTexture(), true, "PlayerFireTrail_Ember (Generated)", EmberHdrBoost);
         return _emberMaterial;
     }
 }

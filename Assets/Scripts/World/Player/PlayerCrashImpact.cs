@@ -3,26 +3,26 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 /// <summary>
-/// One-shot impact burst for the ShipCapsule crash cinematic (see <see cref="ShipCrashIntro"/>):
+/// One-shot impact burst for the player capsule crash cinematic (see <see cref="PlayerCrashIntro"/>):
 /// an explosive flash + dust cloud + fiery sparks + tumbling rock debris, all firing the instant
 /// the capsule hits the ground.
 ///
-/// Like <see cref="ShipReentryGlow"/>, the actual look is authored as a normal prefab (<see
-/// cref="effectPrefab"/>, e.g. "CapsuleImpact") - drag one in and it's fully editable with the
+/// Like <see cref="PlayerReentryGlow"/>, the actual look is authored as a normal prefab (<see
+/// cref="effectPrefab"/>, e.g. "ImpactVfx") - drag one in and it's fully editable with the
 /// regular Particle System inspectors instead of being generated in code. Wire it via
-/// ShipCrashIntro.impactEffectPrefab (or assign it directly here if you add this component to the
-/// ShipCapsule by hand). If left empty, falls back to building everything procedurally in code so
+/// PlayerCrashIntro.impactEffectPrefab (or assign it directly here if you add this component to
+/// the capsule by hand). If left empty, falls back to building everything procedurally in code so
 /// it still works as a single drop-in component with nothing to wire up.
 ///
 /// Usage: call <see cref="Trigger"/> exactly once, at the moment of impact. If the GameObject
-/// doesn't already have this component, <see cref="ShipCrashIntro"/> adds it automatically.
+/// doesn't already have this component, <see cref="PlayerCrashIntro"/> adds it automatically.
 /// </summary>
-public class ShipCrashImpact : MonoBehaviour
+public class PlayerCrashImpact : MonoBehaviour
 {
     [Header("Effect Prefab")]
-    [Tooltip("Authored impact burst prefab (flash + dust + sparks + debris, e.g. CapsuleImpactVfx). " +
+    [Tooltip("Authored impact burst prefab (flash + dust + sparks + debris, e.g. ImpactVfx). " +
         "Edit this prefab directly in the Editor to tune the look - it's instantiated as-is at " +
-        "runtime. Leave empty to load Ship/Capsule/CapsuleImpactVfx from Resources, then fall " +
+        "runtime. Leave empty to load Player/Capsule/ImpactVfx from Resources, then fall " +
         "back to the procedural builder below.")]
     [SerializeField] GameObject effectPrefab;
 
@@ -61,16 +61,16 @@ public class ShipCrashImpact : MonoBehaviour
 
     [Header("Crater")]
     [Tooltip("Impact crater mesh spawned on the planet surface at the moment of impact. " +
-        "Leave empty to load Ship/Capsule/Crater from Resources.")]
+        "Leave empty to load Player/Capsule/Crater from Resources.")]
     [SerializeField] GameObject craterPrefab;
     [SerializeField, Min(0.01f)] float craterScale = 6f;
     [Tooltip("How far to sink the crater into the ground, in world units. Keeps the rim on the " +
         "surface and the bowl clipping into the planet instead of sitting on top like a hat.")]
     [SerializeField] float craterEmbed = 0.2f;
 
-    const string DefaultEffectResource = "Ship/Capsule/CapsuleImpactVfx";
-    const string DefaultCraterResource = "Ship/Capsule/Crater";
-    const string DefaultCraterMaterialResource = "Ship/Capsule/Materials/Crater";
+    const string DefaultEffectResource = "Player/Capsule/ImpactVfx";
+    const string DefaultCraterResource = "Player/Capsule/Crater";
+    const string DefaultCraterMaterialResource = "Player/Capsule/Materials/Crater";
 
     GameObject _instance;
     ParticleSystem[] _systems;
@@ -82,9 +82,9 @@ public class ShipCrashImpact : MonoBehaviour
     static Material _softAlphaMaterial;
     static Material _debrisMaterial;
 
-    /// <summary>Assign the authored prefab (e.g. from ShipCrashIntro right after adding this
+    /// <summary>Assign the authored prefab (e.g. from PlayerCrashIntro right after adding this
     /// component). Safe to call any time before Trigger() - deliberately NOT built in Awake():
-    /// when ShipCrashIntro adds this component via AddComponent, Awake() runs synchronously
+    /// when PlayerCrashIntro adds this component via AddComponent, Awake() runs synchronously
     /// before SetEffectPrefab() gets a chance to run, which would otherwise lock in the
     /// procedural fallback before the prefab is ever assigned. Trigger() builds lazily on first
     /// use instead, by which point the prefab (if any) is already wired up.</summary>
@@ -145,7 +145,7 @@ public class ShipCrashImpact : MonoBehaviour
             debrisCount, debrisSpeed, debrisSize, debrisLifetime,
             new ParticleSystem.MinMaxGradient(Color.white), gravity: debrisGravity,
             GetDebrisMaterial(), fadeToBlack: false, drag: 0f,
-            mesh: ShipVfxUtility.GetCubeMesh(), tumble: true, fade: false, randomDirectionAmount: 0.5f));
+            mesh: PlayerVfxUtility.GetCubeMesh(), tumble: true, fade: false, randomDirectionAmount: 0.5f));
 
         _systems = built.ToArray();
         PrepareSystems(_systems);
@@ -184,7 +184,7 @@ public class ShipCrashImpact : MonoBehaviour
             : Resources.Load<GameObject>(DefaultCraterResource);
         if (prefab == null)
         {
-            Debug.LogWarning("ShipCrashImpact: no crater model found at Resources/" +
+            Debug.LogWarning("PlayerCrashImpact: no crater model found at Resources/" +
                 DefaultCraterResource + ".", this);
             return;
         }
@@ -233,7 +233,7 @@ public class ShipCrashImpact : MonoBehaviour
 
     void EmbedInSurface(Transform crater, Vector3 surface, Vector3 up)
     {
-        if (!ShipVfxUtility.TryGetRendererBounds(crater, out Bounds bounds))
+        if (!PlayerVfxUtility.TryGetRendererBounds(crater, out Bounds bounds))
         {
             crater.position = surface - up * craterEmbed;
             return;
@@ -411,7 +411,7 @@ public class ShipCrashImpact : MonoBehaviour
 
         ParticleSystem.ColorOverLifetimeModule colorOverLifetime = ps.colorOverLifetime;
         colorOverLifetime.enabled = true;
-        colorOverLifetime.color = ShipVfxUtility.BuildFadeGradient(false);
+        colorOverLifetime.color = PlayerVfxUtility.BuildFadeGradient(false);
 
         ParticleSystemRenderer renderer = go.GetComponent<ParticleSystemRenderer>();
         renderer.renderMode = ParticleSystemRenderMode.Billboard;
@@ -429,7 +429,7 @@ public class ShipCrashImpact : MonoBehaviour
         // Heavily over-brightened - this single puff needs to blow straight through the Bloom
         // threshold on its own to read as a blinding "boom" rather than a soft glow.
         if (_flashMaterial == null)
-            _flashMaterial = ShipVfxUtility.BuildParticleMaterial(ShipVfxUtility.GetSoftDotTexture(), true, "ShipCrashImpact_Flash (Generated)", 4.5f);
+            _flashMaterial = PlayerVfxUtility.BuildParticleMaterial(PlayerVfxUtility.GetSoftDotTexture(), true, "PlayerCrashImpact_Flash (Generated)", 4.5f);
         return _flashMaterial;
     }
 
@@ -438,21 +438,21 @@ public class ShipCrashImpact : MonoBehaviour
         // Over-brightened so the spark burst blooms into a punchy flash right on impact instead
         // of a dim scatter of dots.
         if (_softAdditiveMaterial == null)
-            _softAdditiveMaterial = ShipVfxUtility.BuildParticleMaterial(ShipVfxUtility.GetSoftDotTexture(), true, "ShipCrashImpact_Additive (Generated)", 2.8f);
+            _softAdditiveMaterial = PlayerVfxUtility.BuildParticleMaterial(PlayerVfxUtility.GetSoftDotTexture(), true, "PlayerCrashImpact_Additive (Generated)", 2.8f);
         return _softAdditiveMaterial;
     }
 
     static Material GetSoftAlphaMaterial()
     {
         if (_softAlphaMaterial == null)
-            _softAlphaMaterial = ShipVfxUtility.BuildParticleMaterial(ShipVfxUtility.GetSoftDotTexture(), false, "ShipCrashImpact_Dust (Generated)");
+            _softAlphaMaterial = PlayerVfxUtility.BuildParticleMaterial(PlayerVfxUtility.GetSoftDotTexture(), false, "PlayerCrashImpact_Dust (Generated)");
         return _softAlphaMaterial;
     }
 
     Material GetDebrisMaterial()
     {
         if (_debrisMaterial == null)
-            _debrisMaterial = ShipVfxUtility.BuildOpaqueTintedMaterial(debrisColor, "ShipCrashImpact_Debris (Generated)");
+            _debrisMaterial = PlayerVfxUtility.BuildOpaqueTintedMaterial(debrisColor, "PlayerCrashImpact_Debris (Generated)");
         return _debrisMaterial;
     }
 }

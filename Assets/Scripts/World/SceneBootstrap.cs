@@ -32,7 +32,7 @@ public class SceneBootstrap : MonoBehaviour
 
         // If a crash-landing cinematic is present in the scene, wait for it to finish
         // (camera follows the capsule) before spawning the player and taking the camera back.
-        ShipCrashIntro crashIntro = FindAnyObjectByType<ShipCrashIntro>();
+        PlayerCrashIntro crashIntro = FindAnyObjectByType<PlayerCrashIntro>();
         if (crashIntro != null)
             crashIntro.OnLanded += SpawnPlayerAndBindCamera;
         else

@@ -2,16 +2,16 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 /// <summary>
-/// Shared procedural building blocks for the ShipCapsule crash VFX (<see cref="ShipFireTrail"/>,
-/// <see cref="ShipCrashImpact"/>, <see cref="ShipReentryGlow"/>). Everything here is generated in
-/// code - no texture/material/mesh assets required - so every effect stays a drop-in component.
+/// Shared procedural building blocks for the player capsule crash VFX (<see cref="PlayerFireTrail"/>,
+/// <see cref="PlayerCrashImpact"/>, <see cref="PlayerReentryGlow"/>). Everything here is generated
+/// in code - no texture/material/mesh assets required - so every effect stays a drop-in component.
 /// </summary>
-public static class ShipVfxUtility
+public static class PlayerVfxUtility
 {
     static Texture2D _softDotTexture;
     static Mesh _cubeMesh;
 
-    /// <summary>Flame/glow sprite for ship fire. Procedural soft-dot — no texture asset required.</summary>
+    /// <summary>Flame/glow sprite for the capsule's re-entry fire. Procedural soft-dot — no texture asset required.</summary>
     public static Texture2D GetFireGlowTexture() => GetSoftDotTexture();
 
     /// <summary>Smoke puff sprite for the fire trail fringe. Same procedural dot as glow.</summary>
@@ -27,10 +27,10 @@ public static class ShipVfxUtility
         const int size = 32;
         var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
         {
-            name = "ShipVfx_SoftDot (Generated)",
+            name = "PlayerVfx_SoftDot (Generated)",
             wrapMode = TextureWrapMode.Clamp,
             filterMode = FilterMode.Bilinear,
-            // No HideFlags.DontSave: Editor bake tools (e.g. ShipCapsuleVfxBaker) embed whatever
+            // No HideFlags.DontSave: Editor bake tools (e.g. PlayerCapsuleVfxBaker) embed whatever
             // material/texture is live at the time straight into a saved prefab asset - DontSave
             // makes Unity silently drop this texture (and with it, the whole material reference)
             // the moment that asset gets serialized to disk, which is exactly what caused baked
@@ -161,7 +161,7 @@ public static class ShipVfxUtility
     }
 
     /// <summary>Combined world-space bounds of every renderer under root - used to auto-fit
-    /// effects to whatever the actual ShipCapsule model's size turns out to be.</summary>
+    /// effects to whatever the actual capsule model's size turns out to be.</summary>
     public static bool TryGetRendererBounds(Transform root, out Bounds bounds)
     {
         Renderer[] renderers = root.GetComponentsInChildren<Renderer>();

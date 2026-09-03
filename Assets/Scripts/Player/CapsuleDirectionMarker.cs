@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// Two floating billboard icons near the player that point toward the ship capsule — a "home"
+/// Two floating billboard icons near the player that point toward the player capsule — a "home"
 /// badge close to the player and an arrow further out along the same direction, both always
 /// facing the camera (the arrow also rolls in-plane to point at the capsule).
 /// Physically in the world, not UI. Hidden outside the planet scene, or once the player is
@@ -63,8 +63,8 @@ public class CapsuleDirectionMarker : MonoBehaviour
 
     bool TryResolveCapsule()
     {
-        if (_capsule == null && ShipCapsuleBeacon.Instance != null)
-            _capsule = ShipCapsuleBeacon.Instance.transform;
+        if (_capsule == null && PlayerCapsuleBeacon.Instance != null)
+            _capsule = PlayerCapsuleBeacon.Instance.transform;
         return _owner != null && _capsule != null;
     }
 

@@ -2,15 +2,15 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// Builds two floating billboard icons (home badge + arrow) that point toward the ship capsule,
-/// and wires them as a permanent child of the Player prefab. Also tags the ship capsule prefab
+/// Builds two floating billboard icons (home badge + arrow) that point toward the player capsule,
+/// and wires them as a permanent child of the Player prefab. Also tags the capsule prefab
 /// with a findable beacon. Runs automatically on editor load.
 /// Menu: BackHome → Build Capsule Direction Marker
 /// </summary>
 public static class CapsuleDirectionMarkerSetup
 {
     const string PlayerPrefabPath = "Assets/Resources/Player/Player.prefab";
-    const string CapsulePrefabPath = "Assets/Resources/Ship/Capsule/ShipCapsule.prefab";
+    const string CapsulePrefabPath = "Assets/Resources/Player/Capsule/PlayerDiveDownCapsule.prefab";
     const string NavigationFolder = "Assets/Resources/Player/Navigation";
     const string MaterialPath = NavigationFolder + "/NavigationSprite.mat";
     const string HomeSpritePath = NavigationFolder + "/HomeArrowNavigation.png";
@@ -66,14 +66,14 @@ public static class CapsuleDirectionMarkerSetup
     public static bool EnsureBeaconOnCapsule()
     {
         GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(CapsulePrefabPath);
-        if (prefab == null || prefab.GetComponent<ShipCapsuleBeacon>() != null)
+        if (prefab == null || prefab.GetComponent<PlayerCapsuleBeacon>() != null)
             return false;
 
         GameObject root = PrefabUtility.LoadPrefabContents(CapsulePrefabPath);
         try
         {
-            if (root.GetComponent<ShipCapsuleBeacon>() == null)
-                root.AddComponent<ShipCapsuleBeacon>();
+            if (root.GetComponent<PlayerCapsuleBeacon>() == null)
+                root.AddComponent<PlayerCapsuleBeacon>();
             PrefabUtility.SaveAsPrefabAsset(root, CapsulePrefabPath);
         }
         finally

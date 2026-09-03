@@ -2,23 +2,28 @@ using System.Collections;
 using UnityEngine;
 
 /// <summary>
-/// Continuous "already on fire" ambient effect for the ShipCapsule crash cinematic (see
-/// <see cref="ShipCrashIntro"/>): a flame shell hugging the hull, embers peeling off, and a warm
+/// Continuous "already on fire" ambient effect for the player capsule crash cinematic (see
+/// <see cref="PlayerCrashIntro"/>): a flame shell hugging the hull, embers peeling off, and a warm
 /// flickering light. Runs the whole time the capsule is airborne - from the moment it appears
 /// alone in space through the crash fall - so the space-hold doesn't read as "frozen still", but
 /// as "already burning, already falling". Stops on impact.
 ///
-/// Unlike <see cref="ShipFireTrail"/> / <see cref="ShipCrashImpact"/>, the actual look is authored
-/// as a normal prefab (<see cref="effectPrefab"/>) - drag one in and it's fully editable with the
-/// regular Particle System / Light inspectors and Scene view preview, instead of being generated
-/// in code. Wire it via ShipCrashIntro.reentryEffectPrefab (or assign it directly here if you add
-/// this component to the ShipCapsule by hand).
+/// Unlike <see cref="PlayerFireTrail"/> / <see cref="PlayerCrashImpact"/>, the actual look is
+/// authored as a normal prefab (<see cref="effectPrefab"/>) - drag one in and it's fully editable
+/// with the regular Particle System / Light inspectors and Scene view preview, instead of being
+/// generated in code. Wire it via PlayerCrashIntro.reentryEffectPrefab (or assign it directly here
+/// if you add this component to the capsule by hand).
+///
+/// In the common case (PlayerDiveDownCapsule) the effect is already nested directly on the
+/// capsule as a child named "TrailVfx" - <see cref="Build"/> reuses that child as-is instead of
+/// instantiating a second copy, and <see cref="effectPrefab"/>/Resources fallback only matter for
+/// a capsule that doesn't already have one nested.
 /// </summary>
-public class ShipReentryGlow : MonoBehaviour
+public class PlayerReentryGlow : MonoBehaviour
 {
     [Tooltip("Prefab with the re-entry fire look (flame shell + embers + flicker light). Edit this " +
         "prefab directly in the Editor to tune the effect - it's instantiated as-is at runtime. " +
-        "Leave empty to load Ship/Capsule/CapsuleTrailVfx from Resources.")]
+        "Leave empty if the effect is already nested directly on this capsule (e.g. \"TrailVfx\").")]
     [SerializeField] GameObject effectPrefab;
 
     [Header("Light Flicker (animated on top of the prefab's own light settings)")]
@@ -33,13 +38,16 @@ public class ShipReentryGlow : MonoBehaviour
     Coroutine _flickerRoutine;
     bool _built;
 
-    const string DefaultEffectResource = "Ship/Capsule/CapsuleTrailVfx";
+    /// <summary>Name of the trail VFX child baked directly into PlayerDiveDownCapsule (see
+    /// PlayerCapsuleVfxBaker) - checked first, regardless of <see cref="effectPrefab"/>, since the
+    /// canonical capsule always already has this nested and there's nothing left to instantiate.</summary>
+    const string NestedEffectChildName = "TrailVfx";
 
-    /// <summary>The instantiated effect prefab's transform (e.g. "CapsuleTrailVfx"), once
-    /// built - lets other VFX components (see ShipFireTrail.SetEffectParent) nest under the same
-    /// visible root instead of scattering loose particle objects directly under the capsule.
-    /// Null until <see cref="Play"/> (or <see cref="Awake"/>, if the prefab was already assigned)
-    /// has actually built it.</summary>
+    /// <summary>The instantiated effect prefab's transform (e.g. "TrailVfx"), once built - lets
+    /// other VFX components (see PlayerFireTrail.SetEffectParent) nest under the same visible root
+    /// instead of scattering loose particle objects directly under the capsule. Null until
+    /// <see cref="Play"/> (or <see cref="Awake"/>, if the prefab was already assigned) has
+    /// actually built it.</summary>
     public Transform EffectRoot => _instance != null ? _instance.transform : null;
 
     void Awake()
@@ -47,7 +55,7 @@ public class ShipReentryGlow : MonoBehaviour
         Build();
     }
 
-    /// <summary>Assign the authored prefab (e.g. from ShipCrashIntro right after adding this
+    /// <summary>Assign the authored prefab (e.g. from PlayerCrashIntro right after adding this
     /// component). Safe to call before Play() even if Awake() already ran.</summary>
     public void SetEffectPrefab(GameObject prefab)
     {
@@ -58,15 +66,31 @@ public class ShipReentryGlow : MonoBehaviour
     {
         if (_built)
             return;
-        if (effectPrefab == null)
-            return; // SetEffectPrefab may still be called (e.g. by ShipCrashIntro) before Play()
+
+        // Reuse an already-authored child instead of instantiating a second, duplicate copy on
+        // top of it - PlayerDiveDownCapsule has "TrailVfx" nested directly in the prefab (see
+        // PlayerCapsuleVfxBaker), so there's nothing left to instantiate at runtime for it.
+        Transform existing = transform.Find(NestedEffectChildName);
+        if (existing == null && effectPrefab != null)
+            existing = transform.Find(effectPrefab.name);
+
+        if (existing != null)
+        {
+            _instance = existing.gameObject;
+        }
+        else if (effectPrefab != null)
+        {
+            _instance = Instantiate(effectPrefab, transform);
+            _instance.name = effectPrefab.name;
+            _instance.transform.localPosition = Vector3.zero;
+            _instance.transform.localRotation = Quaternion.identity;
+        }
+        else
+        {
+            return; // Nothing nested and nothing assigned - Play() will warn and no-op.
+        }
+
         _built = true;
-
-        _instance = Instantiate(effectPrefab, transform);
-        _instance.name = effectPrefab.name;
-        _instance.transform.localPosition = Vector3.zero;
-        _instance.transform.localRotation = Quaternion.identity;
-
         _particleSystems = _instance.GetComponentsInChildren<ParticleSystem>(true);
         _light = _instance.GetComponentInChildren<Light>(true);
         _baseLightIntensity = _light != null ? _light.intensity : 0f;
@@ -77,13 +101,11 @@ public class ShipReentryGlow : MonoBehaviour
     /// <summary>Call the moment the capsule appears in space - burns continuously until Stop().</summary>
     public void Play()
     {
-        if (effectPrefab == null)
-            effectPrefab = Resources.Load<GameObject>(DefaultEffectResource);
-
         Build();
         if (_instance == null)
         {
-            Debug.LogWarning("ShipReentryGlow: no effect prefab assigned - skipping re-entry fire.", this);
+            Debug.LogWarning("PlayerReentryGlow: no nested \"" + NestedEffectChildName +
+                "\" child and no effect prefab assigned - skipping re-entry fire.", this);
             return;
         }
 

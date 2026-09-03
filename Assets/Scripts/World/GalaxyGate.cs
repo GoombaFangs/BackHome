@@ -15,6 +15,15 @@ public class GalaxyGate : MonoBehaviour
     [Tooltip("World-space distance used when CharacterController triggers are unavailable.")]
     [SerializeField] float proximityFallbackRadius = 2.4f;
 
+    /// <summary>Scene this gate loads on teleport. Exposed so other gates spawned at runtime
+    /// (e.g. the ground portal swapped in by <see cref="PlayerCrashIntro"/>) can inherit whatever
+    /// destination was authored on the gate they're replacing, instead of hardcoding it twice.</summary>
+    public string TargetSceneName
+    {
+        get => targetSceneName;
+        set => targetSceneName = value;
+    }
+
     [Header("Teleport VFX")]
     [Tooltip("Hovl Studio Teleport prefab (or any particle effect). Played at the player's feet. " +
         "Leave empty to cut instantly.")]
