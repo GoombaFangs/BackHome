@@ -586,7 +586,6 @@ MonoBehaviour:
   groundLayer:
     serializedVersion: 2
     m_Bits: 8
-  animationSpeedScale: 1.15
 --- !u!114 &8234567890123456792
 MonoBehaviour:
   m_ObjectHideFlags: 0

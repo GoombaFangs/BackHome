@@ -30,6 +30,12 @@ public class Creature : MonoBehaviour, IVitalsReadable
     public bool IsAlive => _currentHealth > 0f && !_dying;
     public bool HasStats => stats != null;
 
+    /// <summary>True while frozen - e.g. the instant the player dies, so every creature stops dead
+    /// in place and can't keep chasing/attacking during the short beat where the player's own
+    /// death animation plays out. <see cref="CreatureChase"/> and <see cref="CreatureRangeCombat"/>
+    /// both check this and fully stop while it's true. Set via <see cref="SetFrozen"/>.</summary>
+    public bool IsFrozen { get; private set; }
+
     /// <summary>Current surface movement (direction * speed), zero while stationary — lets telegraphed attacks lead a moving target.</summary>
     public Vector3 Velocity => _chase != null ? _chase.Velocity : Vector3.zero;
 
@@ -101,6 +107,12 @@ public class Creature : MonoBehaviour, IVitalsReadable
             BeginDeath();
 
         return true;
+    }
+
+    /// <summary>Freezes/unfreezes this creature - see <see cref="IsFrozen"/>.</summary>
+    public void SetFrozen(bool frozen)
+    {
+        IsFrozen = frozen;
     }
 
     public void Heal(float amount)

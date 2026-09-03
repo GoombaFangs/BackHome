@@ -28,7 +28,7 @@ public class CreatureRangeCombat : MonoBehaviour
     {
         _hitPlayerThisFrame = false;
 
-        if (_creature == null || !_creature.IsAlive)
+        if (_creature == null || !_creature.IsAlive || _creature.IsFrozen)
         {
             _playerInside = false;
             _anim?.SetAttacking(false);

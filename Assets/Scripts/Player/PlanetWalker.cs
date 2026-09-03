@@ -27,9 +27,6 @@ public class PlanetWalker : MonoBehaviour
     [SerializeField] float groundProbeDistance = 12f;
     [SerializeField] LayerMask groundLayer;
 
-    [Header("Feel")]
-    [SerializeField] float animationSpeedScale = 1.15f;
-
     SphericalPlanet _planet;
     PlanetTileMap _tiles;
     StarterAssetsInputs _input;
@@ -71,6 +68,9 @@ public class PlanetWalker : MonoBehaviour
 
     /// <summary>Multiplies walk/run speed. Comes from <see cref="PlayerStats"/> via <see cref="PlayerVitals"/> (1 = normal).</summary>
     float MoveSpeedMultiplier => _vitals != null && _vitals.Stats != null ? _vitals.Stats.MoveSpeedMultiplier : 1f;
+
+    /// <summary>Running animation playback rate. Comes from <see cref="PlayerStats"/> via <see cref="PlayerVitals"/> (1 = normal).</summary>
+    float RunningAnimationSpeed => _vitals != null && _vitals.Stats != null ? _vitals.Stats.RunningAnimationSpeed : 1f;
 
     /// <summary>Intended tangent velocity (units/sec). Drives motion-aware camera framing.</summary>
     public Vector3 PlanarVelocity { get; private set; }
@@ -719,7 +719,7 @@ public class PlanetWalker : MonoBehaviour
         _animator.SetBool(_animIDJump, false);
         _animator.SetBool(_animIDFreeFall, !_grounded);
         _animator.SetFloat(_animIDSpeed, _animBlend);
-        _animator.SetFloat(_animIDMotionSpeed, Mathf.Max(inputMagnitude, 0.01f) * animationSpeedScale);
+        _animator.SetFloat(_animIDMotionSpeed, Mathf.Max(inputMagnitude, 0.01f) * RunningAnimationSpeed);
 
         // Every time the character comes to a stop, re-roll which idle animation starts first
         // (80% Idle1 / 20% Idle2). The AnimatorController then alternates Idle1/Idle2 on its own

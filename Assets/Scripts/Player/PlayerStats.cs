@@ -25,6 +25,8 @@ public class PlayerStats : ScriptableObject
     [Header("Movement")]
     [Tooltip("Multiplies the player's walk/run speed. 1 = normal speed.")]
     [SerializeField, Min(0.1f)] float moveSpeedMultiplier = 1f;
+    [Tooltip("Multiplies the running animation's playback rate (Animator \"MotionSpeed\"). Tune so the feet don't slide/skate when move speed changes.")]
+    [SerializeField, Min(0.1f)] float runningAnimationSpeed = 1.15f;
 
     [Header("Vitality")]
     [SerializeField, Min(1f)] float maxHealth = 200f;
@@ -38,6 +40,7 @@ public class PlayerStats : ScriptableObject
     public IReadOnlyList<WeaponDefinition> Weapons => weapons ?? Array.Empty<WeaponDefinition>();
     public float MaxAttackRange => CombatLoadout.MaxRange(BaseCombat, Weapons);
     public float MoveSpeedMultiplier => moveSpeedMultiplier;
+    public float RunningAnimationSpeed => runningAnimationSpeed;
 
     public CombatStats CombatFor(WeaponDefinition weapon)
     {
@@ -51,6 +54,7 @@ public class PlayerStats : ScriptableObject
         attackSpeed = Mathf.Max(0f, attackSpeed);
         attackRange = Mathf.Max(0f, attackRange);
         moveSpeedMultiplier = Mathf.Max(0.1f, moveSpeedMultiplier);
+        runningAnimationSpeed = Mathf.Max(0.1f, runningAnimationSpeed);
         oxygenTank = Mathf.Max(1f, oxygenTank);
         if (weapons != null && weapons.Length > CombatLoadout.MaxWeapons)
             Array.Resize(ref weapons, CombatLoadout.MaxWeapons);

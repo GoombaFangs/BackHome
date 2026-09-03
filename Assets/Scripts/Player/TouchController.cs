@@ -52,6 +52,9 @@ public class TouchController : MonoBehaviour
     /// <summary>Multiplies walk/run speed. Comes from <see cref="PlayerStats"/> via <see cref="PlayerVitals"/> (1 = normal).</summary>
     float MoveSpeedMultiplier => _vitals != null && _vitals.Stats != null ? _vitals.Stats.MoveSpeedMultiplier : 1f;
 
+    /// <summary>Running animation playback rate. Comes from <see cref="PlayerStats"/> via <see cref="PlayerVitals"/> (1 = normal).</summary>
+    float RunningAnimationSpeed => _vitals != null && _vitals.Stats != null ? _vitals.Stats.RunningAnimationSpeed : 1f;
+
     /// <summary>0..1 move intensity from stick magnitude, clamped to 1 at the run threshold (same
     /// semantics as <see cref="PlanetWalker.MotionAmount"/>) - lets other systems (e.g. DustTrailVfx)
     /// detect "is running" without duplicating runInputThreshold.</summary>
@@ -272,7 +275,7 @@ public class TouchController : MonoBehaviour
         if (_hasAnimator)
         {
             _animator.SetFloat(_animIDSpeed, _animationBlend);
-            _animator.SetFloat(_animIDMotionSpeed, Mathf.Max(inputMagnitude, 0.01f));
+            _animator.SetFloat(_animIDMotionSpeed, Mathf.Max(inputMagnitude, 0.01f) * RunningAnimationSpeed);
 
             // Every time the character comes to a stop, re-roll which idle animation starts first
             // (80% Idle1 / 20% Idle2). The AnimatorController then alternates Idle1/Idle2 on its

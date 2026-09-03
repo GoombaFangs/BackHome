@@ -91,7 +91,7 @@ public class CreatureChase : MonoBehaviour
             return;
         }
 
-        if (!_creature.IsAlive)
+        if (!_creature.IsAlive || _creature.IsFrozen)
         {
             _velocity = Vector3.zero;
             _anim?.ResetToIdle();

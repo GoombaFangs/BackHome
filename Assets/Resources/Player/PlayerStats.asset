@@ -18,6 +18,7 @@ MonoBehaviour:
   attackRange: 2.7
   weapons:
   - {fileID: 11400000, guid: f55f6fe0c557be24881116fa6d6bab6b, type: 2}
-  moveSpeedMultiplier: 0.7
+  moveSpeedMultiplier: 0.8
+  runningAnimationSpeed: 0.5
   maxHealth: 800
   oxygenTank: 90

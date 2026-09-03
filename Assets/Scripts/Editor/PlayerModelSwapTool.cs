@@ -69,6 +69,15 @@ public static class PlayerModelSwapTool
     const string Idle1InPlaceClipPath = "Assets/Resources/Player/Animator/Idle1InPlace.anim";
     const string Idle2InPlaceClipPath = "Assets/Resources/Player/Animator/Idle2InPlace.anim";
 
+    // Death animation (same "Little Starbot" rig/root-bone convention as the two idle exports
+    // above - see IdleSourceRootBoneName). Unlike Run/Idle1/Idle2 this is a one-shot clip: it
+    // should NOT loop, and its final frame (the death pose) must be kept exactly as authored -
+    // see ExtractOneShotClip / MakeInPlaceOneShotCopy, which skip the loop-seam truncation/blend
+    // that ConfigureModelAsHumanoidAndExtractLoopingClip / MakeInPlaceCopy apply for Run/Idle1/Idle2.
+    const string DyingModelPath = "Assets/Resources/Player/Model/Starbot_Animation_dying.fbx";
+    const string DyingClipName = "Dying";
+    const string DyingInPlaceClipPath = "Assets/Resources/Player/Animator/DyingInPlace.anim";
+
     // Material shared by every Meshy AI export in Model/ (they were all authored with a single
     // "Material_1" slot). The shader wired into it isn't actually URP/Lit despite the guid's
     // original comment - it's the project's own custom "BackHome/CasualToon" shader (same one
@@ -78,6 +87,7 @@ public static class PlayerModelSwapTool
     const string CharacterMaterialPath = "Assets/Resources/Player/Model/Material_1.mat";
     static readonly string SetupRunOnPlanetTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeSetupRunOnPlanet.trigger");
     static readonly string SetupIdleAnimationsTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeSetupIdleAnimations.trigger");
+    static readonly string SetupDyingAnimationTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeSetupDyingAnimation.trigger");
     static readonly string DumpLivePlayerHierarchyTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeDumpLivePlayerHierarchy.trigger");
     static readonly string DumpBoneTransformsTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeDumpBoneTransforms.trigger");
     static readonly string CloseIsolationStageTriggerFilePath = System.IO.Path.Combine(Application.dataPath, "..", "Temp", "BackHomeCloseIsolationStage.trigger");
@@ -144,6 +154,13 @@ public static class PlayerModelSwapTool
             try { System.IO.File.Delete(SetupIdleAnimationsTriggerFilePath); } catch { /* ignore */ }
             Debug.Log("[BackHome] Setup-idle-animations trigger detected - wiring up the Idle1/Idle2 idle animations.");
             SetupPlayerIdleAnimations();
+        }
+
+        if (System.IO.File.Exists(SetupDyingAnimationTriggerFilePath))
+        {
+            try { System.IO.File.Delete(SetupDyingAnimationTriggerFilePath); } catch { /* ignore */ }
+            Debug.Log("[BackHome] Setup-dying-animation trigger detected - wiring up the Dying death animation.");
+            SetupPlayerDyingAnimation();
         }
 
         if (System.IO.File.Exists(DumpLivePlayerHierarchyTriggerFilePath))
@@ -1195,6 +1212,41 @@ public static class PlayerModelSwapTool
     }
 
     /// <summary>
+    /// Extracts a one-shot (non-looping) in-place clip from Starbot_Animation_dying.fbx (same rig
+    /// as the idle models - see <see cref="ExtractOneShotClip"/>) and wires it into the shared
+    /// AnimatorController as a new "Dying" state: a new "Dead" bool parameter is added, and an Any
+    /// State transition into Dying fires the instant it becomes true, from whatever
+    /// Run/Idle1/Idle2 state the player was in - and nothing transitions back out of Dying, so the
+    /// clip's final frame (the death pose) holds forever. The existing Run/Idle1/Idle2 Any State
+    /// transitions are rebuilt with an added "Dead == false" guard so a stray Moving/IdleVariant
+    /// change after death can never pull the character back into a locomotion state. Set "Dead"
+    /// from game code (see PlayerDeathUI) the instant the player's HP hits 0.
+    /// </summary>
+    [MenuItem("BackHome/Player/Setup Player Dying Animation")]
+    public static void SetupPlayerDyingAnimation()
+    {
+        try
+        {
+            AnimationClip dyingClip = ExtractOneShotClip(DyingModelPath, DyingClipName, DyingInPlaceClipPath, IdleSourceRootBoneName);
+            if (dyingClip == null)
+                return;
+
+            RemapClipRootBoneName(dyingClip, IdleSourceRootBoneName, IdleTargetRootBoneName);
+
+            if (!WireDyingStateIntoController(dyingClip))
+                return;
+
+            AssetDatabase.SaveAssets();
+            Debug.Log("[BackHome] Player dying animation wired up: 'Dead' bool parameter added, Any State -> Dying transition added, holds final frame once played.");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            Debug.LogError("[BackHome] Setup-Player-Dying-Animation aborted due to the exception above.");
+        }
+    }
+
+    /// <summary>
     /// Rewrites every curve (and object-reference curve) in <paramref name="clip"/> whose path is
     /// exactly <paramref name="oldRootName"/> or starts with "<paramref name="oldRootName"/>/" so
     /// that leading path segment becomes <paramref name="newRootName"/> instead - i.e. re-roots
@@ -1316,6 +1368,13 @@ public static class PlayerModelSwapTool
 
         const float switchDuration = 0.15f;
 
+        // If the Dying state/parameter has already been wired up (see WireDyingStateIntoController),
+        // guard every locomotion transition below with "Dead == false" too, so re-running this tool
+        // after death is wired up can never leave a way for Moving/IdleVariant to pull the character
+        // back out of its death pose. No-op (no condition added) the first time this ever runs, since
+        // the "Dead" parameter won't exist yet.
+        bool hasDeadParameter = controller.parameters.Any(p => p.name == "Dead");
+
         AnimatorStateTransition toIdle1 = rootStateMachine.AddAnyStateTransition(idle1State);
         toIdle1.hasExitTime = false;
         toIdle1.hasFixedDuration = true;
@@ -1323,6 +1382,8 @@ public static class PlayerModelSwapTool
         toIdle1.canTransitionToSelf = false;
         toIdle1.AddCondition(AnimatorConditionMode.IfNot, 0, "Moving");
         toIdle1.AddCondition(AnimatorConditionMode.Equals, 0, "IdleVariant");
+        if (hasDeadParameter)
+            toIdle1.AddCondition(AnimatorConditionMode.IfNot, 0, "Dead");
 
         AnimatorStateTransition toIdle2 = rootStateMachine.AddAnyStateTransition(idle2State);
         toIdle2.hasExitTime = false;
@@ -1331,6 +1392,8 @@ public static class PlayerModelSwapTool
         toIdle2.canTransitionToSelf = false;
         toIdle2.AddCondition(AnimatorConditionMode.IfNot, 0, "Moving");
         toIdle2.AddCondition(AnimatorConditionMode.Equals, 1, "IdleVariant");
+        if (hasDeadParameter)
+            toIdle2.AddCondition(AnimatorConditionMode.IfNot, 0, "Dead");
 
         AnimatorStateTransition toRun = rootStateMachine.AddAnyStateTransition(runState);
         toRun.hasExitTime = false;
@@ -1338,6 +1401,8 @@ public static class PlayerModelSwapTool
         toRun.duration = switchDuration;
         toRun.canTransitionToSelf = false;
         toRun.AddCondition(AnimatorConditionMode.If, 0, "Moving");
+        if (hasDeadParameter)
+            toRun.AddCondition(AnimatorConditionMode.IfNot, 0, "Dead");
 
         // The actual "loop N times, then swap to the other idle" alternation - no scripting
         // needed, an exit time > 1 on a looping state fires after that many full loops (integer
@@ -1358,6 +1423,95 @@ public static class PlayerModelSwapTool
 
         EditorUtility.SetDirty(controller);
         Debug.Log("[BackHome] Added/refreshed Idle1 <-> Idle2 states, Moving/IdleVariant parameters, and their transitions in the AnimatorController.");
+        return true;
+    }
+
+    /// <summary>
+    /// Adds/refreshes the "Dying" state and the "Dead" parameter on the shared locomotion
+    /// AnimatorController. Rebuilds every Any State transition touching Run/Idle1/Idle2/Dying
+    /// from scratch (Run/Idle1/Idle2 get an added "Dead == false" guard so death can't be
+    /// interrupted; Dying gets a single unconditioned-except-for-Dead entry and no way out), so
+    /// re-running this tool never leaves a stale/duplicate transition behind. Safe to run before
+    /// or after <see cref="WireIdleStatesIntoController"/> - whichever runs later re-adds the
+    /// "Dead == false" guard on the other's transitions too (see hasDeadParameter there).
+    /// </summary>
+    static bool WireDyingStateIntoController(AnimationClip dyingClip)
+    {
+        var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
+        if (controller == null)
+        {
+            Debug.LogError($"[BackHome] Could not load AnimatorController at {ControllerPath}");
+            return false;
+        }
+
+        AnimatorStateMachine rootStateMachine = controller.layers[0].stateMachine;
+
+        AnimatorState runState = rootStateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == "Run");
+        if (runState == null)
+        {
+            Debug.LogError("[BackHome] Could not find the 'Run' state in the AnimatorController - run 'Setup Player To Run On Planet Model' first.");
+            return false;
+        }
+        AnimatorState idle1State = rootStateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == "Idle1");
+        AnimatorState idle2State = rootStateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == "Idle2");
+
+        if (!controller.parameters.Any(p => p.name == "Dead"))
+            controller.AddParameter("Dead", AnimatorControllerParameterType.Bool);
+
+        AnimatorState dyingState = rootStateMachine.states.Select(s => s.state).FirstOrDefault(s => s.name == "Dying")
+            ?? rootStateMachine.AddState("Dying", new Vector3(400, 360, 0));
+        dyingState.motion = dyingClip;
+        dyingState.speedParameterActive = false;
+        dyingState.speed = 1f;
+
+        // Rebuild every Any State transition touching Run/Idle1/Idle2/Dying from scratch so
+        // re-running this tool never leaves a stale/duplicate transition (or a locomotion
+        // transition missing the "Dead == false" guard) behind.
+        var locomotionStates = new[] { runState, idle1State, idle2State, dyingState }.Where(s => s != null).ToList();
+        foreach (var t in rootStateMachine.anyStateTransitions.Where(t => locomotionStates.Contains(t.destinationState)).ToList())
+            rootStateMachine.RemoveAnyStateTransition(t);
+
+        const float switchDuration = 0.15f;
+
+        foreach (var state in new[] { runState, idle1State, idle2State })
+        {
+            if (state == null)
+                continue;
+
+            AnimatorStateTransition t = rootStateMachine.AddAnyStateTransition(state);
+            t.hasExitTime = false;
+            t.hasFixedDuration = true;
+            t.duration = switchDuration;
+            t.canTransitionToSelf = false;
+            t.AddCondition(AnimatorConditionMode.IfNot, 0, "Dead");
+
+            if (state == runState)
+                t.AddCondition(AnimatorConditionMode.If, 0, "Moving");
+            else if (state == idle1State)
+            {
+                t.AddCondition(AnimatorConditionMode.IfNot, 0, "Moving");
+                t.AddCondition(AnimatorConditionMode.Equals, 0, "IdleVariant");
+            }
+            else if (state == idle2State)
+            {
+                t.AddCondition(AnimatorConditionMode.IfNot, 0, "Moving");
+                t.AddCondition(AnimatorConditionMode.Equals, 1, "IdleVariant");
+            }
+        }
+
+        // Dying itself: fires from literally any state (including itself, guarded off by
+        // canTransitionToSelf) the instant "Dead" becomes true, and - deliberately - has no
+        // outgoing transition of its own, so once it's entered the state machine can never leave
+        // it again; the clip stops looping (loopTime is off) and holds its final frame forever.
+        AnimatorStateTransition toDying = rootStateMachine.AddAnyStateTransition(dyingState);
+        toDying.hasExitTime = false;
+        toDying.hasFixedDuration = true;
+        toDying.duration = 0.1f;
+        toDying.canTransitionToSelf = false;
+        toDying.AddCondition(AnimatorConditionMode.If, 0, "Dead");
+
+        EditorUtility.SetDirty(controller);
+        Debug.Log("[BackHome] Added/refreshed the 'Dying' state and 'Dead' parameter, and guarded every Run/Idle1/Idle2 Any State transition with 'Dead == false' so death can't be interrupted.");
         return true;
     }
 
@@ -1439,6 +1593,85 @@ public static class PlayerModelSwapTool
         }
 
         return MakeInPlaceCopy(newClip, inPlaceOutputPath);
+    }
+
+    /// <summary>
+    /// Non-looping counterpart to <see cref="ConfigureModelAsHumanoidAndExtractLoopingClip"/>:
+    /// configures the model at <paramref name="modelPath"/> as a Generic-rig model with animation
+    /// compression disabled, then extracts its (single) embedded take as a one-shot AnimationClip
+    /// named <paramref name="clipName"/> - loopTime off, so once the Animator plays it through it
+    /// holds the final frame forever instead of restarting - baked in-place at
+    /// <paramref name="inPlaceOutputPath"/> (see <see cref="MakeInPlaceOneShotCopy"/>, which -
+    /// unlike the looping bake this mirrors - never truncates the clip to a "best loop point" or
+    /// blends its tail back toward frame 0; a one-shot clip like a death animation is supposed to
+    /// end somewhere different from where it started).
+    /// </summary>
+    static AnimationClip ExtractOneShotClip(string modelPath, string clipName, string inPlaceOutputPath, string rootBoneNameForRotationAbsorb = null)
+    {
+        var importer = AssetImporter.GetAtPath(modelPath) as ModelImporter;
+        if (importer == null)
+        {
+            Debug.LogError($"[BackHome] Could not find a ModelImporter at {modelPath}");
+            return null;
+        }
+
+        importer.animationType = ModelImporterAnimationType.Generic;
+        importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+        importer.optimizeGameObjects = false;
+        importer.animationCompression = ModelImporterAnimationCompression.Off;
+        importer.SaveAndReimport();
+
+        var avatar = AssetDatabase.LoadAllAssetsAtPath(modelPath).OfType<Avatar>().FirstOrDefault();
+        if (avatar == null || !avatar.isValid)
+        {
+            Debug.LogError($"[BackHome] Unity could not generate a valid Avatar for {modelPath}. " +
+                "Select it, open the Rig tab, and check for errors there, then re-run this tool.");
+            return null;
+        }
+
+        var takes = importer.importedTakeInfos;
+        if (takes == null || takes.Length == 0)
+        {
+            Debug.LogError($"[BackHome] {modelPath} has no embedded animation take.");
+            return null;
+        }
+
+        var take = takes[0];
+        var clipAnim = new ModelImporterClipAnimation
+        {
+            name = clipName,
+            takeName = take.name,
+            firstFrame = take.startTime * take.sampleRate,
+            lastFrame = take.stopTime * take.sampleRate,
+            loopTime = false,
+            loopPose = false,
+            wrapMode = WrapMode.ClampForever,
+        };
+        importer.clipAnimations = new[] { clipAnim };
+        importer.SaveAndReimport();
+
+        var newClip = AssetDatabase.LoadAllAssetsAtPath(modelPath).OfType<AnimationClip>().FirstOrDefault(c => c.name == clipName);
+        if (newClip == null)
+        {
+            Debug.LogError($"[BackHome] Could not locate the extracted '{clipName}' clip after reimport.");
+            return null;
+        }
+
+        Debug.Log($"[BackHome] Extracted '{clipName}' clip ({newClip.length:0.00}s) from {modelPath} (Generic rig, uncompressed, one-shot).");
+
+        if (!string.IsNullOrEmpty(rootBoneNameForRotationAbsorb))
+        {
+            // Same rig-scale/root-rotation correction as ConfigureModelAsHumanoidAndExtractLoopingClip
+            // - see its comments for why this is needed before the clip is transplanted onto the
+            // live Player skeleton's differently-scaled/rooted "target_character" bone.
+            float liveRootScale = FindTargetCharacterScale(IdleTargetRootBoneName);
+            if (liveRootScale > 0f && Mathf.Abs(liveRootScale - 1f) > 0.0001f)
+                ScaleAllPositionCurves(newClip, 1f / liveRootScale);
+
+            AbsorbRootRotationIntoHips(newClip, rootBoneNameForRotationAbsorb);
+        }
+
+        return MakeInPlaceOneShotCopy(newClip, inPlaceOutputPath);
     }
 
     /// <summary>
@@ -1877,6 +2110,59 @@ public static class PlayerModelSwapTool
         AssetDatabase.SaveAssets();
 
         Debug.Log($"[BackHome] Baked in-place copy of '{sourceClip.name}' at {outputPath} (Hips X/Z locked, Y bob kept).");
+        return clip;
+    }
+
+    /// <summary>
+    /// Non-looping counterpart to <see cref="MakeInPlaceCopy"/>: bakes an in-place copy of
+    /// <paramref name="sourceClip"/> that locks the Hips bone's horizontal (X/Z) position to its
+    /// first-frame value - same "treadmill" trick, so a death animation authored with the root
+    /// sliding forward/back doesn't drag the Player's transform across the ground - but, unlike
+    /// the looping bake, keeps every other curve exactly as authored: no truncation to a "best
+    /// loop point", no blending the tail back toward frame 0. The whole point of a one-shot clip
+    /// like a death animation is that its last frame is supposed to look different from its first.
+    /// </summary>
+    static AnimationClip MakeInPlaceOneShotCopy(AnimationClip sourceClip, string outputPath)
+    {
+        var clip = new AnimationClip { name = System.IO.Path.GetFileNameWithoutExtension(outputPath) };
+        var settings = AnimationUtility.GetAnimationClipSettings(sourceClip);
+        settings.loopTime = false;
+        settings.loopBlend = false;
+        AnimationUtility.SetAnimationClipSettings(clip, settings);
+
+        foreach (var binding in AnimationUtility.GetCurveBindings(sourceClip))
+        {
+            // Same reasoning as MakeInPlaceCopy: some source rigs bake a near-constant ~1.0 scale
+            // track onto every bone (authoring-tool floating point noise, not an intentional
+            // squash/stretch) that would otherwise override the bind pose's real rest scale for as
+            // long as the clip plays - drop it and let the bind pose stand untouched.
+            if (binding.type == typeof(Transform) && binding.propertyName.StartsWith("m_LocalScale."))
+                continue;
+
+            var curve = AnimationUtility.GetEditorCurve(sourceClip, binding);
+
+            bool isHipsHorizontalPosition = binding.path.EndsWith("Hips", System.StringComparison.Ordinal)
+                && binding.propertyName is "m_LocalPosition.x" or "m_LocalPosition.z";
+            if (isHipsHorizontalPosition && curve.keys.Length > 0)
+            {
+                float lockedValue = curve.keys[0].value;
+                curve = AnimationCurve.Constant(curve.keys[0].time, curve.keys[curve.keys.Length - 1].time, lockedValue);
+            }
+
+            AnimationUtility.SetEditorCurve(clip, binding, curve);
+        }
+
+        foreach (var objBinding in AnimationUtility.GetObjectReferenceCurveBindings(sourceClip))
+            AnimationUtility.SetObjectReferenceCurve(clip, objBinding, AnimationUtility.GetObjectReferenceCurve(sourceClip, objBinding));
+
+        EnsureFolderExists(System.IO.Path.GetDirectoryName(outputPath));
+        var existing = AssetDatabase.LoadAssetAtPath<AnimationClip>(outputPath);
+        if (existing != null)
+            AssetDatabase.DeleteAsset(outputPath);
+        AssetDatabase.CreateAsset(clip, outputPath);
+        AssetDatabase.SaveAssets();
+
+        Debug.Log($"[BackHome] Baked in-place one-shot copy of '{sourceClip.name}' at {outputPath} (Hips X/Z locked in place, full pose kept, holds final frame).");
         return clip;
     }
 
