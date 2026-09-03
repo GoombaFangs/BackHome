@@ -45,10 +45,18 @@ public class PlayerCrashIntro : MonoBehaviour
     [Tooltip("Swapped in the instant the capsule lands: the capsule itself (mesh + collider + " +
         "its own GalaxyGate/PlayerCapsuleBeacon) is hidden and this prefab becomes the thing left " +
         "embedded in the ground - it inherits the capsule's teleport destination and 'home' " +
-        "beacon, so nothing else needs to change. Leave empty to load Ship/Portal from Resources.")]
+        "beacon, so nothing else needs to change. Leave empty to load Portal/Portal from Resources.")]
     [SerializeField] GameObject portalPrefab;
     [Tooltip("How far to sink the portal into the ground, in world units.")]
     [SerializeField] float portalEmbed = 0.4f;
+    [Tooltip("Optional: an authored Transform (e.g. the 'Portal' marker PlayerCrashLandingPreview " +
+        "creates in the Scene view) marking exactly where the crash should land and where the " +
+        "player will spawn (see SceneBootstrap). Drag it around to move the whole landing site - " +
+        "the capsule's fall trajectory and rest pose follow it automatically. It's hidden the " +
+        "instant the cinematic starts (see HidePortalAnchor) since the real portal is spawned " +
+        "fresh once the capsule lands. Leave empty to keep using the capsule's own authored " +
+        "position/rotation as the landing site, same as before.")]
+    [SerializeField] Transform portalAnchor;
 
     [Header("Timing")]
     [Tooltip("Seconds for the crash fall itself. Keep this short - it's a hard crash, not a slow glide.")]
@@ -83,7 +91,7 @@ public class PlayerCrashIntro : MonoBehaviour
     /// <summary>Raised once the capsule has settled into its authored resting pose.</summary>
     public event Action OnLanded;
 
-    const string DefaultPortalResource = "Ship/Portal";
+    const string DefaultPortalResource = "Portal/Portal";
 
     Vector3 _restPosition;
     Quaternion _restRotation;
@@ -100,7 +108,35 @@ public class PlayerCrashIntro : MonoBehaviour
             return;
         }
 
+        HidePortalAnchor();
         StartCoroutine(RunSequence());
+    }
+
+    /// <summary>The authored landing marker - falls back to the capsule's own transform when
+    /// <see cref="portalAnchor"/> isn't wired up, so existing setups keep working unchanged.</summary>
+    Transform LandingAnchor => portalAnchor != null ? portalAnchor : playerCapsule;
+
+    /// <summary>Hides <see cref="portalAnchor"/>'s own visuals/collider/gate the instant the
+    /// cinematic starts - it's only meant to be visible/draggable in the Editor before Play, as a
+    /// stand-in for wherever the real portal will be spawned once the capsule lands.</summary>
+    void HidePortalAnchor()
+    {
+        if (portalAnchor == null)
+            return;
+
+        Renderer[] renderers = portalAnchor.GetComponentsInChildren<Renderer>(true);
+        for (int i = 0; i < renderers.Length; i++)
+            if (renderers[i] != null)
+                renderers[i].enabled = false;
+
+        Collider[] colliders = portalAnchor.GetComponentsInChildren<Collider>(true);
+        for (int i = 0; i < colliders.Length; i++)
+            if (colliders[i] != null)
+                colliders[i].enabled = false;
+
+        GalaxyGate gate = portalAnchor.GetComponent<GalaxyGate>();
+        if (gate != null)
+            gate.enabled = false;
     }
 
     IEnumerator RunSequence()
@@ -115,8 +151,9 @@ public class PlayerCrashIntro : MonoBehaviour
         _capsuleRenderers = playerCapsule.GetComponentsInChildren<Renderer>(true);
         _capsuleColliders = playerCapsule.GetComponentsInChildren<Collider>(true);
 
-        _restPosition = playerCapsule.position;
-        _restRotation = playerCapsule.rotation;
+        Transform landingAnchor = LandingAnchor;
+        _restPosition = landingAnchor.position;
+        _restRotation = landingAnchor.rotation;
 
         Vector3 up = SphericalPlanet.Instance != null
             ? SphericalPlanet.Instance.GetUpAt(_restPosition)
@@ -281,7 +318,7 @@ public class PlayerCrashIntro : MonoBehaviour
     /// the portal fully takes over the capsule's "stuck in the ground" role.</summary>
     void SpawnGroundPortal(Vector3 up)
     {
-        GameObject prefab = portalPrefab != null ? portalPrefab : Resources.Load<GameObject>(DefaultPortalResource);
+        GameObject prefab = ResolvePortalPrefab();
         if (prefab == null)
         {
             Debug.LogWarning("PlayerCrashIntro: no portal prefab found at Resources/" + DefaultPortalResource + ".", this);
@@ -306,6 +343,53 @@ public class PlayerCrashIntro : MonoBehaviour
         if (parent != null)
             portal.transform.SetParent(parent, true);
     }
+
+    GameObject ResolvePortalPrefab() =>
+        portalPrefab != null ? portalPrefab : Resources.Load<GameObject>(DefaultPortalResource);
+
+    /// <summary>Computes the same landing pose <see cref="SpawnGroundPortal"/> uses at runtime,
+    /// without running the cinematic. Used by <see cref="SceneBootstrap"/> so the player always
+    /// spawns exactly where the portal ends up (instead of drifting apart from a separately
+    /// authored spawn point), and by editor tooling (see PlayerCrashLandingPreview) to preview
+    /// the landing site while still in Edit Mode.</summary>
+    public bool TryComputeLandingPose(out Vector3 position, out Quaternion rotation)
+    {
+        position = default;
+        rotation = Quaternion.identity;
+        Transform landingAnchor = LandingAnchor;
+        if (landingAnchor == null)
+            return false;
+
+        Vector3 restPosition = landingAnchor.position;
+        Quaternion restRotation = landingAnchor.rotation;
+        SphericalPlanet planet = FindAnyObjectByType<SphericalPlanet>();
+        Vector3 up = planet != null ? planet.GetUpAt(restPosition) : Vector3.up;
+
+        if (snapLandingToGround && planet != null)
+        {
+            float clearance = GetGroundClearance(up) + extraGroundClearance;
+            restPosition = planet.GetSurfacePoint(up, clearance);
+        }
+
+        position = restPosition;
+        rotation = PlanetSurfacePose.RotationFromUp(up, PlanetSurfacePose.ExtractYaw(restRotation, up));
+        return true;
+    }
+
+#if UNITY_EDITOR
+    /// <summary>Editor-only accessor so tools (see PlayerCrashLandingPreview) can find the capsule
+    /// this cinematic will animate - e.g. to hide it in the Scene view and preview the portal
+    /// it leaves behind instead.</summary>
+    public Transform PlayerCapsule => playerCapsule;
+
+    /// <summary>Editor-only accessor for <see cref="portalAnchor"/> - see PlayerCrashLandingPreview,
+    /// which creates/wires this up the first time and never touches it again once it's assigned.</summary>
+    public Transform PortalAnchor => portalAnchor;
+
+    /// <summary>Editor-only: resolves the same portal prefab <see cref="SpawnGroundPortal"/> would use
+    /// at runtime (falling back to the default Resources portal), for Scene view previews.</summary>
+    public GameObject EditorResolvePortalPrefab() => ResolvePortalPrefab();
+#endif
 
     void EmbedInGround(Transform portal, Vector3 up)
     {

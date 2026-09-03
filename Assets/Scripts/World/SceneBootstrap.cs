@@ -6,12 +6,18 @@ using UnityEngine;
 /// so the full Canvas is visible in edit mode; this only instantiates it if the scene has none.
 /// CameraFollow stays on Main Camera — only the target is wired at runtime.
 /// Per-scene defaults (spawn point, vitals bar size) live here because cameras differ per world.
+/// If a crash-landing cinematic (PlayerCrashIntro) is present, the player spawns exactly at its
+/// landing pose instead of the authored <see cref="spawnPosition"/> - keeps the portal and the
+/// spawn point from ever drifting apart.
 /// </summary>
 public class SceneBootstrap : MonoBehaviour
 {
     [SerializeField] GameObject playerPrefab;
     [Tooltip("Fallback only. Prefer a Hud instance already placed in the scene.")]
     [SerializeField] GameObject uiPrefab;
+    [Tooltip("Fallback only, used when there's no PlayerCrashIntro in the scene. When a crash " +
+        "cinematic is present, the player spawns at its landing pose (where the portal ends up) " +
+        "instead, so the two can never drift apart.")]
     [SerializeField] Vector3 spawnPosition = new Vector3(0f, 2f, 0f);
 
     [Header("Vitals Bars")]
@@ -19,6 +25,8 @@ public class SceneBootstrap : MonoBehaviour
     [SerializeField, Min(0.1f)] float vitalsBarsScale = 1f;
     [Tooltip("Local offset of the bars relative to the player (XYZ).")]
     [SerializeField] Vector3 vitalsBarsOffset = new Vector3(0f, 2.15f, 0f);
+
+    PlayerCrashIntro _crashIntro;
 
     void Awake()
     {
@@ -32,9 +40,9 @@ public class SceneBootstrap : MonoBehaviour
 
         // If a crash-landing cinematic is present in the scene, wait for it to finish
         // (camera follows the capsule) before spawning the player and taking the camera back.
-        PlayerCrashIntro crashIntro = FindAnyObjectByType<PlayerCrashIntro>();
-        if (crashIntro != null)
-            crashIntro.OnLanded += SpawnPlayerAndBindCamera;
+        _crashIntro = FindAnyObjectByType<PlayerCrashIntro>();
+        if (_crashIntro != null)
+            _crashIntro.OnLanded += SpawnPlayerAndBindCamera;
         else
             SpawnPlayerAndBindCamera();
     }
@@ -44,7 +52,17 @@ public class SceneBootstrap : MonoBehaviour
         Transform player = FindExistingPlayer();
         if (player == null && playerPrefab != null)
         {
-            GameObject playerObject = Instantiate(playerPrefab, spawnPosition, Quaternion.identity);
+            Vector3 position = spawnPosition;
+            Quaternion rotation = Quaternion.identity;
+            // Prefer the crash intro's actual landing pose (where the portal ends up) over the
+            // separately-authored spawnPosition, so the player never spawns away from the portal.
+            if (_crashIntro != null && _crashIntro.TryComputeLandingPose(out Vector3 landingPosition, out Quaternion landingRotation))
+            {
+                position = landingPosition;
+                rotation = landingRotation;
+            }
+
+            GameObject playerObject = Instantiate(playerPrefab, position, rotation);
             playerObject.name = playerPrefab.name;
             player = playerObject.transform;
         }
