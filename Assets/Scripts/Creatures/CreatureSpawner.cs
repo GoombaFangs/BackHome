@@ -601,7 +601,7 @@ public class CreatureSpawner : MonoBehaviour
     /// <summary>Samples a direction within <paramref name="worldRadius"/> world units of
     /// <paramref name="anchor"/>'s position (projected onto the planet), area-uniformly across the
     /// disk. Shared math lives in <see cref="PlanetRadialSampling"/> so other systems that scatter
-    /// points around an anchor (e.g. <see cref="PortalPlayerSpawn"/>) use the exact same
+    /// points around an anchor (e.g. a crash-landing portal) use the exact same
     /// distribution instead of a copy-pasted version.</summary>
     bool TryGetRandomPointNearAnchor(Transform anchor, float worldRadius, out Vector3 dir)
     {

@@ -60,6 +60,9 @@ public class TouchController : MonoBehaviour
     /// detect "is running" without duplicating runInputThreshold.</summary>
     public float MotionAmount { get; private set; }
 
+    /// <summary>When true, walk/run is frozen (crash-land intro plays on this Animator).</summary>
+    public bool LockLocomotion { get; set; }
+
     int _animIDSpeed;
     int _animIDGrounded;
     int _animIDJump;
@@ -121,6 +124,8 @@ public class TouchController : MonoBehaviour
     {
         PlanetWalker walker = GetComponent<PlanetWalker>();
         if (walker != null && walker.IsWalkingOnPlanet)
+            return;
+        if (LockLocomotion)
             return;
 
         _hasAnimator = TryGetComponent(out _animator);

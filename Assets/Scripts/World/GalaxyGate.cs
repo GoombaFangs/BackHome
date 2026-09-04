@@ -25,12 +25,12 @@ public class GalaxyGate : MonoBehaviour
     }
 
     /// <summary>Exposed so anything placing the player near this portal (see
-    /// <see cref="PortalPlayerSpawn"/>) can keep a safe distance and never spawn back inside the
+    /// portal-like anchor (e.g. <see cref="PlayerCrashIntro"/>) can keep a safe distance and never spawn back inside the
     /// zone that would instantly teleport them right back through it.</summary>
     public float ProximityFallbackRadius => proximityFallbackRadius;
 
     /// <summary>Shared by anything that scatters a spawn point around a portal-like anchor (see
-    /// <see cref="PortalPlayerSpawn"/>, <see cref="PlayerCrashIntro"/>): a safe minimum radius that
+    /// <see cref="PlayerCrashIntro"/>): a safe minimum radius that
     /// keeps a randomly-picked point outside <paramref name="gate"/>'s own re-teleport zone (plus a
     /// small margin), clamped so it never exceeds <paramref name="maxRadius"/> itself - e.g. if a
     /// designer sets a very small spawn radius on a gate with a large trigger. Returns 0 if

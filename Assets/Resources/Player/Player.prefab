@@ -294,6 +294,7 @@ GameObject:
   - component: {fileID: 8234567890123456794}
   - component: {fileID: 8234567890123456795}
   - component: {fileID: 9087509891297419740}
+  - component: {fileID: 6129384756102938488}
   m_Layer: 8
   m_Name: Player
   m_TagString: Player
@@ -668,6 +669,20 @@ MonoBehaviour:
   hitCooldown: 0.4
   vfxHeight: 1
   vfxLifetime: 2
+--- !u!114 &6129384756102938488
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7594552319720850513}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a3c8e1f04b7d4c2e9a1b5d8f0c3e6a47, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerLandIntro
+  landClip: {fileID: 0}
+  startTime: 0.5
 --- !u!1001 &910000200
 PrefabInstance:
   m_ObjectHideFlags: 0

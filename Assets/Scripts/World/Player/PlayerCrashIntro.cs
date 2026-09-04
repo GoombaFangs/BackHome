@@ -51,6 +51,12 @@ public class PlayerCrashIntro : MonoBehaviour
         "empty to instantiate a fresh portal prefab at the crash site instead.")]
     [SerializeField] Transform portalAnchor;
 
+    [Header("Player Spawn")]
+    [Tooltip("The player spawns at a random point within this distance of the ground portal, " +
+        "instead of exactly on top of it. Also drives the environment exclusion disk around the " +
+        "landing site. This is the only place in the project to tune that radius.")]
+    [SerializeField, Min(0f)] float spawnRadius = 4f;
+
     [Header("Timing")]
     [Tooltip("Seconds for the crash fall itself. Keep this short - it's a hard crash, not a slow glide.")]
     [SerializeField, Min(0.05f)] float fallDuration = 1.1f;
@@ -85,8 +91,11 @@ public class PlayerCrashIntro : MonoBehaviour
     public event Action OnLanded;
 
     /// <summary>The ground portal left behind at the crash site once the cinematic finishes.
-    /// SceneBootstrap reads <see cref="PortalPlayerSpawn"/> from here to scatter the player spawn.</summary>
+    /// SceneBootstrap reads <see cref="TryComputePlayerSpawnPose"/> to scatter the player spawn.</summary>
     public Transform GroundPortal => _groundPortal;
+
+    /// <summary>World-space scatter radius for the initial player spawn around <see cref="GroundPortal"/>.</summary>
+    public float SpawnRadius => spawnRadius;
 
     const string DefaultPortalResource = "Portal/Portal";
 
@@ -107,6 +116,7 @@ public class PlayerCrashIntro : MonoBehaviour
         }
 
         HidePortalAnchor();
+        ApplyExclusionSpawnRadius(portalAnchor);
         StartCoroutine(RunSequence());
     }
 
@@ -187,6 +197,9 @@ public class PlayerCrashIntro : MonoBehaviour
         PlayerFireTrail fireTrail = ResolveFireTrail(reentryGlow);
         fireTrail?.Play(-up); // falling inward (toward the planet), i.e. opposite of radial "up"
 
+        PlayerDiveAnimation diveAnimation = ResolveDiveAnimation();
+        diveAnimation?.Play();
+
         // Straight line, fixed angle, fast - a hard crash, no tumbling or easing into place. A
         // tremble rides on top the whole way down so it reads as a rough, out-of-control fall.
         float fallTimer = 0f;
@@ -196,6 +209,7 @@ public class PlayerCrashIntro : MonoBehaviour
             float t = fallEase.Evaluate(Mathf.Clamp01(fallTimer / fallDuration));
             Vector3 basePosition = Vector3.LerpUnclamped(spacePosition, _restPosition, t);
             playerCapsule.position = basePosition + GetFallTrembleOffset(fallTimer);
+            diveAnimation?.Tick(Time.deltaTime);
             yield return null;
         }
 
@@ -278,31 +292,19 @@ public class PlayerCrashIntro : MonoBehaviour
         return follow;
     }
 
-    // Prefers whatever's already authored inside the reentry glow's effect prefab (e.g.
-    // "FireTrail" baked into TrailVfx) so the trail's sub-emitters live in the same editable
-    // place. Only falls back to bolting a fresh component straight onto the capsule if that
-    // prefab doesn't have one - keeps this working with no setup at all on a capsule that
-    // doesn't have a nested trail effect.
+    // Uses the authored trail already nested on the Starbot (PlayerDiveDownCapsule →
+    // Starbot_Animation_Dive_Down_and_Land → Trail). Never AddComponent a second PlayerFireTrail
+    // onto the capsule root - that spawned a duplicate streak (FlameBody/Line/etc.) at the
+    // capsule origin, offset from the character.
     PlayerFireTrail ResolveFireTrail(PlayerReentryGlow reentryGlow)
     {
-        Transform effectRoot = reentryGlow != null ? reentryGlow.EffectRoot : null;
-        PlayerFireTrail trail = effectRoot != null ? effectRoot.GetComponentInChildren<PlayerFireTrail>(true) : null;
-        if (trail == null)
-            trail = playerCapsule.GetComponent<PlayerFireTrail>();
-        if (trail == null)
-        {
-            // Authored particle FX (e.g. Hovl Studio nested inside TrailVfx) already cover the
-            // re-entry look - don't bolt the old procedural trail on top of them.
-            if (effectRoot != null && effectRoot.GetComponentInChildren<ParticleSystem>(true) != null)
-                return null;
+        PlayerFireTrail trail = playerCapsule.GetComponentInChildren<PlayerFireTrail>(true);
+        if (trail != null)
+            return trail;
 
-            trail = playerCapsule.gameObject.AddComponent<PlayerFireTrail>();
-            // No authored "FireTrail" child found anywhere - the sub-emitters above were just
-            // built procedurally straight onto the capsule, so tidy them under the same visible
-            // root as the reentry glow instead of leaving them loose. Purely cosmetic: everything
-            // simulates in world space regardless of where it sits in the hierarchy.
-            trail.SetEffectParent(effectRoot);
-        }
+        Transform effectRoot = reentryGlow != null ? reentryGlow.EffectRoot : null;
+        if (effectRoot != null)
+            trail = effectRoot.GetComponentInChildren<PlayerFireTrail>(true);
         return trail;
     }
 
@@ -360,6 +362,8 @@ public class PlayerCrashIntro : MonoBehaviour
         if (portal.GetComponent<PlanetEnvironmentExclusionZone>() == null)
             portal.AddComponent<PlanetEnvironmentExclusionZone>();
 
+        ApplyExclusionSpawnRadius(portal.transform);
+
         Transform parent = PlanetSurfacePose.GetOrCreateObjectsRoot(ResolvePlanet());
         if (parent != null)
             portal.transform.SetParent(parent, true);
@@ -414,6 +418,59 @@ public class PlayerCrashIntro : MonoBehaviour
         portal.SetPositionAndRotation(groundPosition, rotation);
         PortalGroundSnap.Snap(portal, groundPosition, groundUp, portalEmbed);
         return true;
+    }
+
+    /// <summary>Computes where the player should spawn: scattered within <see cref="spawnRadius"/>
+    /// of the ground portal (never closer than the portal's own re-teleport radius). Used by
+    /// <see cref="SceneBootstrap"/> after the crash cinematic finishes.</summary>
+    public bool TryComputePlayerSpawnPose(out Vector3 position, out Quaternion rotation)
+    {
+        position = default;
+        rotation = Quaternion.identity;
+
+        Transform portal = _groundPortal != null ? _groundPortal : portalAnchor;
+        if (portal == null)
+            return false;
+
+        Vector3 anchorPosition = portal.position;
+        Quaternion anchorRotation = portal.rotation;
+
+        if (spawnRadius <= 0.0001f)
+        {
+            position = anchorPosition;
+            rotation = anchorRotation;
+            return true;
+        }
+
+        if (!PlanetSurfacePose.TryResolvePlanet(portal, out SphericalPlanet planet, out PlanetTileMap tiles))
+        {
+            position = anchorPosition;
+            rotation = anchorRotation;
+            return true;
+        }
+
+        float minRadius = GalaxyGate.GetSafeMinSpawnRadius(portal.GetComponent<GalaxyGate>(), spawnRadius);
+        if (PlanetRadialSampling.TryGetRandomPointNear(planet, anchorPosition, minRadius, spawnRadius, out Vector3 direction)
+            && PlanetSurfacePose.TryGetPose(
+                planet, tiles, direction, UnityEngine.Random.Range(0f, 360f), PlanetSurfacePose.DefaultHover,
+                out position, out rotation, out _))
+        {
+            return true;
+        }
+
+        position = anchorPosition;
+        rotation = anchorRotation;
+        return true;
+    }
+
+    void ApplyExclusionSpawnRadius(Transform portal)
+    {
+        if (portal == null)
+            return;
+
+        PlanetEnvironmentExclusionZone zone = portal.GetComponent<PlanetEnvironmentExclusionZone>();
+        if (zone != null)
+            zone.SetPlayerSpawnRadius(spawnRadius);
     }
 
     /// <summary>Landing site for the portal itself — on the walkable surface with no capsule
@@ -490,6 +547,8 @@ public class PlayerCrashIntro : MonoBehaviour
     }
 
 #if UNITY_EDITOR
+    void OnValidate() => ApplyExclusionSpawnRadius(portalAnchor);
+
     /// <summary>Editor-only accessor so tools (see PlayerCrashLandingPreview) can find the capsule
     /// this cinematic will animate - e.g. to hide it in the Scene view and preview the portal
     /// it leaves behind instead.</summary>
@@ -507,6 +566,16 @@ public class PlayerCrashIntro : MonoBehaviour
     public bool EditorApplyGroundPortalPose(Transform portal, Vector3 nearWorldPoint, Quaternion yawSource) =>
         TryApplyGroundPortalPose(portal, nearWorldPoint, yawSource);
 #endif
+
+    PlayerDiveAnimation ResolveDiveAnimation()
+    {
+        PlayerDiveAnimation dive = playerCapsule.GetComponent<PlayerDiveAnimation>();
+        if (dive == null)
+            dive = playerCapsule.GetComponentInChildren<PlayerDiveAnimation>(true);
+        if (dive == null)
+            dive = playerCapsule.gameObject.AddComponent<PlayerDiveAnimation>();
+        return dive;
+    }
 
     /// <summary>Hides exactly the capsule's own (authored) renderers/colliders and disables its
     /// GalaxyGate/PlayerCapsuleBeacon now that the ground portal has taken over - never touches the
@@ -528,6 +597,11 @@ public class PlayerCrashIntro : MonoBehaviour
                     _capsuleColliders[i].enabled = false;
         }
 
+        DisableCapsuleGateAndBeacon();
+    }
+
+    void DisableCapsuleGateAndBeacon()
+    {
         GalaxyGate gate = playerCapsule.GetComponent<GalaxyGate>();
         if (gate != null)
             gate.enabled = false;

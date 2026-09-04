@@ -314,7 +314,6 @@ GameObject:
   - component: {fileID: 784744133295761415}
   - component: {fileID: 1194241660088807016}
   - component: {fileID: 1982023585189397953}
-  - component: {fileID: 743010787645130180}
   - component: {fileID: 743010787645130181}
   m_Layer: 6
   m_Name: Portal
@@ -386,19 +385,6 @@ MonoBehaviour:
   cameraDollyFovDelta: -3.5
   cameraLiftDuration: 1
   cameraLiftDistance: 90
---- !u!114 &743010787645130180
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6026344805119218322}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 93e257c919424e6c827fb8a0120c24ca, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PortalPlayerSpawn
-  spawnRadius: 4
 --- !u!114 &743010787645130181
 MonoBehaviour:
   m_ObjectHideFlags: 0

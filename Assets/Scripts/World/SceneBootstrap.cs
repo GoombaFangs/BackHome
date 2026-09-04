@@ -7,7 +7,8 @@ using UnityEngine;
 /// CameraFollow stays on Main Camera — only the target is wired at runtime.
 /// Per-scene vitals bar sizing lives here because cameras differ per world.
 /// Where the player spawns is resolved by <see cref="TryResolveSpawnPose"/> from, in order:
-/// crash-landing portal, planet portal, or a <see cref="ScenePlayerSpawnPoint"/> marker.
+/// crash-landing <see cref="PlayerCrashIntro"/> (spawn radius lives there), a planet portal's
+/// transform, or a <see cref="ScenePlayerSpawnPoint"/> marker.
 /// </summary>
 public class SceneBootstrap : MonoBehaviour
 {
@@ -50,7 +51,7 @@ public class SceneBootstrap : MonoBehaviour
             if (!TryResolveSpawnPose(out Vector3 position, out Quaternion rotation))
             {
                 Debug.LogWarning("SceneBootstrap: no spawn pose resolved. Add PlayerCrashIntro, " +
-                    "PortalPlayerSpawn, or ScenePlayerSpawnPoint to this scene.", this);
+                    "a planet portal, or ScenePlayerSpawnPoint to this scene.", this);
                 return;
             }
 
@@ -65,34 +66,35 @@ public class SceneBootstrap : MonoBehaviour
         BindCameraTarget(player);
         ApplyVitalsBarsSettings(player);
         BindMobileInput(player);
+
+        if (_crashIntro != null)
+        {
+            PlayerLandIntro land = player.GetComponent<PlayerLandIntro>();
+            if (land == null)
+                land = player.gameObject.AddComponent<PlayerLandIntro>();
+            land.Play();
+        }
     }
 
     /// <summary>
-    /// 1. Crash-landing ground portal (<see cref="PortalPlayerSpawn"/>), or the crash site itself.
-    /// 2. Planet scene portal (<see cref="PortalPlayerSpawn"/>).
+    /// 1. Crash-landing <see cref="PlayerCrashIntro"/> (spawn radius on that component).
+    /// 2. Planet scene portal transform (exact portal position — no scatter without crash intro).
     /// 3. <see cref="ScenePlayerSpawnPoint"/> for fixed spawns (e.g. SpaceShip).
     /// </summary>
     bool TryResolveSpawnPose(out Vector3 position, out Quaternion rotation)
     {
-        if (_crashIntro != null)
-        {
-            Transform groundPortal = _crashIntro.GroundPortal;
-            if (groundPortal != null)
-            {
-                PortalPlayerSpawn portalSpawn = groundPortal.GetComponent<PortalPlayerSpawn>();
-                if (portalSpawn != null && portalSpawn.TryGetRandomSpawnPose(out position, out rotation))
-                    return true;
-            }
-
-            if (_crashIntro.TryComputeLandingSite(out position, out rotation))
-                return true;
-        }
+        if (_crashIntro != null && _crashIntro.TryComputePlayerSpawnPose(out position, out rotation))
+            return true;
 
         if (SceneRoles.IsPlanetScene())
         {
-            PortalPlayerSpawn portalSpawn = FindAnyObjectByType<PortalPlayerSpawn>();
-            if (portalSpawn != null && portalSpawn.TryGetRandomSpawnPose(out position, out rotation))
+            GalaxyGate gate = FindAnyObjectByType<GalaxyGate>();
+            if (gate != null)
+            {
+                position = gate.transform.position;
+                rotation = gate.transform.rotation;
                 return true;
+            }
         }
 
         if (ScenePlayerSpawnPoint.TryGetPose(out position, out rotation))

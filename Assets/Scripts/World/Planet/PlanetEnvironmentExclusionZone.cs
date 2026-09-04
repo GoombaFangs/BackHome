@@ -4,18 +4,25 @@ using UnityEngine;
 
 /// <summary>
 /// Marks a world position where streamed planet environment (grass, trees, rocks) must not appear.
-/// Attach to portals — the cleared disk defaults to <see cref="PortalPlayerSpawn.SpawnRadius"/> plus
-/// <see cref="clearanceMargin"/> so the landing site stays open for the portal mesh and the player
-/// spawn scatter.
+/// Attach to portals — the cleared disk uses <see cref="PlayerCrashIntro.SpawnRadius"/> (pushed at
+/// runtime via <see cref="SetPlayerSpawnRadius"/>) plus <see cref="clearanceMargin"/>.
 /// </summary>
 [DisallowMultipleComponent]
 public class PlanetEnvironmentExclusionZone : MonoBehaviour
 {
-    [Tooltip("Extra world-space clearance beyond the player spawn radius and portal trigger.")]
+    [Tooltip("Extra world-space clearance beyond the player spawn radius set on PlayerCrashIntro.")]
     [SerializeField, Min(0f)] float clearanceMargin = 3f;
 
-    [Tooltip("When enabled, the exclusion disk always covers PortalPlayerSpawn's configured radius.")]
+    [Tooltip("When enabled, the exclusion disk covers PlayerCrashIntro's spawn radius.")]
     [SerializeField] bool includePlayerSpawnRadius = true;
+
+    float _playerSpawnRadius;
+
+    public void SetPlayerSpawnRadius(float radius)
+    {
+        _playerSpawnRadius = Mathf.Max(0f, radius);
+        PlanetEnvironmentExclusion.NotifyChanged();
+    }
 
     public float EffectiveRadius
     {
@@ -23,12 +30,7 @@ public class PlanetEnvironmentExclusionZone : MonoBehaviour
         {
             float radius = clearanceMargin;
             if (includePlayerSpawnRadius)
-            {
-                PortalPlayerSpawn spawn = GetComponent<PortalPlayerSpawn>();
-                if (spawn != null)
-                    radius += spawn.SpawnRadius;
-            }
-
+                radius += _playerSpawnRadius;
             return radius;
         }
     }

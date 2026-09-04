@@ -47,6 +47,9 @@ public class PlanetWalker : MonoBehaviour
     float _footDropBelowPivot = -1f;
     float _runHoverBlend;
 
+    /// <summary>When true, planet locomotion is frozen (crash-land intro plays on this Animator).</summary>
+    public bool LockLocomotion { get; set; }
+
     int _animIDSpeed;
     int _animIDGrounded;
     int _animIDJump;
@@ -134,6 +137,9 @@ public class PlanetWalker : MonoBehaviour
 
         if (_pendingFootResnap)
             ResnapIfFootClearanceReady();
+
+        if (LockLocomotion)
+            return;
 
         TickPlanetWalk();
     }

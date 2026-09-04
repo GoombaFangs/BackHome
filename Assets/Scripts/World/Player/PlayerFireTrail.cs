@@ -2,10 +2,10 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 /// <summary>
-/// Fiery re-entry trail for the player capsule crash cinematic (see <see cref="PlayerCrashIntro"/>):
-/// a bright core streak (TrailRenderer), a flickering fire Line (hot core + orange envelope),
-/// plus optional flame puffs, a sooty smoke fringe, and outward-flying sparks - together reading
-/// as a proper meteor fireball.
+/// SuperCasual comet trail for the player capsule crash cinematic (see <see cref="PlayerCrashIntro"/>):
+/// a soft teardrop (LineRenderer core + glow) that joins the blue orb at its trailing rim, plus an
+/// optional thin motion streak (TrailRenderer). Tuned to sit in the same visual family as the orb -
+/// round falloff, modest color, no HDR blowout - rather than a photoreal fireball.
 ///
 /// Authored as a normal child ("FireTrail", with FlameBody/Smoke/Sparks/FireEmbers underneath it)
 /// inside the capsule's nested "TrailVfx", so every particle system here is directly editable in
@@ -19,25 +19,26 @@ using UnityEngine.Rendering;
 /// automatically with sensible defaults.
 /// </summary>
 [RequireComponent(typeof(TrailRenderer))]
+[DefaultExecutionOrder(-80)]
 public class PlayerFireTrail : MonoBehaviour
 {
-    [Header("Trail Shape (bright core streak)")]
-    [SerializeField, Min(0.05f)] float trailTime = 0.6f;
-    [SerializeField, Min(0.01f)] float headWidth = 2.6f;
-    [SerializeField, Min(0f)] float tailWidthRatio = 0.05f;
+    [Header("Trail Shape (thin motion streak)")]
+    [SerializeField, Min(0.05f)] float trailTime = 0.45f;
+    [SerializeField, Min(0.01f)] float headWidth = 0.48f;
+    [SerializeField, Min(0f)] float tailWidthRatio = 0f;
     [SerializeField, Min(0f)] float minVertexDistance = 0.1f;
     [Tooltip("World units of trail pre-seeded behind the capsule the instant Play() is called, so " +
         "the streak appears at full length immediately instead of visibly growing in over the first " +
         "fraction of a second (a TrailRenderer normally starts as a single point).")]
-    [SerializeField, Min(0f)] float instantSeedLength = 12f;
+    [SerializeField, Min(0f)] float instantSeedLength = 8f;
 
     [Header("Trail Color (head -> tail)")]
-    [SerializeField] Color coreColor = new Color(1f, 0.98f, 0.85f, 1f);
-    [SerializeField] Color midColor = new Color(1f, 0.42f, 0.06f, 0.9f);
+    [SerializeField] Color coreColor = new Color(1f, 0.90f, 0.68f, 0.78f);
+    [SerializeField] Color midColor = new Color(1f, 0.58f, 0.28f, 0.50f);
     // RGB (not just alpha) fades toward black - the additive blend is forced directly via
     // Src/DstBlend, bypassing the shader's own alpha-premultiply path, so alpha alone can't be
     // relied on to fade the tail to nothing.
-    [SerializeField] Color tailColor = new Color(0.08f, 0.01f, 0f, 0f);
+    [SerializeField] Color tailColor = new Color(0.95f, 0.32f, 0.10f, 0f);
 
     [Header("Flame Body (thick overlapping fire puffs)")]
     [Tooltip("Continuously-spawned, additively-blended glow puffs along the fall path - this is " +
@@ -70,17 +71,18 @@ public class PlayerFireTrail : MonoBehaviour
     [SerializeField] Color emberHotColor = new Color(1f, 0.85f, 0.4f, 1f);
     [SerializeField] Color emberCoolColor = new Color(0.9f, 0.25f, 0.05f, 1f);
 
-    [Header("Fire Line (flickering flame streak)")]
-    [Tooltip("Straight fire line behind the capsule: a thin white-hot core plus a wider orange " +
-        "envelope, with Perlin flicker so it reads as flame tongues rather than a laser.")]
+    [Header("Fire Line (soft comet teardrop)")]
+    [Tooltip("Comet tail behind the orb: a cream core plus a peach envelope, joining at the rim " +
+        "and tapering to a point. Light Perlin wobble keeps it alive without reading as fire noise.")]
     [SerializeField] bool enableFireLine = true;
-    [SerializeField, Min(0.5f)] float lineLength = 11f;
-    [SerializeField, Min(0.05f)] float lineCoreWidth = 0.48f;
-    [SerializeField, Min(0.05f)] float lineGlowWidth = 2.1f;
-    [SerializeField, Range(0f, 0.6f)] float lineFlicker = 0.24f;
-    [SerializeField] Color lineCoreColor = new Color(1f, 0.97f, 0.78f, 1f);
-    [SerializeField] Color lineMidColor = new Color(1f, 0.42f, 0.06f, 0.95f);
-    [SerializeField] Color lineTailColor = new Color(0.18f, 0.02f, 0f, 0f);
+    [SerializeField, Min(0.5f)] float lineLength = 8.5f;
+    [SerializeField, Min(0.05f)] float lineCoreWidth = 0.42f;
+    [SerializeField, Min(0.05f)] float lineGlowWidth = 1.85f;
+    [SerializeField, Range(0f, 0.6f)] float lineFlicker = 0.10f;
+    [SerializeField] Color lineCoreColor = new Color(1f, 0.92f, 0.72f, 0.82f);
+    [SerializeField] Color lineMidColor = new Color(1f, 0.55f, 0.24f, 0.58f);
+    [SerializeField] Color lineTailColor = new Color(0.95f, 0.30f, 0.08f, 0f);
+    [SerializeField] bool enableLineTongues = false;
 
     TrailRenderer _trail;
     ParticleSystem _flameBody;
@@ -95,6 +97,8 @@ public class PlayerFireTrail : MonoBehaviour
     Vector3 _lastLinePosition;
     bool _linePlaying;
     bool _hasLastLinePosition;
+    SkinnedMeshRenderer _followSkin;
+    Transform _followBone;
 
     static Material _trailMaterial;
     static Material _flameMaterial;
@@ -124,9 +128,7 @@ public class PlayerFireTrail : MonoBehaviour
         _trail.time = trailTime;
         _trail.minVertexDistance = minVertexDistance;
         _trail.widthMultiplier = headWidth;
-        _trail.widthCurve = new AnimationCurve(
-            new Keyframe(0f, 1f, 0f, 0f),
-            new Keyframe(1f, tailWidthRatio, 0f, 0f));
+        _trail.widthCurve = BuildCometWidthCurve(Mathf.Max(0.2f, tailWidthRatio));
 
         Gradient gradient = new Gradient();
         gradient.SetKeys(
@@ -145,14 +147,14 @@ public class PlayerFireTrail : MonoBehaviour
         _trail.colorGradient = gradient;
 
         _trail.alignment = LineAlignment.View;
-        _trail.numCapVertices = 4;
-        _trail.numCornerVertices = 2;
-        _trail.textureMode = LineTextureMode.Tile;
-        _trail.textureScale = new Vector2(2.4f, 1f);
+        _trail.numCapVertices = 8;
+        _trail.numCornerVertices = 4;
+        _trail.textureMode = LineTextureMode.Stretch;
+        _trail.textureScale = Vector2.one;
         _trail.shadowCastingMode = ShadowCastingMode.Off;
         _trail.receiveShadows = false;
-        if (_trail.sharedMaterial == null)
-            _trail.sharedMaterial = GetTrailMaterial();
+        _trail.sortingOrder = TrailSortingOrder;
+        _trail.sharedMaterial = GetTrailMaterial();
         SetAllTrailsEmitting(false);
     }
 
@@ -386,15 +388,10 @@ public class PlayerFireTrail : MonoBehaviour
             _lineGlow = glowRoot.gameObject.AddComponent<LineRenderer>();
 
         if (_lineMaterial == null)
-        {
-            Material source = _trail != null && _trail.sharedMaterial != null
-                ? _trail.sharedMaterial
-                : GetTrailMaterial();
-            _lineMaterial = new Material(source) { name = "PlayerFireTrail_Line" };
-        }
+            _lineMaterial = new Material(GetTrailMaterial()) { name = "PlayerFireTrail_Line" };
 
-        ApplyFireLineStyle(_lineCore, lineCoreWidth, 3, BuildFireLineGradient(true));
-        ApplyFireLineStyle(_lineGlow, lineGlowWidth, 1, BuildFireLineGradient(false));
+        ApplyFireLineStyle(_lineCore, lineCoreWidth, CoreSortingOrder, BuildFireLineGradient(true));
+        ApplyFireLineStyle(_lineGlow, lineGlowWidth, GlowSortingOrder, BuildFireLineGradient(false));
         ConfigureFireLineTongues(lineRoot);
         // Prefab-authored LineRenderers stay visible in Prefab Mode (Awake doesn't run there).
         // In Play Mode Stop() hides them until Play().
@@ -460,14 +457,13 @@ public class PlayerFireTrail : MonoBehaviour
         trails.enabled = false;
 
         ParticleSystemRenderer renderer = _lineTongues.GetComponent<ParticleSystemRenderer>();
-        renderer.renderMode = ParticleSystemRenderMode.Stretch;
-        renderer.velocityScale = 0.06f;
-        renderer.lengthScale = 2.2f;
+        renderer.renderMode = ParticleSystemRenderMode.Billboard;
+        renderer.alignment = ParticleSystemRenderSpace.View;
         renderer.shadowCastingMode = ShadowCastingMode.Off;
         renderer.receiveShadows = false;
         renderer.sharedMaterial = GetFlameMaterial();
         renderer.trailMaterial = null;
-        renderer.sortingOrder = 4;
+        renderer.sortingOrder = TrailSortingOrder;
     }
 
     void ApplyFireLineStyle(LineRenderer line, float width, int sortingOrder, Gradient gradient)
@@ -477,18 +473,14 @@ public class PlayerFireTrail : MonoBehaviour
         line.loop = false;
         line.alignment = LineAlignment.View;
         line.textureMode = LineTextureMode.Stretch;
-        line.numCapVertices = 5;
-        line.numCornerVertices = 3;
+        line.numCapVertices = 8;
+        line.numCornerVertices = 4;
         line.shadowCastingMode = ShadowCastingMode.Off;
         line.receiveShadows = false;
         line.allowOcclusionWhenDynamic = false;
         line.sortingOrder = sortingOrder;
         line.widthMultiplier = width;
-        line.widthCurve = new AnimationCurve(
-            new Keyframe(0f, 1f, 0f, -0.6f),
-            new Keyframe(0.18f, 0.72f, -0.8f, -0.8f),
-            new Keyframe(0.55f, 0.28f, -0.7f, -0.7f),
-            new Keyframe(1f, 0.02f, -0.3f, 0f));
+        line.widthCurve = BuildCometWidthCurve(sortingOrder == GlowSortingOrder ? 0.18f : 0.28f);
         line.colorGradient = gradient;
         line.sharedMaterial = _lineMaterial;
     }
@@ -502,22 +494,22 @@ public class PlayerFireTrail : MonoBehaviour
                 new[]
                 {
                     new GradientColorKey(lineCoreColor, 0f),
-                    new GradientColorKey(new Color(1f, 0.78f, 0.28f, 1f), 0.28f),
+                    new GradientColorKey(new Color(1f, 0.78f, 0.42f, 0.72f), 0.28f),
                     new GradientColorKey(lineMidColor, 0.62f),
                     new GradientColorKey(lineTailColor, 1f),
                 },
                 new[]
                 {
-                    new GradientAlphaKey(1f, 0f),
-                    new GradientAlphaKey(0.95f, 0.35f),
-                    new GradientAlphaKey(0.45f, 0.75f),
+                    new GradientAlphaKey(lineCoreColor.a, 0f),
+                    new GradientAlphaKey(0.7f, 0.35f),
+                    new GradientAlphaKey(0.28f, 0.75f),
                     new GradientAlphaKey(0f, 1f),
                 });
         }
         else
         {
-            Color glowHead = new Color(1f, 0.55f, 0.12f, 0.85f);
-            Color glowMid = new Color(1f, 0.22f, 0.03f, 0.55f);
+            Color glowHead = new Color(1f, 0.64f, 0.30f, 0.38f);
+            Color glowMid = new Color(1f, 0.40f, 0.14f, 0.18f);
             gradient.SetKeys(
                 new[]
                 {
@@ -527,9 +519,9 @@ public class PlayerFireTrail : MonoBehaviour
                 },
                 new[]
                 {
-                    new GradientAlphaKey(0.85f, 0f),
-                    new GradientAlphaKey(0.55f, 0.35f),
-                    new GradientAlphaKey(0.2f, 0.72f),
+                    new GradientAlphaKey(0.38f, 0f),
+                    new GradientAlphaKey(0.22f, 0.35f),
+                    new GradientAlphaKey(0.08f, 0.72f),
                     new GradientAlphaKey(0f, 1f),
                 });
         }
@@ -540,6 +532,8 @@ public class PlayerFireTrail : MonoBehaviour
 
     void LateUpdate()
     {
+        SnapToCharacter();
+
         if (!_linePlaying || _lineCore == null)
             return;
 
@@ -652,6 +646,7 @@ public class PlayerFireTrail : MonoBehaviour
     /// </summary>
     public void Play(Vector3 travelDirection = default)
     {
+        SnapToCharacter();
         TrailRenderer[] trails = GetComponentsInChildren<TrailRenderer>(true);
         for (int i = 0; i < trails.Length; i++)
         {
@@ -669,8 +664,49 @@ public class PlayerFireTrail : MonoBehaviour
         _hasLastLinePosition = false;
         _linePlaying = enableFireLine && _lineCore != null;
         SetFireLineVisible(_linePlaying);
-        if (_linePlaying)
+        if (_linePlaying && enableLineTongues)
             PlaySystem(_lineTongues);
+    }
+
+    /// <summary>Pins this trail to the animated Starbot mesh/hips. The clip moves Armature/Hips,
+    /// not the FBX root this object is parented to - without this the streak sits at a fixed local
+    /// offset and reads as "below the character" as soon as the dive pose lifts the body.</summary>
+    void SnapToCharacter()
+    {
+        if (_followSkin == null && _followBone == null)
+            ResolveFollowTarget();
+
+        if (_followBone != null)
+        {
+            transform.position = _followBone.position;
+            return;
+        }
+
+        if (_followSkin != null)
+            transform.position = _followSkin.bounds.center;
+    }
+
+    void ResolveFollowTarget()
+    {
+        Transform model = transform.parent;
+        if (model == null)
+            return;
+
+        _followBone = model.Find("Armature/Hips");
+        if (_followBone == null)
+        {
+            Transform[] children = model.GetComponentsInChildren<Transform>(true);
+            for (int i = 0; i < children.Length; i++)
+            {
+                if (children[i].name == "Hips")
+                {
+                    _followBone = children[i];
+                    break;
+                }
+            }
+        }
+
+        _followSkin = model.GetComponentInChildren<SkinnedMeshRenderer>(true);
     }
 
     static void PlaySystem(ParticleSystem ps)
@@ -729,21 +765,38 @@ public class PlayerFireTrail : MonoBehaviour
             trails[i].emitting = emitting;
     }
 
-    // HDR over-brighten multipliers for the "hot" additive materials - pushes rendered pixels
-    // past the Bloom threshold so the fireball glows strongly on its own, not just where puffs
-    // happen to overlap. Smoke is intentionally excluded (soot shouldn't bloom).
-    const float TrailHdrBoost = 2.2f;
-    const float FlameHdrBoost = 2.6f;
-    const float SparkHdrBoost = 3.2f;
-    const float EmberHdrBoost = 2.4f;
+    const int GlowSortingOrder = 0;
+    const int TrailSortingOrder = 1;
+    const int CoreSortingOrder = 2;
+
+    /// <summary>SuperCasual comet silhouette: hairline join at the orb rim, juicy body just
+    /// behind, then a smooth taper to a point. <paramref name="head"/> is the width at t=0
+    /// (the rim) as a fraction of the max width.</summary>
+    static AnimationCurve BuildCometWidthCurve(float head)
+    {
+        return new AnimationCurve(
+            new Keyframe(0f, head, 0f, 6f),
+            new Keyframe(0.11f, 1f, 0f, 0f),
+            new Keyframe(0.45f, 0.48f, -1.15f, -1.15f),
+            new Keyframe(1f, 0f, -0.35f, 0f));
+    }
+
+    // Modest over-brighten so the comet reads as a glow, not a blown-out bloom slab. The orb
+    // itself sits around HDR ~2.4; staying well below that keeps it the hero silhouette.
+    const float TrailHdrBoost = 1.15f;
+    const float FlameHdrBoost = 1.2f;
+    const float SparkHdrBoost = 1.6f;
+    const float EmberHdrBoost = 1.15f;
 
     static Material GetTrailMaterial()
     {
         if (_trailMaterial == null)
         {
-            _trailMaterial = Resources.Load<Material>(PlayerDiveDownCapsulePaths.ResourcesReentryFlameMaterial);
+            _trailMaterial = Resources.Load<Material>(PlayerDiveDownCapsulePaths.ResourcesReentryTrailMaterial);
             if (_trailMaterial == null)
-                _trailMaterial = PlayerVfxUtility.BuildParticleMaterial(Texture2D.whiteTexture, true, "PlayerFireTrail_Streak (Generated)", TrailHdrBoost);
+                _trailMaterial = Resources.Load<Material>(PlayerDiveDownCapsulePaths.ResourcesReentryFlameMaterial);
+            if (_trailMaterial == null)
+                _trailMaterial = PlayerVfxUtility.BuildParticleMaterial(PlayerVfxUtility.GetSoftDotTexture(), false, "PlayerFireTrail_Streak (Generated)", TrailHdrBoost);
         }
         return _trailMaterial;
     }
