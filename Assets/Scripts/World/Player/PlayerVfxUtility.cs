@@ -176,4 +176,113 @@ public static class PlayerVfxUtility
             bounds.Encapsulate(renderers[i].bounds);
         return true;
     }
+
+    /// <summary>Like <see cref="TryGetRendererBounds"/> but ignores particle/line/trail renderers -
+    /// their "bounds" describe simulated VFX extents (fire trails, sparks, smoke puffs), which can
+    /// be many times larger than the actual physical object and are meaningless for things like
+    /// ground-clearance/embed checks that want the solid mesh's real size. Returns false (and an
+    /// empty bounds at root.position) if nothing but VFX renderers are found - e.g. a capsule that
+    /// is itself just a fire-trail effect with no body mesh, in which case callers should treat the
+    /// object as having ~zero physical size rather than the VFX's simulated extent.</summary>
+    public static bool TryGetSolidRendererBounds(Transform root, out Bounds bounds)
+    {
+        Renderer[] renderers = root.GetComponentsInChildren<Renderer>();
+        bounds = new Bounds(root.position, Vector3.zero);
+        bool found = false;
+
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer r = renderers[i];
+            if (r == null || r is ParticleSystemRenderer || r is LineRenderer || r is TrailRenderer)
+                continue;
+
+            if (!found)
+            {
+                bounds = r.bounds;
+                found = true;
+            }
+            else
+            {
+                bounds.Encapsulate(r.bounds);
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>Moves <paramref name="root"/> so the lowest solid-mesh point sits on
+    /// <paramref name="surfacePoint"/> (plus optional <paramref name="embed"/> sink along
+    /// <paramref name="surfaceUp"/>). Uses bounds corners instead of the AABB center so tall or
+    /// offset children (portal sign posts, crater bowls) can't push the whole assembly upward.
+    /// Pass <paramref name="boundsRoot"/> to measure only part of the hierarchy (e.g. the portal
+    /// crater bowl, not the sign post).</summary>
+    public static void SnapBaseToSurface(
+        Transform root,
+        Vector3 surfacePoint,
+        Vector3 surfaceUp,
+        float embed = 0f,
+        Transform boundsRoot = null)
+    {
+        if (root == null)
+            return;
+
+        if (surfaceUp.sqrMagnitude < 0.0001f)
+            surfaceUp = Vector3.up;
+        surfaceUp.Normalize();
+
+        Transform measureRoot = boundsRoot != null ? boundsRoot : root;
+        if (!TryGetLowestProjectionAlongUp(measureRoot, surfacePoint, surfaceUp, out float lowestAlongUp))
+        {
+            root.position -= surfaceUp * embed;
+            return;
+        }
+
+        root.position -= surfaceUp * (lowestAlongUp + embed);
+    }
+
+    static bool TryGetLowestProjectionAlongUp(
+        Transform root,
+        Vector3 origin,
+        Vector3 up,
+        out float lowestAlongUp)
+    {
+        lowestAlongUp = float.MaxValue;
+        bool found = false;
+
+        Renderer[] renderers = root.GetComponentsInChildren<Renderer>();
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            Renderer renderer = renderers[i];
+            if (renderer == null || renderer is ParticleSystemRenderer or LineRenderer or TrailRenderer)
+                continue;
+
+            Bounds bounds = renderer.bounds;
+            GetBoundsCorners(bounds, s_BoundsCorners);
+            for (int c = 0; c < s_BoundsCorners.Length; c++)
+            {
+                float alongUp = Vector3.Dot(s_BoundsCorners[c] - origin, up);
+                if (alongUp < lowestAlongUp)
+                    lowestAlongUp = alongUp;
+                found = true;
+            }
+        }
+
+        return found;
+    }
+
+    static readonly Vector3[] s_BoundsCorners = new Vector3[8];
+
+    static void GetBoundsCorners(Bounds bounds, Vector3[] corners)
+    {
+        Vector3 center = bounds.center;
+        Vector3 extents = bounds.extents;
+        corners[0] = center + new Vector3(-extents.x, -extents.y, -extents.z);
+        corners[1] = center + new Vector3(-extents.x, -extents.y, extents.z);
+        corners[2] = center + new Vector3(-extents.x, extents.y, -extents.z);
+        corners[3] = center + new Vector3(-extents.x, extents.y, extents.z);
+        corners[4] = center + new Vector3(extents.x, -extents.y, -extents.z);
+        corners[5] = center + new Vector3(extents.x, -extents.y, extents.z);
+        corners[6] = center + new Vector3(extents.x, extents.y, -extents.z);
+        corners[7] = center + new Vector3(extents.x, extents.y, extents.z);
+    }
 }

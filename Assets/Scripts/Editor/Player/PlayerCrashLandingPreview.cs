@@ -11,9 +11,9 @@ using UnityEngine;
 ///
 /// From that point on this tool never touches the anchor's transform again - it's a normal,
 /// fully user-owned scene object. Drag it anywhere and PlayerCrashIntro.LandingAnchor (see
-/// TryComputeLandingPose) follows it automatically, both for the crash cinematic itself and for
-/// where SceneBootstrap spawns the player - so the portal and the spawn point can never drift
-/// apart, no matter where the portal gets moved.
+/// TryComputeLandingSite) follows it automatically, both for the crash cinematic itself and for
+/// where the ground portal ends up - so the portal and the crash site can never drift apart, no
+/// matter where the portal gets moved.
 /// </summary>
 [InitializeOnLoad]
 static class PlayerCrashLandingPreview
@@ -30,7 +30,7 @@ static class PlayerCrashLandingPreview
     }
 
     [MenuItem("BackHome/Refresh Crash Landing Previews")]
-    static void RefreshFromMenu() => RefreshAll();
+    static void RefreshFromMenu() => RefreshAllInternal(snapExistingAnchors: true);
 
     static void OnPlayModeStateChanged(PlayModeStateChange state)
     {
@@ -38,7 +38,9 @@ static class PlayerCrashLandingPreview
             RefreshAll();
     }
 
-    static void RefreshAll()
+    static void RefreshAll() => RefreshAllInternal(snapExistingAnchors: false);
+
+    static void RefreshAllInternal(bool snapExistingAnchors)
     {
         if (_refreshing)
             return;
@@ -50,7 +52,7 @@ static class PlayerCrashLandingPreview
         {
             PlayerCrashIntro[] found = Object.FindObjectsByType<PlayerCrashIntro>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             foreach (PlayerCrashIntro intro in found)
-                EnsureAnchor(intro);
+                EnsureAnchor(intro, snapExistingAnchors);
         }
         finally
         {
@@ -58,7 +60,7 @@ static class PlayerCrashLandingPreview
         }
     }
 
-    static void EnsureAnchor(PlayerCrashIntro intro)
+    static void EnsureAnchor(PlayerCrashIntro intro, bool snapExistingAnchor = false)
     {
         Transform capsule = intro.PlayerCapsule;
         if (capsule == null)
@@ -68,13 +70,17 @@ static class PlayerCrashLandingPreview
         SceneVisibilityManager.instance.Hide(capsule.gameObject, true);
 
         if (intro.PortalAnchor != null)
-            return; // User-owned from here on - never move or recreate it.
+        {
+            if (snapExistingAnchor)
+                intro.EditorApplyGroundPortalPose(intro.PortalAnchor, intro.PortalAnchor.position, intro.PortalAnchor.rotation);
+            return;
+        }
 
         GameObject prefab = intro.EditorResolvePortalPrefab();
         if (prefab == null)
             return;
 
-        if (!intro.TryComputeLandingPose(out Vector3 position, out Quaternion rotation))
+        if (!intro.TryComputePortalLandingSite(out Vector3 position, out Quaternion rotation))
             return;
 
         GameObject marker = (GameObject)PrefabUtility.InstantiatePrefab(prefab, capsule.gameObject.scene);
@@ -82,7 +88,7 @@ static class PlayerCrashLandingPreview
             return;
 
         marker.name = AnchorName;
-        marker.transform.SetPositionAndRotation(position, rotation);
+        intro.EditorApplyGroundPortalPose(marker.transform, position, rotation);
         StripInteractivity(marker);
         Undo.RegisterCreatedObjectUndo(marker, "Create Portal Landing Anchor");
 

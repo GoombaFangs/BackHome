@@ -741,7 +741,7 @@ public class PlayerFireTrail : MonoBehaviour
     {
         if (_trailMaterial == null)
         {
-            _trailMaterial = Resources.Load<Material>("Player/Capsule/Materials/ReentryFlame");
+            _trailMaterial = Resources.Load<Material>(PlayerDiveDownCapsulePaths.ResourcesReentryFlameMaterial);
             if (_trailMaterial == null)
                 _trailMaterial = PlayerVfxUtility.BuildParticleMaterial(Texture2D.whiteTexture, true, "PlayerFireTrail_Streak (Generated)", TrailHdrBoost);
         }

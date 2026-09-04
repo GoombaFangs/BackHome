@@ -2,6 +2,7 @@ using System.Collections;
 using StarterAssets;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 /// <summary>
@@ -24,7 +25,8 @@ public class PlayerDeathUI : MonoBehaviour
     static readonly int DeathOverlayFrostAmountId = Shader.PropertyToID("_FrostAmount");
     static readonly int DeathOverlayVignetteAmountId = Shader.PropertyToID("_VignetteAmount");
 
-    [SerializeField] string shipSceneName = "SpaceShip";
+    [FormerlySerializedAs("shipSceneName")]
+    [SerializeField] string spaceshipSceneName = "SpaceShip";
     [Tooltip("Seconds after death before the camera fully locks, time freezes and stays frozen.")]
     [SerializeField, Min(0f)] float freezeDelay = 2f;
     [Tooltip("DeathPanel prefab (You are dead + Continue). Instantiated under the UI canvas.")]
@@ -310,7 +312,7 @@ public class PlayerDeathUI : MonoBehaviour
         _loading = true;
         Time.timeScale = 1f;
 
-        string scene = string.IsNullOrWhiteSpace(shipSceneName) ? "SpaceShip" : shipSceneName;
+        string scene = string.IsNullOrWhiteSpace(spaceshipSceneName) ? "SpaceShip" : spaceshipSceneName;
         SceneManager.LoadScene(scene);
     }
 

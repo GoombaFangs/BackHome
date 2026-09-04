@@ -108,7 +108,6 @@ public class CreatureSpawner : MonoBehaviour
     readonly List<Vector3> _acceptedDirs = new();
     readonly List<PendingRespawn> _pendingRespawns = new();
     readonly List<ResolvedEntry> _allEntries = new();
-    System.Random _spawnRng;
     LootDropPool _lootPool;
 
     void OnValidate()
@@ -544,9 +543,6 @@ public class CreatureSpawner : MonoBehaviour
         dir = Vector3.up;
 
         bool useSpawnPoint = spawnPointIndex >= 0 && spawnPoints != null && spawnPointIndex < spawnPoints.Length;
-        if (useSpawnPoint)
-            _spawnRng ??= new System.Random();
-
         SpawnPoint spawnPoint = useSpawnPoint ? spawnPoints[spawnPointIndex] : default;
         if (useSpawnPoint && spawnPoint.anchor == null)
             useSpawnPoint = false;
@@ -604,33 +600,16 @@ public class CreatureSpawner : MonoBehaviour
 
     /// <summary>Samples a direction within <paramref name="worldRadius"/> world units of
     /// <paramref name="anchor"/>'s position (projected onto the planet), area-uniformly across the
-    /// disk.</summary>
+    /// disk. Shared math lives in <see cref="PlanetRadialSampling"/> so other systems that scatter
+    /// points around an anchor (e.g. <see cref="PortalPlayerSpawn"/>) use the exact same
+    /// distribution instead of a copy-pasted version.</summary>
     bool TryGetRandomPointNearAnchor(Transform anchor, float worldRadius, out Vector3 dir)
     {
         dir = Vector3.up;
         if (anchor == null || planet == null)
             return false;
 
-        Vector3 anchorUp = anchor.position - planet.Center;
-        if (anchorUp.sqrMagnitude < 0.0001f)
-            return false;
-        anchorUp.Normalize();
-
-        _spawnRng ??= new System.Random();
-        float maxAngleDeg = Mathf.Asin(Mathf.Clamp01(worldRadius / Mathf.Max(0.01f, planet.Radius))) * Mathf.Rad2Deg;
-        float angle = Mathf.Sqrt((float)_spawnRng.NextDouble()) * maxAngleDeg; // sqrt => uniform density across the disk area.
-        float spin = (float)_spawnRng.NextDouble() * 360f;
-        dir = JitterDirection(anchorUp, angle, spin);
-        return true;
-    }
-
-    static Vector3 JitterDirection(Vector3 dir, float angleDegrees, float spinDegrees)
-    {
-        Vector3 axis = Vector3.Cross(dir, Vector3.up);
-        if (axis.sqrMagnitude < 0.0001f)
-            axis = Vector3.Cross(dir, Vector3.right);
-        axis = (Quaternion.AngleAxis(spinDegrees, dir) * axis).normalized;
-        return (Quaternion.AngleAxis(angleDegrees, axis) * dir).normalized;
+        return PlanetRadialSampling.TryGetRandomPointNear(planet, anchor.position, worldRadius, out dir);
     }
 
     bool TryGetSurfacePose(Vector3 directionFromCenter, out Vector3 position, out Quaternion rotation)

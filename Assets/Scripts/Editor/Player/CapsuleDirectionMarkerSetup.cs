@@ -10,7 +10,7 @@ using UnityEngine;
 public static class CapsuleDirectionMarkerSetup
 {
     const string PlayerPrefabPath = "Assets/Resources/Player/Player.prefab";
-    const string CapsulePrefabPath = "Assets/Resources/Player/Capsule/PlayerDiveDownCapsule.prefab";
+    const string CapsulePrefabPath = PlayerDiveDownCapsulePaths.AssetCapsulePrefab;
     const string NavigationFolder = "Assets/Resources/Player/Navigation";
     const string MaterialPath = NavigationFolder + "/NavigationSprite.mat";
     const string HomeSpritePath = NavigationFolder + "/HomeArrowNavigation.png";

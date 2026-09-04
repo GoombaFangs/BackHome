@@ -439,7 +439,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c3d4e5f60718293a4b5c6d7e8f012345, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerDeathUI
-  shipSceneName: SpaceShip
+  spaceshipSceneName: SpaceShip
   freezeDelay: 2
   deathPanelPrefab: {fileID: 9207511818991568597, guid: 28a5be64fbebab74abad12c5a2a156eb, type: 3}
   deathOverlay: {fileID: 0}

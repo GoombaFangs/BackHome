@@ -14,8 +14,8 @@ using UnityEngine;
 /// </summary>
 static class PlayerCapsuleVfxBaker
 {
-    const string ImpactPrefabPath = "Assets/Resources/Player/Capsule/ImpactVfx.prefab";
-    const string PlayerDiveDownCapsulePrefabPath = "Assets/Resources/Player/Capsule/PlayerDiveDownCapsule.prefab";
+    const string ImpactPrefabPath = PlayerDiveDownCapsulePaths.AssetImpactVfxPrefab;
+    const string PlayerDiveDownCapsulePrefabPath = PlayerDiveDownCapsulePaths.AssetCapsulePrefab;
 
     /// <summary>Same placeholder metal material the capsule's builtin Capsule mesh has always
     /// used.</summary>

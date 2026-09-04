@@ -350,6 +350,9 @@ public class PlanetGrassStreamer : MonoBehaviour
                 if (!_tiles.TryGetCellCenter(lat, lon, out Vector3 cellCenter))
                     continue;
 
+                if (PlanetEnvironmentExclusion.IsExcluded(_planet, cellCenter))
+                    continue;
+
                 Vector3 up = regionSet != null ? (cellCenter - _planet.Center).normalized : default;
                 int regionIndex = regionSet != null ? regionSet.GetRegionIndex(up) : -1;
                 float effectiveDensity = regionSet != null
@@ -514,6 +517,9 @@ public class PlanetGrassStreamer : MonoBehaviour
         if (!TryComputePose(lat, lon, slot, out Vector3 position, out Quaternion rotation))
             return false;
 
+        if (PlanetEnvironmentExclusion.IsExcluded(_planet, position))
+            return false;
+
         GameObject instance = Rent(prefabIndex, prefab);
         if (instance == null)
             return false;
@@ -533,6 +539,9 @@ public class PlanetGrassStreamer : MonoBehaviour
             return false;
 
         if (!TryComputePose(lat, lon, slot, out Vector3 position, out Quaternion rotation))
+            return false;
+
+        if (PlanetEnvironmentExclusion.IsExcluded(_planet, position))
             return false;
 
         GameObject instance = RentRegion(prefab);

@@ -22,7 +22,7 @@ public class PlayerCrashImpact : MonoBehaviour
     [Header("Effect Prefab")]
     [Tooltip("Authored impact burst prefab (flash + dust + sparks + debris, e.g. ImpactVfx). " +
         "Edit this prefab directly in the Editor to tune the look - it's instantiated as-is at " +
-        "runtime. Leave empty to load Player/Capsule/ImpactVfx from Resources, then fall " +
+        "runtime. Leave empty to load from Resources via PlayerDiveDownCapsulePaths, then fall " +
         "back to the procedural builder below.")]
     [SerializeField] GameObject effectPrefab;
 
@@ -59,23 +59,11 @@ public class PlayerCrashImpact : MonoBehaviour
     [SerializeField] Color debrisColor = new Color(0.28f, 0.24f, 0.2f, 1f);
     [SerializeField, Min(0f)] float debrisGravity = 3.4f;
 
-    [Header("Crater")]
-    [Tooltip("Impact crater mesh spawned on the planet surface at the moment of impact. " +
-        "Leave empty to load Player/Capsule/Crater from Resources.")]
-    [SerializeField] GameObject craterPrefab;
-    [SerializeField, Min(0.01f)] float craterScale = 6f;
-    [Tooltip("How far to sink the crater into the ground, in world units. Keeps the rim on the " +
-        "surface and the bowl clipping into the planet instead of sitting on top like a hat.")]
-    [SerializeField] float craterEmbed = 0.2f;
-
-    const string DefaultEffectResource = "Player/Capsule/ImpactVfx";
-    const string DefaultCraterResource = "Player/Capsule/Crater";
-    const string DefaultCraterMaterialResource = "Player/Capsule/Materials/Crater";
+    const string DefaultEffectResource = PlayerDiveDownCapsulePaths.ResourcesImpactVfx;
 
     GameObject _instance;
     ParticleSystem[] _systems;
     bool _built;
-    bool _craterSpawned;
 
     static Material _flashMaterial;
     static Material _softAdditiveMaterial;
@@ -91,13 +79,6 @@ public class PlayerCrashImpact : MonoBehaviour
     public void SetEffectPrefab(GameObject prefab)
     {
         effectPrefab = prefab;
-    }
-
-    public void SetCrater(GameObject prefab, float scale, float embed)
-    {
-        craterPrefab = prefab;
-        craterScale = Mathf.Max(0.01f, scale);
-        craterEmbed = embed;
     }
 
     void Build()
@@ -151,8 +132,7 @@ public class PlayerCrashImpact : MonoBehaviour
         PrepareSystems(_systems);
     }
 
-    /// <summary>Fires every authored (or procedurally built) burst once, and stamps a crater
-    /// into the planet surface. Safe to call multiple times (the crater only spawns once).</summary>
+    /// <summary>Fires every authored (or procedurally built) burst once. Safe to call multiple times.</summary>
     public void Trigger()
     {
         Build();
@@ -168,81 +148,6 @@ public class PlayerCrashImpact : MonoBehaviour
                 ps.Play(false);
             }
         }
-
-        if (Application.isPlaying)
-            SpawnCrater();
-    }
-
-    void SpawnCrater()
-    {
-        if (_craterSpawned)
-            return;
-        _craterSpawned = true;
-
-        GameObject prefab = craterPrefab != null
-            ? craterPrefab
-            : Resources.Load<GameObject>(DefaultCraterResource);
-        if (prefab == null)
-        {
-            Debug.LogWarning("PlayerCrashImpact: no crater model found at Resources/" +
-                DefaultCraterResource + ".", this);
-            return;
-        }
-
-        SphericalPlanet planet = SphericalPlanet.Instance;
-        Vector3 up = planet != null ? planet.GetUpAt(transform.position) : Vector3.up;
-        Vector3 surface = planet != null
-            ? planet.GetSurfacePoint(up)
-            : transform.position;
-
-        Quaternion rotation = PlanetSurfacePose.RotationFromUp(up, Random.Range(0f, 360f));
-        GameObject crater = Instantiate(prefab, surface, rotation);
-        crater.name = "ImpactCrater";
-        crater.transform.localScale = Vector3.one * craterScale;
-
-        StripRuntimeJunk(crater);
-        ApplyCraterMaterial(crater);
-        EmbedInSurface(crater.transform, surface, up);
-
-        Transform parent = PlanetSurfacePose.GetOrCreateObjectsRoot(planet);
-        if (parent != null)
-            crater.transform.SetParent(parent, true);
-    }
-
-    static void StripRuntimeJunk(GameObject crater)
-    {
-        Animator[] animators = crater.GetComponentsInChildren<Animator>(true);
-        for (int i = 0; i < animators.Length; i++)
-            Destroy(animators[i]);
-
-        Collider[] colliders = crater.GetComponentsInChildren<Collider>(true);
-        for (int i = 0; i < colliders.Length; i++)
-            Destroy(colliders[i]);
-    }
-
-    static void ApplyCraterMaterial(GameObject crater)
-    {
-        Material material = Resources.Load<Material>(DefaultCraterMaterialResource);
-        if (material == null)
-            return;
-
-        MeshRenderer[] renderers = crater.GetComponentsInChildren<MeshRenderer>(true);
-        for (int i = 0; i < renderers.Length; i++)
-            renderers[i].sharedMaterial = material;
-    }
-
-    void EmbedInSurface(Transform crater, Vector3 surface, Vector3 up)
-    {
-        if (!PlayerVfxUtility.TryGetRendererBounds(crater, out Bounds bounds))
-        {
-            crater.position = surface - up * craterEmbed;
-            return;
-        }
-
-        // Sit the mesh so its center is slightly below the surface: rim stays visible,
-        // bowl clips into the planet instead of hovering as a separate prop.
-        float alongUp = Vector3.Dot(bounds.center - surface, up);
-        crater.position -= up * (alongUp + craterEmbed);
     }
 
     static void AlignEmitterToPlanetUp(Transform emitter)

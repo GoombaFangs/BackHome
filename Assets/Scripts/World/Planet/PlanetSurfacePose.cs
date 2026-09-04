@@ -249,4 +249,35 @@ public static class PlanetSurfacePose
         feetPosition = best.point + normal * hover;
         return true;
     }
+
+    /// <summary>Raycasts straight down along <paramref name="up"/> from just above
+    /// <paramref name="nearPoint"/> to find the actual ground mesh at that spot.</summary>
+    public static bool TrySampleGroundBelow(
+        Vector3 nearPoint,
+        Vector3 up,
+        float maxDistance,
+        float hover,
+        out Vector3 position,
+        out Vector3 normal)
+    {
+        position = default;
+        normal = up.sqrMagnitude > 0.0001f ? up.normalized : Vector3.up;
+
+        float probeDistance = Mathf.Max(1f, maxDistance);
+        Vector3 origin = nearPoint + normal * 0.5f;
+        if (!Physics.Raycast(
+                origin,
+                -normal,
+                out RaycastHit hit,
+                probeDistance + 0.5f,
+                GroundLayer,
+                QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+
+        normal = hit.normal.sqrMagnitude > 0.001f ? hit.normal.normalized : normal;
+        position = hit.point + normal * hover;
+        return true;
+    }
 }

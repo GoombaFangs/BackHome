@@ -26,13 +26,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 608051933199199739}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.7071068, y: -0, z: -0, w: 0.7071068}
-  m_LocalPosition: {x: 0.117, y: -0, z: -0.637}
+  m_LocalRotation: {x: -0, y: -0.7071068, z: -0.7071068, w: 0}
+  m_LocalPosition: {x: 0.564, y: 0, z: -2.07}
   m_LocalScale: {x: 100, y: 100, z: 100}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 784744133295761415}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: -90, y: 0, z: -180}
 --- !u!33 &3788713913737853156
 MeshFilter:
   m_ObjectHideFlags: 0
@@ -115,7 +115,7 @@ Transform:
   m_GameObject: {fileID: 2355904170247317845}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -1.346, y: 0, z: 0.89}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -314,6 +314,8 @@ GameObject:
   - component: {fileID: 784744133295761415}
   - component: {fileID: 1194241660088807016}
   - component: {fileID: 1982023585189397953}
+  - component: {fileID: 743010787645130180}
+  - component: {fileID: 743010787645130181}
   m_Layer: 6
   m_Name: Portal
   m_TagString: Untagged
@@ -358,8 +360,8 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 0.81
-  m_Center: {x: 0, y: 0, z: 0}
+  m_Radius: 2.22
+  m_Center: {x: 0, y: -0.78, z: -1.39}
 --- !u!114 &1982023585189397953
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -384,6 +386,33 @@ MonoBehaviour:
   cameraDollyFovDelta: -3.5
   cameraLiftDuration: 1
   cameraLiftDistance: 90
+--- !u!114 &743010787645130180
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6026344805119218322}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 93e257c919424e6c827fb8a0120c24ca, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PortalPlayerSpawn
+  spawnRadius: 4
+--- !u!114 &743010787645130181
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6026344805119218322}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c8f2e4a19b3d4f6a9e0c1d2b3a4f5e61, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlanetEnvironmentExclusionZone
+  clearanceMargin: 5
+  includePlayerSpawnRadius: 1
 --- !u!1 &8050074001471882587
 GameObject:
   m_ObjectHideFlags: 0
@@ -408,14 +437,14 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8050074001471882587}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.235, y: -0.642, z: -1.361}
-  m_LocalScale: {x: 3.18, y: 3.18, z: 3.18}
-  m_ConstrainProportionsScale: 1
+  m_LocalRotation: {x: 0.6883546, y: 0, z: 0, w: 0.72537434}
+  m_LocalPosition: {x: 0.235, y: -0.74, z: -1.361}
+  m_LocalScale: {x: 2.8, y: 2.8, z: 5.2}
+  m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 8084014801152568450}
   m_Father: {fileID: 784744133295761415}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 87, y: 0, z: 0}
 --- !u!1 &8897951839249675832
 GameObject:
   m_ObjectHideFlags: 0

@@ -24,6 +24,26 @@ public class GalaxyGate : MonoBehaviour
         set => targetSceneName = value;
     }
 
+    /// <summary>Exposed so anything placing the player near this portal (see
+    /// <see cref="PortalPlayerSpawn"/>) can keep a safe distance and never spawn back inside the
+    /// zone that would instantly teleport them right back through it.</summary>
+    public float ProximityFallbackRadius => proximityFallbackRadius;
+
+    /// <summary>Shared by anything that scatters a spawn point around a portal-like anchor (see
+    /// <see cref="PortalPlayerSpawn"/>, <see cref="PlayerCrashIntro"/>): a safe minimum radius that
+    /// keeps a randomly-picked point outside <paramref name="gate"/>'s own re-teleport zone (plus a
+    /// small margin), clamped so it never exceeds <paramref name="maxRadius"/> itself - e.g. if a
+    /// designer sets a very small spawn radius on a gate with a large trigger. Returns 0 if
+    /// <paramref name="gate"/> is null (nothing to stay clear of).</summary>
+    public static float GetSafeMinSpawnRadius(GalaxyGate gate, float maxRadius)
+    {
+        if (gate == null)
+            return 0f;
+
+        const float safetyMargin = 0.75f;
+        return Mathf.Min(gate.proximityFallbackRadius + safetyMargin, maxRadius * 0.9f);
+    }
+
     [Header("Teleport VFX")]
     [Tooltip("Hovl Studio Teleport prefab (or any particle effect). Played at the player's feet. " +
         "Leave empty to cut instantly.")]

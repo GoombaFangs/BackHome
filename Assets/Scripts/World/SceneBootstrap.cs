@@ -5,20 +5,15 @@ using UnityEngine;
 /// Spawns Player when a playable scene starts. HUD lives in the scene (Hud prefab instance)
 /// so the full Canvas is visible in edit mode; this only instantiates it if the scene has none.
 /// CameraFollow stays on Main Camera — only the target is wired at runtime.
-/// Per-scene defaults (spawn point, vitals bar size) live here because cameras differ per world.
-/// If a crash-landing cinematic (PlayerCrashIntro) is present, the player spawns exactly at its
-/// landing pose instead of the authored <see cref="spawnPosition"/> - keeps the portal and the
-/// spawn point from ever drifting apart.
+/// Per-scene vitals bar sizing lives here because cameras differ per world.
+/// Where the player spawns is resolved by <see cref="TryResolveSpawnPose"/> from, in order:
+/// crash-landing portal, planet portal, or a <see cref="ScenePlayerSpawnPoint"/> marker.
 /// </summary>
 public class SceneBootstrap : MonoBehaviour
 {
     [SerializeField] GameObject playerPrefab;
     [Tooltip("Fallback only. Prefer a Hud instance already placed in the scene.")]
     [SerializeField] GameObject uiPrefab;
-    [Tooltip("Fallback only, used when there's no PlayerCrashIntro in the scene. When a crash " +
-        "cinematic is present, the player spawns at its landing pose (where the portal ends up) " +
-        "instead, so the two can never drift apart.")]
-    [SerializeField] Vector3 spawnPosition = new Vector3(0f, 2f, 0f);
 
     [Header("Vitals Bars")]
     [Tooltip("World size of HP/Oxygen bars for this scene. Raise on distant/high cameras (planets).")]
@@ -52,14 +47,11 @@ public class SceneBootstrap : MonoBehaviour
         Transform player = FindExistingPlayer();
         if (player == null && playerPrefab != null)
         {
-            Vector3 position = spawnPosition;
-            Quaternion rotation = Quaternion.identity;
-            // Prefer the crash intro's actual landing pose (where the portal ends up) over the
-            // separately-authored spawnPosition, so the player never spawns away from the portal.
-            if (_crashIntro != null && _crashIntro.TryComputeLandingPose(out Vector3 landingPosition, out Quaternion landingRotation))
+            if (!TryResolveSpawnPose(out Vector3 position, out Quaternion rotation))
             {
-                position = landingPosition;
-                rotation = landingRotation;
+                Debug.LogWarning("SceneBootstrap: no spawn pose resolved. Add PlayerCrashIntro, " +
+                    "PortalPlayerSpawn, or ScenePlayerSpawnPoint to this scene.", this);
+                return;
             }
 
             GameObject playerObject = Instantiate(playerPrefab, position, rotation);
@@ -73,6 +65,42 @@ public class SceneBootstrap : MonoBehaviour
         BindCameraTarget(player);
         ApplyVitalsBarsSettings(player);
         BindMobileInput(player);
+    }
+
+    /// <summary>
+    /// 1. Crash-landing ground portal (<see cref="PortalPlayerSpawn"/>), or the crash site itself.
+    /// 2. Planet scene portal (<see cref="PortalPlayerSpawn"/>).
+    /// 3. <see cref="ScenePlayerSpawnPoint"/> for fixed spawns (e.g. SpaceShip).
+    /// </summary>
+    bool TryResolveSpawnPose(out Vector3 position, out Quaternion rotation)
+    {
+        if (_crashIntro != null)
+        {
+            Transform groundPortal = _crashIntro.GroundPortal;
+            if (groundPortal != null)
+            {
+                PortalPlayerSpawn portalSpawn = groundPortal.GetComponent<PortalPlayerSpawn>();
+                if (portalSpawn != null && portalSpawn.TryGetRandomSpawnPose(out position, out rotation))
+                    return true;
+            }
+
+            if (_crashIntro.TryComputeLandingSite(out position, out rotation))
+                return true;
+        }
+
+        if (SceneRoles.IsPlanetScene())
+        {
+            PortalPlayerSpawn portalSpawn = FindAnyObjectByType<PortalPlayerSpawn>();
+            if (portalSpawn != null && portalSpawn.TryGetRandomSpawnPose(out position, out rotation))
+                return true;
+        }
+
+        if (ScenePlayerSpawnPoint.TryGetPose(out position, out rotation))
+            return true;
+
+        position = default;
+        rotation = default;
+        return false;
     }
 
     static void BindMobileInput(Transform player)

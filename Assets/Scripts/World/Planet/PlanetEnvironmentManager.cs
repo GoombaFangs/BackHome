@@ -32,6 +32,10 @@ public class PlanetEnvironmentManager : MonoBehaviour
         ApplyConfiguration();
     }
 
+    void OnEnable() => PlanetEnvironmentExclusion.Changed += ForceRefreshAll;
+
+    void OnDisable() => PlanetEnvironmentExclusion.Changed -= ForceRefreshAll;
+
     void OnValidate()
     {
         ResolveStreamers();
@@ -49,6 +53,15 @@ public class PlanetEnvironmentManager : MonoBehaviour
             treeStreamer.ConfigureFromManager(resolvedPlanet, regionSet);
         if (rockStreamer != null)
             rockStreamer.ConfigureFromManager(resolvedPlanet, regionSet);
+    }
+
+    /// <summary>Forces every streamer on this manager to rescan immediately — used when landing
+    /// exclusion zones appear or move.</summary>
+    public void ForceRefreshAll()
+    {
+        grassStreamer?.ForceRefresh();
+        treeStreamer?.ForceRefresh();
+        rockStreamer?.ForceRefresh();
     }
 
     void ResolveStreamers()
