@@ -668,6 +668,15 @@ public class PlayerFireTrail : MonoBehaviour
             PlaySystem(_lineTongues);
     }
 
+    /// <summary>Clears the cached hips/skin so the next snap looks up from the current parent
+    /// (used when the trail is reparented from the capsule Starbot onto the live Player).</summary>
+    public void RetargetFollow()
+    {
+        _followBone = null;
+        _followSkin = null;
+        ResolveFollowTarget();
+    }
+
     /// <summary>Pins this trail to the animated Starbot mesh/hips. The clip moves Armature/Hips,
     /// not the FBX root this object is parented to - without this the streak sits at a fixed local
     /// offset and reads as "below the character" as soon as the dive pose lifts the body.</summary>
@@ -692,21 +701,32 @@ public class PlayerFireTrail : MonoBehaviour
         if (model == null)
             return;
 
-        _followBone = model.Find("Armature/Hips");
+        _followBone = model.Find("target_character/Hips");
+        if (_followBone == null)
+            _followBone = model.Find("Armature/Hips");
         if (_followBone == null)
         {
             Transform[] children = model.GetComponentsInChildren<Transform>(true);
             for (int i = 0; i < children.Length; i++)
             {
-                if (children[i].name == "Hips")
-                {
-                    _followBone = children[i];
-                    break;
-                }
+                if (children[i].name != "Hips")
+                    continue;
+                if (!children[i].gameObject.activeInHierarchy)
+                    continue;
+                _followBone = children[i];
+                break;
             }
         }
 
-        _followSkin = model.GetComponentInChildren<SkinnedMeshRenderer>(true);
+        SkinnedMeshRenderer[] skins = model.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        for (int i = 0; i < skins.Length; i++)
+        {
+            if (skins[i] != null && skins[i].gameObject.activeInHierarchy)
+            {
+                _followSkin = skins[i];
+                break;
+            }
+        }
     }
 
     static void PlaySystem(ParticleSystem ps)

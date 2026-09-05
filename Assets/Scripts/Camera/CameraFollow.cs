@@ -122,6 +122,19 @@ public class CameraFollow : MonoBehaviour
     }
 
     /// <summary>
+    /// Landing/hit jolt: a short downward kick plus a decaying rumble. Magnitude is camera-space
+    /// world units — use more than <see cref="Shake"/> at distant cinematic framing.
+    /// </summary>
+    public void ImpactShake(float duration, float magnitude)
+    {
+        if (duration <= 0f || magnitude <= 0f)
+            return;
+        if (_shakeRoutine != null)
+            StopCoroutine(_shakeRoutine);
+        _shakeRoutine = StartCoroutine(ImpactShakeRoutine(duration, magnitude));
+    }
+
+    /// <summary>
     /// Sustained camera-space kick (x/y) added on top of <see cref="Shake"/>.
     /// Used for low-HP heartbeat. Pass <see cref="Vector3.zero"/> to clear.
     /// </summary>
@@ -158,6 +171,27 @@ public class CameraFollow : MonoBehaviour
             float x = (Mathf.PerlinNoise(seedX + Time.time * 28f, 0f) - 0.5f) * 2f;
             float y = (Mathf.PerlinNoise(0f, seedY + Time.time * 28f) - 0.5f) * 2f;
             _shakeOffset = new Vector3(x, y, 0f) * magnitude * damper;
+            yield return null;
+        }
+        _shakeOffset = Vector3.zero;
+        _shakeRoutine = null;
+    }
+
+    IEnumerator ImpactShakeRoutine(float duration, float magnitude)
+    {
+        float t = 0f;
+        float seedX = Random.value * 100f;
+        float seedY = Random.value * 100f;
+        Vector3 kick = new Vector3((Random.value - 0.5f) * 0.4f, -1f, 0f).normalized * magnitude;
+        while (t < duration)
+        {
+            t += Time.deltaTime;
+            float u = Mathf.Clamp01(t / duration);
+            float punch = (1f - u) * (1f - u);
+            float rumble = 1f - u;
+            float x = (Mathf.PerlinNoise(seedX + Time.time * 36f, 0f) - 0.5f) * 2f;
+            float y = (Mathf.PerlinNoise(0f, seedY + Time.time * 36f) - 0.5f) * 2f;
+            _shakeOffset = kick * punch + new Vector3(x, y, 0f) * (magnitude * 0.7f * rumble);
             yield return null;
         }
         _shakeOffset = Vector3.zero;

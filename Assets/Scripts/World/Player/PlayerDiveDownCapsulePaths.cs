@@ -10,6 +10,7 @@ public static class PlayerDiveDownCapsulePaths
     public const string ResourcesReentryTrailMaterial = "Player/VFX/DiveDownCapsule/Materials/ReentryTrail";
     public const string ResourcesDiveAnimator = "Player/Animator/DiveDownAndLand";
     public const string ResourcesDiveClip = "Player/Animator/DiveDownClip";
+    public const string ResourcesDiveInPlaceClip = "Player/Animator/DiveDownInPlace";
     public const string ResourcesLandClip = "Player/Animator/DiveDownAndLandClip";
     public const string ResourcesLandInPlaceClip = "Player/Animator/DiveDownAndLandInPlace";
     public const string ResourcesDiveDownModel = "Player/Models/Starbot_Animation_Dive_Down";
@@ -25,6 +26,7 @@ public static class PlayerDiveDownCapsulePaths
     public const string AssetDiveDownModel = "Assets/Resources/Player/Models/Starbot_Animation_Dive_Down.fbx";
     public const string AssetLandModel = "Assets/Resources/Player/Models/Starbot_Animation_Dive_Down_and_Land.fbx";
     public const string AssetDiveClip = "Assets/Resources/Player/Animator/DiveDownClip.anim";
+    public const string AssetDiveInPlaceClip = "Assets/Resources/Player/Animator/DiveDownInPlace.anim";
     public const string AssetLandClip = "Assets/Resources/Player/Animator/DiveDownAndLandClip.anim";
     public const string AssetLandInPlaceClip = "Assets/Resources/Player/Animator/DiveDownAndLandInPlace.anim";
 #endif

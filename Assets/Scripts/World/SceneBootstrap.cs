@@ -7,8 +7,9 @@ using UnityEngine;
 /// CameraFollow stays on Main Camera — only the target is wired at runtime.
 /// Per-scene vitals bar sizing lives here because cameras differ per world.
 /// Where the player spawns is resolved by <see cref="TryResolveSpawnPose"/> from, in order:
-/// crash-landing <see cref="PlayerCrashIntro"/> (spawn radius lives there), a planet portal's
-/// transform, or a <see cref="ScenePlayerSpawnPoint"/> marker.
+/// crash-landing <see cref="PlayerCrashIntro"/> (the crash intro itself spawns the player at
+/// the start of the fall), a <see cref="GalaxyGate"/> transform, or a <see cref="ScenePlayerSpawnPoint"/>
+/// marker.
 /// </summary>
 public class SceneBootstrap : MonoBehaviour
 {
@@ -24,6 +25,10 @@ public class SceneBootstrap : MonoBehaviour
 
     PlayerCrashIntro _crashIntro;
 
+    /// <summary>Prefab this scene uses for the player. Crash intro reads this so the falling
+    /// actor is the same object gameplay later walks with.</summary>
+    public GameObject PlayerPrefab => playerPrefab;
+
     void Awake()
     {
         if (uiPrefab != null && FindExistingHud() == null)
@@ -34,13 +39,17 @@ public class SceneBootstrap : MonoBehaviour
 
         PlayerInventory.EnsureExists();
 
-        // If a crash-landing cinematic is present in the scene, wait for it to finish
-        // (camera follows the capsule) before spawning the player and taking the camera back.
         _crashIntro = FindAnyObjectByType<PlayerCrashIntro>();
         if (_crashIntro != null)
-            _crashIntro.OnLanded += SpawnPlayerAndBindCamera;
+            _crashIntro.OnPlayerReady += BindPlayer;
         else
             SpawnPlayerAndBindCamera();
+    }
+
+    void OnDestroy()
+    {
+        if (_crashIntro != null)
+            _crashIntro.OnPlayerReady -= BindPlayer;
     }
 
     void SpawnPlayerAndBindCamera()
@@ -51,7 +60,7 @@ public class SceneBootstrap : MonoBehaviour
             if (!TryResolveSpawnPose(out Vector3 position, out Quaternion rotation))
             {
                 Debug.LogWarning("SceneBootstrap: no spawn pose resolved. Add PlayerCrashIntro, " +
-                    "a planet portal, or ScenePlayerSpawnPoint to this scene.", this);
+                    "a GalaxyGate, or ScenePlayerSpawnPoint to this scene.", this);
                 return;
             }
 
@@ -60,25 +69,23 @@ public class SceneBootstrap : MonoBehaviour
             player = playerObject.transform;
         }
 
+        BindPlayer(player);
+    }
+
+    /// <summary>Wires camera, vitals bars, and mobile input onto an already-spawned player.</summary>
+    public void BindPlayer(Transform player)
+    {
         if (player == null)
             return;
 
         BindCameraTarget(player);
         ApplyVitalsBarsSettings(player);
         BindMobileInput(player);
-
-        if (_crashIntro != null)
-        {
-            PlayerLandIntro land = player.GetComponent<PlayerLandIntro>();
-            if (land == null)
-                land = player.gameObject.AddComponent<PlayerLandIntro>();
-            land.Play();
-        }
     }
 
     /// <summary>
-    /// 1. Crash-landing <see cref="PlayerCrashIntro"/> (spawn radius on that component).
-    /// 2. Planet scene portal transform (exact portal position — no scatter without crash intro).
+    /// 1. Crash-landing <see cref="PlayerCrashIntro"/> (crash site on that component).
+    /// 2. A <see cref="GalaxyGate"/> transform, if one exists in a planet scene.
     /// 3. <see cref="ScenePlayerSpawnPoint"/> for fixed spawns (e.g. SpaceShip).
     /// </summary>
     bool TryResolveSpawnPose(out Vector3 position, out Quaternion rotation)

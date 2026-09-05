@@ -127,6 +127,8 @@ public class TouchController : MonoBehaviour
             return;
         if (LockLocomotion)
             return;
+        if (_controller == null || !_controller.enabled)
+            return;
 
         _hasAnimator = TryGetComponent(out _animator);
         if (_camera == null)

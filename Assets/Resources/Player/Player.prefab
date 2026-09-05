@@ -681,8 +681,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a3c8e1f04b7d4c2e9a1b5d8f0c3e6a47, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerLandIntro
-  landClip: {fileID: 0}
-  startTime: 0.5
 --- !u!1001 &910000200
 PrefabInstance:
   m_ObjectHideFlags: 0

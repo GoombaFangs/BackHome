@@ -1,33 +1,25 @@
-using System.Collections;
 using StarterAssets;
 using UnityEngine;
-using UnityEngine.Animations;
-using UnityEngine.Playables;
 
 /// <summary>
-/// Plays <c>Starbot_Animation_Dive_Down_and_Land</c> on the real Player after the crash cinematic
-/// hides the capsule. The capsule only plays Dive_Down; this is the land/recover so the handoff
-/// doesn't swap clips on two different rigs mid-fall.
-///
-/// Uses a PlayableGraph (same reason as PlayerDiveAnimation) and a remapped in-place clip
-/// (Armature → target_character, hips translation stripped) so Generic bone paths actually bind
-/// to the live Player skeleton.
+/// Locks the live Player during the crash cinematic (see PlayerCrashIntro). Animation plays on
+/// the nested dive FBX via PlayerDiveAnimation — not on this Animator, whose rig does not match
+/// those clips.
 /// </summary>
+[DefaultExecutionOrder(-200)]
 public class PlayerLandIntro : MonoBehaviour
 {
-    [Tooltip("Land clip remapped onto the Player rig. Leave empty to load from Resources.")]
-    [SerializeField] AnimationClip landClip;
-    [Tooltip("Skip the aerial drop at the start of Dive_Down_and_Land (hips fall from ~10 to ~0.7 " +
-             "in the first 0.5s). The capsule already did that dive.")]
-    [SerializeField, Min(0f)] float startTime = 0.5f;
-
     Animator _animator;
     RuntimeAnimatorController _controller;
-    PlayableGraph _graph;
-    AnimationClipPlayable _playable;
     PlanetWalker _planetWalker;
     TouchController _touchController;
-    bool _playing;
+    CharacterController _characterController;
+    PlayerRangeCombat _combat;
+    PlayerVitals _vitals;
+    VitalsBars _vitalsBars;
+    FloatingWeapon _floatingWeapon;
+    StarterAssetsInputs _input;
+    bool _cinematic;
 
     void Awake()
     {
@@ -36,76 +28,75 @@ public class PlayerLandIntro : MonoBehaviour
             _animator = GetComponentInChildren<Animator>();
         _planetWalker = GetComponent<PlanetWalker>();
         _touchController = GetComponent<TouchController>();
-        if (landClip == null)
-            landClip = Resources.Load<AnimationClip>(PlayerDiveDownCapsulePaths.ResourcesLandInPlaceClip);
+        _characterController = GetComponent<CharacterController>();
+        _combat = GetComponent<PlayerRangeCombat>();
+        _vitals = GetComponent<PlayerVitals>();
+        _vitalsBars = GetComponent<VitalsBars>();
+        _floatingWeapon = GetComponent<FloatingWeapon>();
+        _input = GetComponent<StarterAssetsInputs>();
     }
 
-    void OnDestroy() => StopGraph();
+    /// <summary>True when the player is pushing the stick / WASD. Used to skip land recover
+    /// once <see cref="PlayerDiveAnimation.CanSkipLand"/> opens.</summary>
+    public bool WantsMove => _input != null && _input.move.sqrMagnitude > 0.0025f;
 
-    /// <summary>Starts the land clip and locks locomotion until it finishes.</summary>
-    public void Play()
+    /// <summary>Locks locomotion and hides gameplay chrome before the first fall frame.</summary>
+    public void BeginCinematic()
     {
-        if (_playing)
-            return;
-        if (landClip == null)
-            landClip = Resources.Load<AnimationClip>(PlayerDiveDownCapsulePaths.ResourcesLandInPlaceClip);
-        if (_animator == null || landClip == null)
-        {
-            Debug.LogWarning("PlayerLandIntro: no Animator or land clip - skipping land pose.", this);
-            return;
-        }
+        _cinematic = true;
+        SetLocomotionLocked(true);
+        ZeroMoveInput();
 
-        StartCoroutine(PlayRoutine());
-    }
-
-    IEnumerator PlayRoutine()
-    {
-        _playing = true;
-        LockLocomotion(true);
-
-        StarterAssetsInputs input = GetComponent<StarterAssetsInputs>();
-        if (input != null)
-            input.move = Vector2.zero;
-
-        _controller = _animator.runtimeAnimatorController;
-        _animator.runtimeAnimatorController = null;
-        _animator.applyRootMotion = false;
-        _animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
-        _animator.enabled = true;
-
-        float time = Mathf.Clamp(startTime, 0f, Mathf.Max(0f, landClip.length - 0.05f));
-        _graph = PlayableGraph.Create("PlayerLandIntro");
-        _graph.SetTimeUpdateMode(DirectorUpdateMode.Manual);
-        AnimationPlayableOutput output = AnimationPlayableOutput.Create(_graph, "Land", _animator);
-        _playable = AnimationClipPlayable.Create(_graph, landClip);
-        _playable.SetApplyFootIK(false);
-        _playable.SetDuration(landClip.length);
-        _playable.SetTime(time);
-        _playable.SetSpeed(1);
-        output.SetSourcePlayable(_playable);
-        _graph.Play();
-        _graph.Evaluate();
-
-        while (time < landClip.length - 0.01f)
-        {
-            time += Time.deltaTime;
-            if (time > landClip.length)
-                time = landClip.length;
-            if (input != null)
-                input.move = Vector2.zero;
-            _playable.SetTime(time);
-            _graph.Evaluate();
-            yield return null;
-        }
-
-        StopGraph();
         if (_animator != null)
-            _animator.runtimeAnimatorController = _controller;
-        LockLocomotion(false);
-        _playing = false;
+        {
+            if (_controller == null)
+                _controller = _animator.runtimeAnimatorController;
+            _animator.enabled = false;
+        }
+
+        if (_characterController != null)
+            _characterController.enabled = false;
+        if (_combat != null)
+            _combat.HideRange();
+        if (_vitals != null)
+            _vitals.SetInvulnerable(true);
+        if (_vitalsBars != null)
+            _vitalsBars.SetHidden(true);
+        if (_floatingWeapon != null)
+            _floatingWeapon.SetVisible(false);
     }
 
-    void LockLocomotion(bool locked)
+    /// <summary>Restores the gameplay AnimatorController and unlocks walking.</summary>
+    public void EndCinematic()
+    {
+        if (!_cinematic)
+            return;
+        _cinematic = false;
+
+        if (_animator != null)
+        {
+            _animator.runtimeAnimatorController = _controller;
+            _animator.enabled = true;
+            if (WantsMove)
+                _animator.SetBool("Moving", true);
+        }
+
+        if (_planetWalker != null)
+            _planetWalker.EnsureWalkingOnPlanet();
+
+        if (_combat != null)
+            _combat.enabled = true;
+        if (_vitals != null)
+            _vitals.SetInvulnerable(false);
+        if (_vitalsBars != null)
+            _vitalsBars.SetHidden(false);
+        if (_floatingWeapon != null)
+            _floatingWeapon.SetVisible(true);
+
+        SetLocomotionLocked(false);
+    }
+
+    void SetLocomotionLocked(bool locked)
     {
         if (_planetWalker != null)
             _planetWalker.LockLocomotion = locked;
@@ -113,9 +104,9 @@ public class PlayerLandIntro : MonoBehaviour
             _touchController.LockLocomotion = locked;
     }
 
-    void StopGraph()
+    void ZeroMoveInput()
     {
-        if (_graph.IsValid())
-            _graph.Destroy();
+        if (_input != null)
+            _input.move = Vector2.zero;
     }
 }

@@ -4,7 +4,7 @@ using UnityEngine;
 
 /// <summary>
 /// Marks a world position where streamed planet environment (grass, trees, rocks) must not appear.
-/// Attach to portals — the cleared disk uses <see cref="PlayerCrashIntro.SpawnRadius"/> (pushed at
+/// Attach to crash landing sites — the cleared disk uses <see cref="PlayerCrashIntro.SpawnRadius"/> (pushed at
 /// runtime via <see cref="SetPlayerSpawnRadius"/>) plus <see cref="clearanceMargin"/>.
 /// </summary>
 [DisallowMultipleComponent]

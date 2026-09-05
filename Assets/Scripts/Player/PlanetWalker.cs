@@ -108,13 +108,23 @@ public class PlanetWalker : MonoBehaviour
     void Start()
     {
         _sceneAllowsPlanetWalk = !onlyInPlanetScenes || SceneRoles.IsPlanetScene();
+        if (_sceneAllowsPlanetWalk && !LockLocomotion)
+            TryStartPlanetWalk();
+    }
+
+    /// <summary>Takes planet control (snaps to the surface, disables CharacterController) without
+    /// unlocking locomotion. Call before releasing a cinematic lock so TouchController never
+    /// Move()s on a disabled collider.</summary>
+    public void EnsureWalkingOnPlanet()
+    {
+        _sceneAllowsPlanetWalk = !onlyInPlanetScenes || SceneRoles.IsPlanetScene();
         if (_sceneAllowsPlanetWalk)
             TryStartPlanetWalk();
     }
 
     void OnEnable()
     {
-        if (_sceneAllowsPlanetWalk)
+        if (_sceneAllowsPlanetWalk && !LockLocomotion)
             TryStartPlanetWalk();
     }
 
@@ -126,6 +136,9 @@ public class PlanetWalker : MonoBehaviour
     void Update()
     {
         if (!_sceneAllowsPlanetWalk)
+            return;
+
+        if (LockLocomotion)
             return;
 
         if (!_ownsControl || _planet == null)
@@ -491,7 +504,7 @@ public class PlanetWalker : MonoBehaviour
         // to keep the character from visually sinking into the ground/planet.
         float runBoost = runFootHoverBoost * _runHoverBlend * scale;
 
-        return Mathf.Max(clearance, footDrop + footOffset * scale + runBoost, 0.02f);
+        return Mathf.Min(2f, Mathf.Max(clearance, footDrop + footOffset * scale + runBoost, 0.02f));
     }
 
     float GetFootDropBelowPivot()
@@ -534,7 +547,7 @@ public class PlanetWalker : MonoBehaviour
         for (int i = 0; i < renderers.Length; i++)
         {
             Renderer renderer = renderers[i];
-            if (renderer == null || !renderer.enabled)
+            if (renderer == null || !renderer.enabled || !renderer.gameObject.activeInHierarchy)
                 continue;
 
             Vector3 localMin = transform.InverseTransformPoint(renderer.bounds.min);

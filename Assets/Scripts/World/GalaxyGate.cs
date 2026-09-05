@@ -16,25 +16,19 @@ public class GalaxyGate : MonoBehaviour
     [SerializeField] float proximityFallbackRadius = 2.4f;
 
     /// <summary>Scene this gate loads on teleport. Exposed so other gates spawned at runtime
-    /// (e.g. the ground portal swapped in by <see cref="PlayerCrashIntro"/>) can inherit whatever
-    /// destination was authored on the gate they're replacing, instead of hardcoding it twice.</summary>
+    /// can inherit whatever destination was authored on the gate they're replacing.</summary>
     public string TargetSceneName
     {
         get => targetSceneName;
         set => targetSceneName = value;
     }
 
-    /// <summary>Exposed so anything placing the player near this portal (see
-    /// portal-like anchor (e.g. <see cref="PlayerCrashIntro"/>) can keep a safe distance and never spawn back inside the
-    /// zone that would instantly teleport them right back through it.</summary>
+    /// <summary>Trigger radius used when CharacterController trigger events are unavailable.</summary>
     public float ProximityFallbackRadius => proximityFallbackRadius;
 
-    /// <summary>Shared by anything that scatters a spawn point around a portal-like anchor (see
-    /// <see cref="PlayerCrashIntro"/>): a safe minimum radius that
-    /// keeps a randomly-picked point outside <paramref name="gate"/>'s own re-teleport zone (plus a
-    /// small margin), clamped so it never exceeds <paramref name="maxRadius"/> itself - e.g. if a
-    /// designer sets a very small spawn radius on a gate with a large trigger. Returns 0 if
-    /// <paramref name="gate"/> is null (nothing to stay clear of).</summary>
+    /// <summary>Minimum scatter radius that stays outside <paramref name="gate"/>'s re-teleport
+    /// zone (plus a small margin), clamped so it never exceeds <paramref name="maxRadius"/>.
+    /// Returns 0 if <paramref name="gate"/> is null.</summary>
     public static float GetSafeMinSpawnRadius(GalaxyGate gate, float maxRadius)
     {
         if (gate == null)
@@ -72,6 +66,7 @@ public class GalaxyGate : MonoBehaviour
 
     bool _loading;
     Transform _player;
+    Transform _ignoreUntilExit;
     float _armAtTime;
 
     void Reset()
@@ -82,7 +77,11 @@ public class GalaxyGate : MonoBehaviour
     void Awake()
     {
         EnsureTrigger();
-        // Avoid instantly loading if the player spawns next to the portal.
+    }
+
+    void OnEnable()
+    {
+        // Refresh when a gate is armed later (e.g. the incoming crash-site portal).
         _armAtTime = Time.time + 0.75f;
     }
 
@@ -93,9 +92,19 @@ public class GalaxyGate : MonoBehaviour
             col.isTrigger = true;
     }
 
+    /// <summary>Don't teleport <paramref name="occupant"/> while they are still standing in this
+    /// volume. Arms automatically once they walk out.</summary>
+    public void IgnoreUntilOccupantLeaves(Transform occupant)
+    {
+        _ignoreUntilExit = occupant;
+    }
+
     void Update()
     {
         if (_loading || string.IsNullOrEmpty(targetSceneName) || Time.time < _armAtTime)
+            return;
+
+        if (IsIgnoringOccupant())
             return;
 
         if (_player == null)
@@ -115,10 +124,28 @@ public class GalaxyGate : MonoBehaviour
         if (_loading || string.IsNullOrEmpty(targetSceneName) || Time.time < _armAtTime)
             return;
 
+        if (IsIgnoringOccupant())
+            return;
+
         if (!IsPlayer(other))
             return;
 
         BeginTeleport(ResolvePlayerRoot(other.transform));
+    }
+
+    bool IsIgnoringOccupant()
+    {
+        if (_ignoreUntilExit == null)
+            return false;
+
+        float radius = proximityFallbackRadius * 1.2f;
+        if ((_ignoreUntilExit.position - transform.position).sqrMagnitude > radius * radius)
+        {
+            _ignoreUntilExit = null;
+            return false;
+        }
+
+        return true;
     }
 
     void BeginTeleport(Transform player)

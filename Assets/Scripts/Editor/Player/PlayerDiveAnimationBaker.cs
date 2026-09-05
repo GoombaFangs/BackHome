@@ -15,6 +15,8 @@ static class PlayerDiveAnimationBaker
     static readonly string TriggerFilePath = Path.Combine(Application.dataPath, "..", "Temp", "BackHomeBakeDiveAnimation.trigger");
     static readonly string ResultLogPath = Path.Combine(Application.dataPath, "..", "Temp", "DiveAnimBake.log");
 
+    static bool _bakeQueued;
+
     [InitializeOnLoadMethod]
     static void WatchForTriggerFile()
     {
@@ -27,14 +29,18 @@ static class PlayerDiveAnimationBaker
 
     static void TryRunFromTrigger()
     {
-        if (!File.Exists(TriggerFilePath))
+        if (_bakeQueued || !File.Exists(TriggerFilePath))
             return;
         if (EditorApplication.isPlaying || EditorApplication.isCompiling)
             return;
 
         try { File.Delete(TriggerFilePath); } catch { return; }
-        EditorApplication.update -= PollTrigger;
-        EditorApplication.delayCall += Run;
+        _bakeQueued = true;
+        EditorApplication.delayCall += () =>
+        {
+            try { Run(); }
+            finally { _bakeQueued = false; }
+        };
     }
 
     [MenuItem("Tools/Player VFX/Bake Dive Down Animation")]
@@ -75,9 +81,18 @@ static class PlayerDiveAnimationBaker
                 PlayerDiveDownCapsulePaths.DiveClipAssetName,
                 Line);
 
-            AnimationClip landInPlace = BakePlayerLandClip(landClip, Line);
+            AnimationClip landInPlace = BakePlayerInPlaceClip(
+                landClip,
+                PlayerDiveDownCapsulePaths.AssetLandInPlaceClip,
+                "DiveDownAndLandInPlace",
+                Line);
+            AnimationClip diveInPlace = BakePlayerInPlaceClip(
+                diveClip,
+                PlayerDiveDownCapsulePaths.AssetDiveInPlaceClip,
+                "DiveDownInPlace",
+                Line);
 
-            if (diveClip == null && landClip == null && landInPlace == null)
+            if (diveClip == null && landClip == null && landInPlace == null && diveInPlace == null)
             {
                 WriteLog(log);
                 return;
@@ -121,6 +136,8 @@ static class PlayerDiveAnimationBaker
                 so.FindProperty("modelRoot").objectReferenceValue = model;
                 if (diveClip != null)
                     so.FindProperty("diveClip").objectReferenceValue = diveClip;
+                if (landClip != null)
+                    so.FindProperty("landClip").objectReferenceValue = landClip;
                 so.ApplyModifiedPropertiesWithoutUndo();
 
                 PrefabUtility.SaveAsPrefabAsset(prefab, CapsulePrefabPath);
@@ -143,20 +160,20 @@ static class PlayerDiveAnimationBaker
         WriteLog(log);
     }
 
-    static AnimationClip BakePlayerLandClip(AnimationClip source, System.Action<string> line)
+    static AnimationClip BakePlayerInPlaceClip(
+        AnimationClip source, string outputPath, string clipName, System.Action<string> line)
     {
         if (source == null)
         {
-            line("FAIL: no land source clip to remap onto the Player.");
+            line("FAIL: no source clip to remap onto the Player for " + clipName + ".");
             return null;
         }
 
         const string oldRoot = "Armature";
         const string newRoot = "target_character";
         string oldPrefix = oldRoot + "/";
-        string outputPath = PlayerDiveDownCapsulePaths.AssetLandInPlaceClip;
 
-        AnimationClip clip = new AnimationClip { name = "DiveDownAndLandInPlace" };
+        AnimationClip clip = new AnimationClip { name = clipName };
         var settings = AnimationUtility.GetAnimationClipSettings(source);
         settings.loopTime = false;
         settings.loopBlend = false;
@@ -180,9 +197,9 @@ static class PlayerDiveAnimationBaker
                 continue;
             }
 
-            bool isHipsPosition = binding.path.EndsWith("Hips", System.StringComparison.Ordinal)
+            bool isPosition = binding.type == typeof(Transform)
                 && binding.propertyName.StartsWith("m_LocalPosition.");
-            if (isHipsPosition)
+            if (isPosition)
             {
                 dropped++;
                 continue;
@@ -200,26 +217,8 @@ static class PlayerDiveAnimationBaker
         if (AssetDatabase.LoadAssetAtPath<AnimationClip>(outputPath) != null)
             AssetDatabase.DeleteAsset(outputPath);
         AssetDatabase.CreateAsset(clip, outputPath);
-        line("Player land clip: " + remapped + " curves remapped " + oldRoot + " -> " + newRoot +
-             ", dropped " + dropped + " root/hips-position/scale tracks -> " + outputPath);
-
-        GameObject player = PrefabUtility.LoadPrefabContents("Assets/Resources/Player/Player.prefab");
-        try
-        {
-            PlayerLandIntro land = player.GetComponent<PlayerLandIntro>();
-            if (land == null)
-                land = player.AddComponent<PlayerLandIntro>();
-            SerializedObject so = new SerializedObject(land);
-            so.FindProperty("landClip").objectReferenceValue = clip;
-            so.ApplyModifiedPropertiesWithoutUndo();
-            PrefabUtility.SaveAsPrefabAsset(player, "Assets/Resources/Player/Player.prefab");
-            line("Wired PlayerLandIntro on Player.prefab");
-        }
-        finally
-        {
-            PrefabUtility.UnloadPrefabContents(player);
-        }
-
+        line("Player clip '" + clipName + "': " + remapped + " curves remapped " + oldRoot + " -> " + newRoot +
+             ", dropped " + dropped + " root/position/scale tracks -> " + outputPath);
         return clip;
     }
 

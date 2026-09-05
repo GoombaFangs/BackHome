@@ -4,9 +4,9 @@ using UnityEngine.Animations;
 using UnityEngine.Playables;
 
 /// <summary>
-/// Plays <c>Starbot_Animation_Dive_Down</c> on the nested Starbot inside PlayerDiveDownCapsule
-/// for the whole crash fall, and holds the last dive pose until the capsule is hidden.
-/// The land clip plays on the real Player (see PlayerLandIntro), not here.
+/// Plays the authored dive/land takes on the nested Starbot FBX (Armature skeleton). Those clips
+/// must not be retargeted onto the live Player rig — different bind-pose translations crumple the
+/// mesh. The Player transform still carries the fall; this only drives the matching cinematic mesh.
 /// </summary>
 public class PlayerDiveAnimation : MonoBehaviour
 {
@@ -15,65 +15,126 @@ public class PlayerDiveAnimation : MonoBehaviour
     [SerializeField] Transform modelRoot;
     [Tooltip("In-air dive. Leave empty to load Starbot_Animation_Dive_Down from Resources.")]
     [SerializeField] AnimationClip diveClip;
+    [Tooltip("Land/recover. Leave empty to load Starbot_Animation_Dive_Down_and_Land from Resources.")]
+    [SerializeField] AnimationClip landClip;
+    [Tooltip("Seconds into the land clip that the character contacts the ground.")]
+    [SerializeField, Min(0.05f)] float landGroundContactTime = 0.55f;
+    [Tooltip("Move input during this many seconds at the end of the land clip skips recover and starts gameplay.")]
+    [SerializeField, Min(0f)] float landSkipWindow = 1.5f;
 
     Animator _animator;
     PlayableGraph _graph;
     AnimationClipPlayable _playable;
+    AnimationClip _activeClip;
     float _clipTime;
     bool _playing;
+    bool _landClipActive;
 
+    public Transform ModelRoot
+    {
+        get
+        {
+            EnsureWired();
+            return modelRoot;
+        }
+    }
+
+    public bool HasDiveClip
+    {
+        get
+        {
+            EnsureWired();
+            return diveClip != null;
+        }
+    }
+
+    public bool HasLandClip
+    {
+        get
+        {
+            EnsureWired();
+            return landClip != null;
+        }
+    }
+
+    public float LandLength => HasLandClip ? landClip.length : 0f;
+    public float LandGroundContactTime => Mathf.Min(landGroundContactTime, Mathf.Max(0.05f, LandLength));
     public bool IsPlaying => _playing;
+    public bool IsFinished => !_playing;
+
+    /// <summary>True after ground contact, while the land clip is in its last skip-window
+    /// seconds, so move input can cancel recover and start gameplay.</summary>
+    public bool CanSkipLand
+    {
+        get
+        {
+            if (!_landClipActive || !_playing || _activeClip == null || landSkipWindow <= 0f)
+                return false;
+            if (_clipTime < LandGroundContactTime)
+                return false;
+            return _clipTime >= _activeClip.length - landSkipWindow;
+        }
+    }
 
     void Awake() => EnsureWired();
     void OnDestroy() => Stop();
 
-    public void Play()
+    public void PlayDive() => PlayClip(diveClip, 0f, false);
+
+    public void PlayLand(float startTime = 0f) => PlayClip(landClip, startTime, true);
+
+    public void Tick(float deltaTime)
+    {
+        if (!_playing || !_graph.IsValid() || !_playable.IsValid() || _activeClip == null)
+            return;
+
+        _clipTime += deltaTime;
+        if (_clipTime > _activeClip.length)
+            _clipTime = _activeClip.length;
+
+        _playable.SetTime(_clipTime);
+        _graph.Evaluate();
+
+        if (_landClipActive && _clipTime >= _activeClip.length - 0.01f)
+            _playing = false;
+    }
+
+    public void Stop()
+    {
+        _playing = false;
+        _landClipActive = false;
+        _activeClip = null;
+        if (_graph.IsValid())
+            _graph.Destroy();
+    }
+
+    void PlayClip(AnimationClip clip, float startTime, bool land)
     {
         EnsureWired();
-        if (_animator == null || diveClip == null)
+        if (_animator == null || clip == null)
         {
-            Debug.LogWarning(
-                "PlayerDiveAnimation: no model Animator or Dive_Down clip on " + name + ".",
-                this);
+            _playing = false;
             return;
         }
 
         Stop();
         PrepareAnimator();
 
-        _clipTime = 0f;
+        _activeClip = clip;
+        _landClipActive = land;
+        _clipTime = Mathf.Clamp(startTime, 0f, Mathf.Max(0f, clip.length - 0.05f));
         _graph = PlayableGraph.Create("PlayerDiveAnimation");
         _graph.SetTimeUpdateMode(DirectorUpdateMode.Manual);
         AnimationPlayableOutput output = AnimationPlayableOutput.Create(_graph, "Dive", _animator);
-        _playable = AnimationClipPlayable.Create(_graph, diveClip);
+        _playable = AnimationClipPlayable.Create(_graph, clip);
         _playable.SetApplyFootIK(false);
-        _playable.SetDuration(diveClip.length);
-        _playable.SetTime(0);
+        _playable.SetDuration(clip.length);
+        _playable.SetTime(_clipTime);
         _playable.SetSpeed(1);
         output.SetSourcePlayable(_playable);
         _graph.Play();
         _graph.Evaluate();
         _playing = true;
-    }
-
-    public void Tick(float deltaTime)
-    {
-        if (!_playing || !_graph.IsValid() || !_playable.IsValid() || diveClip == null)
-            return;
-
-        _clipTime += deltaTime;
-        if (_clipTime > diveClip.length)
-            _clipTime = diveClip.length;
-
-        _playable.SetTime(_clipTime);
-        _graph.Evaluate();
-    }
-
-    public void Stop()
-    {
-        _playing = false;
-        if (_graph.IsValid())
-            _graph.Destroy();
     }
 
     void PrepareAnimator()
@@ -136,6 +197,10 @@ public class PlayerDiveAnimation : MonoBehaviour
             diveClip = LoadClip(
                 PlayerDiveDownCapsulePaths.ResourcesDiveClip,
                 PlayerDiveDownCapsulePaths.ResourcesDiveDownModel);
+        if (landClip == null)
+            landClip = LoadClip(
+                PlayerDiveDownCapsulePaths.ResourcesLandClip,
+                PlayerDiveDownCapsulePaths.ResourcesDiveModel);
     }
 
     static AnimationClip LoadClip(string standaloneResource, string fbxResource)
