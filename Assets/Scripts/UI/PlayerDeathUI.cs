@@ -151,8 +151,11 @@ public class PlayerDeathUI : MonoBehaviour
         Rigidbody body = player.GetComponent<Rigidbody>();
         if (body != null)
         {
-            body.linearVelocity = Vector3.zero;
-            body.angularVelocity = Vector3.zero;
+            if (!body.isKinematic)
+            {
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
             body.isKinematic = true;
         }
     }

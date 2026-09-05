@@ -188,7 +188,7 @@ public static class DeathPanelSetup
         ui.alignment = align;
         ui.text = text;
         ui.raycastTarget = false;
-        ui.enableWordWrapping = false;
+        ui.textWrappingMode = TextWrappingModes.NoWrap;
         ui.overflowMode = TextOverflowModes.Overflow;
         return go;
     }

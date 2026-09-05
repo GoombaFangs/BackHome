@@ -43,8 +43,7 @@ public class PlanetParticleGravity : MonoBehaviour
 
     void Discover()
     {
-        ParticleSystem[] systems = FindObjectsByType<ParticleSystem>(
-            FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        ParticleSystem[] systems = FindObjectsByType<ParticleSystem>(FindObjectsInactive.Exclude);
 
         for (int i = 0; i < systems.Length; i++)
         {

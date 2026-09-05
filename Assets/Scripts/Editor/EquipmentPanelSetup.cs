@@ -514,7 +514,7 @@ public static class EquipmentPanelSetup
         ui.alignment = align;
         ui.text = text;
         ui.raycastTarget = false;
-        ui.enableWordWrapping = false;
+        ui.textWrappingMode = TextWrappingModes.NoWrap;
         ui.overflowMode = TextOverflowModes.Overflow;
         ui.richText = false;
         return go;

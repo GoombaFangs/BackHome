@@ -2,21 +2,13 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 /// <summary>
-/// SuperCasual comet trail for the player capsule crash cinematic (see <see cref="PlayerCrashIntro"/>):
-/// a soft teardrop (LineRenderer core + glow) that joins the blue orb at its trailing rim, plus an
-/// optional thin motion streak (TrailRenderer). Tuned to sit in the same visual family as the orb -
-/// round falloff, modest color, no HDR blowout - rather than a photoreal fireball.
+/// SuperCasual comet trail for the player crash cinematic (see <see cref="PlayerCrashIntro"/>):
+/// a soft teardrop (LineRenderer core + glow) plus an optional thin motion streak (TrailRenderer).
 ///
-/// Authored as a normal child ("FireTrail", with FlameBody/Smoke/Sparks/FireEmbers underneath it)
-/// inside the capsule's nested "TrailVfx", so every particle system here is directly editable in
-/// the Inspector/Scene view like any hand-authored effect. If any of those children are missing
-/// (e.g. this component ends up on a capsule that doesn't have that nested), it falls back to
-/// building them procedurally in code so it still works as a drop-in component with nothing to
-/// wire up - see <see cref="ConfigureFlameBody"/> etc.
+/// Authored as a child on the nested Starbot (typically "Trail"). If expected particle children
+/// are missing, it falls back to building them procedurally.
 ///
-/// Usage: <see cref="Play"/> when the fall starts, <see cref="Stop"/> on impact. If the
-/// GameObject doesn't already have this component, <see cref="PlayerCrashIntro"/> adds it
-/// automatically with sensible defaults.
+/// Usage: <see cref="Play"/> when the fall starts, <see cref="Stop"/> on impact.
 /// </summary>
 [RequireComponent(typeof(TrailRenderer))]
 [DefaultExecutionOrder(-80)]
@@ -597,9 +589,8 @@ public class PlayerFireTrail : MonoBehaviour
             Destroy(_lineMaterial);
     }
 
-    /// <summary>Looks for an already-authored child (e.g. baked into the capsule's nested
-    /// "TrailVfx") so Awake() can reuse it as-is instead of stomping hand-tuned values with the
-    /// procedural defaults below.</summary>
+    /// <summary>Looks for an already-authored child so Awake() can reuse it as-is instead of
+    /// stomping hand-tuned values with the procedural defaults below.</summary>
     bool TryGetExistingChild(string name, out ParticleSystem ps)
     {
         Transform existing = transform.Find(name);
@@ -612,30 +603,6 @@ public class PlayerFireTrail : MonoBehaviour
         GameObject go = new GameObject(name);
         go.transform.SetParent(transform, false);
         return go.AddComponent<ParticleSystem>();
-    }
-
-    /// <summary>Re-parents FlameBody/Smoke/Sparks/FireEmbers under <paramref name="parent"/> (e.g.
-    /// PlayerReentryGlow.EffectRoot, "TrailVfx") purely for a tidy hierarchy - all of
-    /// them simulate in world space, so moving them in the hierarchy has no effect on where the
-    /// particles actually appear. Only meaningful for the procedural fallback path (no authored
-    /// "FireTrail" child was found, see PlayerCrashIntro.ResolveFireTrail) - when the children are
-    /// reused from the prefab they're already correctly nested. Safe no-op if <paramref
-    /// name="parent"/> is null.</summary>
-    public void SetEffectParent(Transform parent)
-    {
-        if (parent == null)
-            return;
-
-        ReparentKeepingWorldPose(_flameBody, parent);
-        ReparentKeepingWorldPose(_smoke, parent);
-        ReparentKeepingWorldPose(_sparks, parent);
-        ReparentKeepingWorldPose(_embers, parent);
-    }
-
-    static void ReparentKeepingWorldPose(ParticleSystem ps, Transform parent)
-    {
-        if (ps != null)
-            ps.transform.SetParent(parent, true);
     }
 
     /// <summary>

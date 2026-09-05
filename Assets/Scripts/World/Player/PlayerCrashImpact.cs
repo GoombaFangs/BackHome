@@ -3,16 +3,11 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 /// <summary>
-/// One-shot impact burst for the player capsule crash cinematic (see <see cref="PlayerCrashIntro"/>):
-/// an explosive flash + dust cloud + fiery sparks + tumbling rock debris, all firing the instant
-/// the capsule hits the ground.
-///
-/// Like <see cref="PlayerReentryGlow"/>, the actual look is authored as a normal prefab (<see
-/// cref="effectPrefab"/>, e.g. "ImpactVfx") - drag one in and it's fully editable with the
-/// regular Particle System inspectors instead of being generated in code. Wire it via
-/// PlayerCrashIntro.impactEffectPrefab (or assign it directly here if you add this component to
-/// the capsule by hand). If left empty, falls back to building everything procedurally in code so
-/// it still works as a single drop-in component with nothing to wire up.
+/// One-shot impact burst for the player crash cinematic (see <see cref="PlayerCrashIntro"/>).
+/// The look is authored as a normal prefab (<see cref="effectPrefab"/>, e.g. "ImpactVfx") —
+/// wire it via PlayerCrashIntro.impactEffectPrefab or assign it here. If left empty, loads
+/// ImpactVfx from Resources, then falls back to the procedural builder so the component still
+/// works with nothing wired up.
 ///
 /// Usage: call <see cref="Trigger"/> exactly once, at the moment of impact. If the GameObject
 /// doesn't already have this component, <see cref="PlayerCrashIntro"/> adds it automatically.

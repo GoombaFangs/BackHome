@@ -47,7 +47,7 @@ public static class NyxaraRockStreamingSetup
     {
         OpenSceneIfNeeded();
 
-        SphericalPlanet planet = UnityEngine.Object.FindFirstObjectByType<SphericalPlanet>();
+        SphericalPlanet planet = UnityEngine.Object.FindAnyObjectByType<SphericalPlanet>();
         if (planet == null)
         {
             Debug.LogError("[BackHome] Rock Streaming: no SphericalPlanet found in the scene.");

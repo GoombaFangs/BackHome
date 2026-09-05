@@ -81,18 +81,7 @@ static class PlayerDiveAnimationBaker
                 PlayerDiveDownCapsulePaths.DiveClipAssetName,
                 Line);
 
-            AnimationClip landInPlace = BakePlayerInPlaceClip(
-                landClip,
-                PlayerDiveDownCapsulePaths.AssetLandInPlaceClip,
-                "DiveDownAndLandInPlace",
-                Line);
-            AnimationClip diveInPlace = BakePlayerInPlaceClip(
-                diveClip,
-                PlayerDiveDownCapsulePaths.AssetDiveInPlaceClip,
-                "DiveDownInPlace",
-                Line);
-
-            if (diveClip == null && landClip == null && landInPlace == null && diveInPlace == null)
+            if (diveClip == null && landClip == null)
             {
                 WriteLog(log);
                 return;
@@ -158,68 +147,6 @@ static class PlayerDiveAnimationBaker
         }
 
         WriteLog(log);
-    }
-
-    static AnimationClip BakePlayerInPlaceClip(
-        AnimationClip source, string outputPath, string clipName, System.Action<string> line)
-    {
-        if (source == null)
-        {
-            line("FAIL: no source clip to remap onto the Player for " + clipName + ".");
-            return null;
-        }
-
-        const string oldRoot = "Armature";
-        const string newRoot = "target_character";
-        string oldPrefix = oldRoot + "/";
-
-        AnimationClip clip = new AnimationClip { name = clipName };
-        var settings = AnimationUtility.GetAnimationClipSettings(source);
-        settings.loopTime = false;
-        settings.loopBlend = false;
-        AnimationUtility.SetAnimationClipSettings(clip, settings);
-
-        int remapped = 0;
-        int dropped = 0;
-        foreach (var binding in AnimationUtility.GetCurveBindings(source))
-        {
-            if (binding.type == typeof(Transform) && binding.propertyName.StartsWith("m_LocalScale."))
-            {
-                dropped++;
-                continue;
-            }
-
-            bool isRoot = binding.path == oldRoot;
-            bool isChild = binding.path.StartsWith(oldPrefix, System.StringComparison.Ordinal);
-            if (isRoot)
-            {
-                dropped++;
-                continue;
-            }
-
-            bool isPosition = binding.type == typeof(Transform)
-                && binding.propertyName.StartsWith("m_LocalPosition.");
-            if (isPosition)
-            {
-                dropped++;
-                continue;
-            }
-
-            var curve = AnimationUtility.GetEditorCurve(source, binding);
-            var newBinding = binding;
-            if (isChild)
-                newBinding.path = newRoot + binding.path.Substring(oldRoot.Length);
-
-            AnimationUtility.SetEditorCurve(clip, newBinding, curve);
-            remapped++;
-        }
-
-        if (AssetDatabase.LoadAssetAtPath<AnimationClip>(outputPath) != null)
-            AssetDatabase.DeleteAsset(outputPath);
-        AssetDatabase.CreateAsset(clip, outputPath);
-        line("Player clip '" + clipName + "': " + remapped + " curves remapped " + oldRoot + " -> " + newRoot +
-             ", dropped " + dropped + " root/position/scale tracks -> " + outputPath);
-        return clip;
     }
 
     static AnimationClip ExtractClip(string fbxPath, string clipAssetPath, string clipName, System.Action<string> line)

@@ -41,7 +41,7 @@ public static class PlanetSurfacePose
         if (planet == null)
             planet = SphericalPlanet.Instance;
         if (planet == null)
-            planet = Object.FindFirstObjectByType<SphericalPlanet>();
+            planet = Object.FindAnyObjectByType<SphericalPlanet>();
 
         if (planet == null)
             return false;

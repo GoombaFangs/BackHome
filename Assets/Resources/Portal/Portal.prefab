@@ -315,6 +315,7 @@ GameObject:
   - component: {fileID: 1194241660088807016}
   - component: {fileID: 1982023585189397953}
   - component: {fileID: 743010787645130181}
+  - component: {fileID: 5128471930562847103}
   m_Layer: 6
   m_Name: Portal
   m_TagString: Untagged
@@ -399,6 +400,42 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlanetEnvironmentExclusionZone
   clearanceMargin: 5
   includePlayerSpawnRadius: 1
+--- !u!114 &5128471930562847103
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6026344805119218322}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e8a1c4b27d6f4093a5c1e90b74d3a8f2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PortalSignBillboard
+  sign: {fileID: 7994110277457916548}
+  yawLag: 0.1
+  pitchTowardCamera: 0.16
+  flipFace: 0
+  bobHeight: 0.07
+  bobSpeed: 0.78
+  squash: 0.11
+  scaleFollowThrough: 0.07
+  tiltDegrees: 5
+  rollDegrees: 6.5
+  popIntervalMin: 2.9
+  popIntervalMax: 4.4
+  popDuration: 0.48
+  popSquash: 0.16
+  popLift: 0.1
+  plantDuration: 0.58
+  plantSquash: 0.24
+  plantLift: 0.18
+  excitedDuration: 0.72
+  excitedSquash: 0.3
+  excitedHop: 0.24
+  excitedPunch: 0.18
+  excitedNodDegrees: 17
+  excitedShakeDegrees: 20
 --- !u!1 &8050074001471882587
 GameObject:
   m_ObjectHideFlags: 0

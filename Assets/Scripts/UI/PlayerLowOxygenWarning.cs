@@ -439,7 +439,7 @@ public class PlayerLowOxygenWarning : MonoBehaviour
 
         Light best = null;
         float bestIntensity = -1f;
-        Light[] lights = FindObjectsByType<Light>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        Light[] lights = FindObjectsByType<Light>(FindObjectsInactive.Exclude);
         for (int i = 0; i < lights.Length; i++)
         {
             Light light = lights[i];

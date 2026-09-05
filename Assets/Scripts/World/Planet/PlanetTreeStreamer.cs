@@ -208,13 +208,11 @@ public class PlanetTreeStreamer : MonoBehaviour
         Refresh();
     }
 
-    /// <summary>Force an immediate rescan (e.g. after teleporting the player).</summary>
+    /// <summary>Queue a rescan on the next Update (e.g. after teleporting the player).</summary>
     [ContextMenu("Refresh Now")]
     public void ForceRefresh()
     {
         _refreshTimer = 0f;
-        if (_tiles != null && _tiles.HasValidMap())
-            Refresh();
     }
 
     void WarnIfPrefabMissing(GameObject prefab, string label)
@@ -513,7 +511,7 @@ public class PlanetTreeStreamer : MonoBehaviour
         return true;
     }
 
-    /// <summary>Jittered surface pose for a tree at (lat, lon) — shared by the legacy and
+    /// <summary>Jittered surface pose for a tree at (lat, lon) — shared by the named-prefab and
     /// region-driven spawn paths so both place/orient instances identically.</summary>
     bool TryComputePose(int lat, int lon, out Vector3 position, out Quaternion rotation)
     {
@@ -601,9 +599,7 @@ public class PlanetTreeStreamer : MonoBehaviour
                 return pooled;
         }
 
-        GameObject instance = Instantiate(prefab, _root);
-        PrepareInstance(instance);
-        return instance;
+        return CreateInstance(prefab);
     }
 
     GameObject RentRegion(GameObject prefab)
@@ -616,7 +612,15 @@ public class PlanetTreeStreamer : MonoBehaviour
                 return pooled;
         }
 
-        GameObject instance = Instantiate(prefab, _root);
+        return CreateInstance(prefab);
+    }
+
+    GameObject CreateInstance(GameObject prefab)
+    {
+        // Instantiate unparented so the clone can finish Awake before we parent it.
+        // Instantiate(prefab, parent) SendMessages OnTransformChildrenChanged during that Awake.
+        GameObject instance = Instantiate(prefab);
+        instance.transform.SetParent(_root, false);
         PrepareInstance(instance);
         return instance;
     }

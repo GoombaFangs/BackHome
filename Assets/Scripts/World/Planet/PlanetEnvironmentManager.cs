@@ -55,8 +55,7 @@ public class PlanetEnvironmentManager : MonoBehaviour
             rockStreamer.ConfigureFromManager(resolvedPlanet, regionSet);
     }
 
-    /// <summary>Forces every streamer on this manager to rescan immediately — used when landing
-    /// exclusion zones appear or move.</summary>
+    /// <summary>Queues every streamer to rescan on its next Update when landing exclusion zones appear or move.</summary>
     public void ForceRefreshAll()
     {
         grassStreamer?.ForceRefresh();

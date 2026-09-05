@@ -7,12 +7,11 @@ using UnityEngine.Serialization;
 /// Crash-landing cinematic: the live Player transform falls from space onto the planet. The
 /// visible mesh during the fall is the nested Starbot FBX from PlayerDiveDownCapsule (the rig the
 /// dive/land clips were authored on). The gameplay Player mesh stays hidden until the land clip
-/// finishes (or is skipped by move input in its last 1.5s), then locomotion unlocks.
-/// Trail/orb ride on that cinematic mesh.
+/// finishes (or is skipped by move input in its last 1.5s), then locomotion unlocks. The authored
+/// fire trail rides on that cinematic mesh.
 ///
-/// On impact the capsule is hidden. Locomotion unlocks when the land clip finishes, or earlier
-/// if the player moves during its last 1.5 seconds. A portal then falls from space toward the
-/// crash site and only plants on the ground after the player has walked clear of that disk.
+/// A portal then falls from space toward the crash site and only plants on the ground after the
+/// player has walked clear of that disk.
 ///
 /// One reusable prefab: every planet scene drops this in and wires only <see cref="playerCapsule"/>
 /// to its own PlayerDiveDownCapsule instance. Start pose and fall distance are derived from the
@@ -26,9 +25,6 @@ public class PlayerCrashIntro : MonoBehaviour
     [SerializeField] Transform playerCapsule;
     [Tooltip("Optional override. Leave empty to use SceneBootstrap's player prefab, then Resources/Player/Player.")]
     [SerializeField] GameObject playerPrefab;
-    [Tooltip("Authored re-entry fire trail (Hovl streak + sparks/smoke inside the capsule's own " +
-        "nested \"TrailVfx\"). Leave empty to use whatever's already nested on the capsule.")]
-    [SerializeField] GameObject reentryEffectPrefab;
     [Tooltip("Authored impact burst (Hovl Studio explosion/dust inside ImpactVfx). Passed " +
         "to PlayerCrashImpact so the look is edited as a normal prefab instead of generated in code. " +
         "Leave empty to load ImpactVfx from Resources (see PlayerDiveDownCapsulePaths).")]
@@ -44,8 +40,10 @@ public class PlayerCrashIntro : MonoBehaviour
     [SerializeField] GameObject portalPrefab;
     [Tooltip("How far to sink the planted portal into the ground, in world units.")]
     [SerializeField] float portalEmbed = 0.4f;
-    [Tooltip("Seconds for the portal's fall from space onto the ground, after the player has walked clear.")]
-    [SerializeField, Min(0.05f)] float portalFallDuration = 1.6f;
+    [Tooltip("Seconds for the portal's drop onto the ground, after the player has walked clear.")]
+    [SerializeField, Min(0.05f)] float portalFallDuration = 0.5f;
+    [Tooltip("How far above the plant point the portal starts. Keep this much shorter than the player crash so it plops in from nearby, not from space.")]
+    [SerializeField, Min(1f)] float portalStartDistance = 14f;
     [Tooltip("How far the player must walk from the crash site before the portal falls in. Keep this just outside the gate trigger.")]
     [SerializeField, Min(0.5f)] float portalClearRadius = 4f;
     [Tooltip("Impact burst played the instant the portal plants. Leave empty to load Portal/PortalImpactVfx from Resources.")]
@@ -62,12 +60,10 @@ public class PlayerCrashIntro : MonoBehaviour
     [Header("Space Start Pose")]
     [Tooltip("How far out (along the planet's radial up at the landing site) the capsule starts, alone in space.")]
     [SerializeField, Min(1f)] float startDistance = 70f;
-    [Tooltip("Snap the landing spot onto the planet's actual terrain surface (offset by the " +
-        "capsule's own half-height so it rests on top of the ground) instead of trusting wherever " +
-        "the object happened to be authored in the scene - needed because the capsule is often a " +
-        "repurposed/floating placeholder, not already sitting on the ground.")]
+    [Tooltip("Snap the landing spot onto the planet surface instead of trusting wherever the " +
+        "capsule was authored in the scene.")]
     [SerializeField] bool snapLandingToGround = true;
-    [Tooltip("Extra clearance added on top of the auto-measured half-height, in world units.")]
+    [Tooltip("Extra world-space clearance above the planet surface at rest.")]
     [SerializeField] float extraGroundClearance = 0f;
 
     [Header("Crash Tremble")]
@@ -108,7 +104,6 @@ public class PlayerCrashIntro : MonoBehaviour
     PlayerLandIntro _actor;
     PlayerDiveAnimation _diveAnimation;
     PlayerFireTrail _attachedTrail;
-    Transform _attachedOrb;
     Transform _diveModel;
     Renderer[] _hiddenPlayerRenderers;
     Vector3 _restPosition;
@@ -372,13 +367,6 @@ public class PlayerCrashIntro : MonoBehaviour
         if (_attachedTrail != null)
             _attachedTrail.RetargetFollow();
 
-        _attachedOrb = FindNamedChild(playerCapsule, "Circle");
-        if (_attachedOrb != null)
-        {
-            _attachedOrb.SetParent(_player, true);
-            _attachedOrb.gameObject.SetActive(true);
-        }
-
         _capsuleRenderers = playerCapsule.GetComponentsInChildren<Renderer>(true);
         _capsuleColliders = playerCapsule.GetComponentsInChildren<Collider>(true);
         if (_capsuleColliders != null)
@@ -442,27 +430,7 @@ public class PlayerCrashIntro : MonoBehaviour
             return true;
         if (_attachedTrail != null && (t == _attachedTrail.transform || t.IsChildOf(_attachedTrail.transform)))
             return true;
-        if (_attachedOrb != null && (t == _attachedOrb || t.IsChildOf(_attachedOrb)))
-            return true;
         return false;
-    }
-
-    static Transform FindNamedChild(Transform root, string name)
-    {
-        if (root == null)
-            return null;
-        Transform exact = root.Find(name);
-        if (exact != null)
-            return exact;
-
-        Transform[] children = root.GetComponentsInChildren<Transform>(true);
-        for (int i = 0; i < children.Length; i++)
-        {
-            if (children[i] != null && children[i].name == name)
-                return children[i];
-        }
-
-        return null;
     }
 
     void HideCrashVfx()
@@ -470,8 +438,6 @@ public class PlayerCrashIntro : MonoBehaviour
         _attachedTrail?.Stop();
         if (_attachedTrail != null)
             _attachedTrail.gameObject.SetActive(false);
-        if (_attachedOrb != null)
-            _attachedOrb.gameObject.SetActive(false);
     }
 
     Vector3 GetFallTrembleOffset(float time)
@@ -508,8 +474,6 @@ public class PlayerCrashIntro : MonoBehaviour
             Mathf.Lerp(cinematicStartOffsetBack, cinematicOffsetBack, zoom));
     }
 
-    /// <summary>Single place both <see cref="RunSequence"/> and <see cref="TryComputeLandingSite"/>
-    /// resolve the planet from - avoids the two drifting to different lookup strategies.</summary>
     static SphericalPlanet ResolvePlanet() =>
         SphericalPlanet.Instance != null ? SphericalPlanet.Instance : FindAnyObjectByType<SphericalPlanet>();
 
@@ -519,22 +483,6 @@ public class PlayerCrashIntro : MonoBehaviour
         if (follow == null && Camera.main != null)
             follow = Camera.main.GetComponent<CameraFollow>();
         return follow;
-    }
-
-    // Uses the authored trail already nested on the Starbot (PlayerDiveDownCapsule →
-    // Starbot_Animation_Dive_Down_and_Land → Trail). Never AddComponent a second PlayerFireTrail
-    // onto the capsule root - that spawned a duplicate streak (FlameBody/Line/etc.) at the
-    // capsule origin, offset from the character.
-    PlayerFireTrail ResolveFireTrail(PlayerReentryGlow reentryGlow)
-    {
-        PlayerFireTrail trail = playerCapsule.GetComponentInChildren<PlayerFireTrail>(true);
-        if (trail != null)
-            return trail;
-
-        Transform effectRoot = reentryGlow != null ? reentryGlow.EffectRoot : null;
-        if (effectRoot != null)
-            trail = effectRoot.GetComponentInChildren<PlayerFireTrail>(true);
-        return trail;
     }
 
     PlayerCrashImpact ResolveImpactEffect()
@@ -570,7 +518,7 @@ public class PlayerCrashIntro : MonoBehaviour
             groundUp = snappedUp;
         }
 
-        Vector3 spacePosition = groundPosition + groundUp * startDistance;
+        Vector3 spacePosition = groundPosition + groundUp * portalStartDistance;
 
         GameObject portal = Instantiate(prefab);
         portal.name = prefab.name;
@@ -680,6 +628,9 @@ public class PlayerCrashIntro : MonoBehaviour
         PortalGroundSnap.Snap(portal.transform, groundPosition, groundUp, portalEmbed);
         SetCraterActive(portal, true);
         PlayPortalImpactVfx(portal.transform, groundUp);
+        PortalSignBillboard sign = portal.GetComponentInChildren<PortalSignBillboard>(true);
+        if (sign != null)
+            sign.PlayPlantImpact();
 
         GalaxyGate gate = portal.GetComponent<GalaxyGate>();
         if (gate != null)
@@ -831,38 +782,8 @@ public class PlayerCrashIntro : MonoBehaviour
         return true;
     }
 
-    /// <summary>The fixed landing/crash site itself — where the capsule comes to rest.</summary>
-    public bool TryComputeLandingSite(out Vector3 position, out Quaternion rotation)
-    {
-        position = default;
-        rotation = Quaternion.identity;
-        Transform landingAnchor = LandingAnchor;
-        if (landingAnchor == null)
-            return false;
-
-        Vector3 restPosition = landingAnchor.position;
-        Quaternion restRotation = landingAnchor.rotation;
-        bool hasPlanet = PlanetSurfacePose.TryResolvePlanet(landingAnchor, out SphericalPlanet planet, out _);
-        Vector3 up = hasPlanet ? planet.GetUpAt(restPosition) : Vector3.up;
-
-        if (snapLandingToGround && hasPlanet)
-        {
-            restPosition = planet.GetSurfacePoint(up, extraGroundClearance);
-        }
-
-        position = restPosition;
-        rotation = PlanetSurfacePose.RotationFromUp(up, PlanetSurfacePose.ExtractYaw(restRotation, up));
-        return true;
-    }
-
-#if UNITY_EDITOR
-    /// <summary>Editor-only accessor so tools can find the capsule this cinematic will animate.</summary>
-    public Transform PlayerCapsule => playerCapsule;
-#endif
-
-    /// <summary>Hides exactly the capsule's own (authored) renderers/colliders and disables its
-    /// GalaxyGate now that the landing site marker has taken over - never touches the runtime
-    /// impact/glow/trail VFX parented under it, which are left to play out and fade on their own.</summary>
+    /// <summary>Hides the dive capsule's own renderers/colliders and disables its
+    /// GalaxyGate now that the landing site marker has taken over.</summary>
     void HideCapsuleAfterLanding()
     {
         if (_capsuleRenderers != null)

@@ -2373,7 +2373,6 @@ MonoBehaviour:
   grass3Prefab: {fileID: 6586595388452404679, guid: c3801e8c7acdd7c47bc2a99a6d21ad9a, type: 3}
   grass4Prefab: {fileID: 5275194215813165404, guid: 17502c779e1d97e4d9daec1535eb602f, type: 3}
   grass5Prefab: {fileID: 6685107302268268320, guid: 6c1d4f9b5e2a7388d0b1c3f4a5e6d708, type: 3}
-  grassPrefabs: []
   visibleRadius: 48
   refreshInterval: 0.3
   density: 0.17
@@ -2974,12 +2973,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerCrashIntro
   playerCapsule: {fileID: 827283002610760159}
   playerPrefab: {fileID: 0}
-  reentryEffectPrefab: {fileID: 0}
   impactEffectPrefab: {fileID: 4183474322023641962, guid: e5cf9b9db4e645e4b97e810ac91af419, type: 3}
   spawnRadius: 6
   portalPrefab: {fileID: 0}
   portalEmbed: 0.4
-  portalFallDuration: 1.6
+  portalFallDuration: 0.5
+  portalStartDistance: 14
   portalClearRadius: 4
   portalTargetScene: SpaceShip
   fallDuration: 2

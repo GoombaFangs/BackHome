@@ -55,9 +55,6 @@ public class PlanetGrassStreamer : MonoBehaviour
     [SerializeField] GameObject grass4Prefab;
     [SerializeField] GameObject grass5Prefab;
 
-    // Legacy array — auto-migrated in Awake so existing scenes keep working.
-    [SerializeField, HideInInspector] GameObject[] grassPrefabs;
-
     [Header("Streaming Range")]
     [Tooltip("World-space radius around the player kept filled with grass. Push this out past what the camera can actually see (screen edge or planet horizon) so spawn/despawn pop-in happens off-screen instead of in view.")]
     [SerializeField, Min(4f)] float visibleRadius = 48f;
@@ -136,7 +133,7 @@ public class PlanetGrassStreamer : MonoBehaviour
         _tiles = _planet != null ? _planet.GetComponent<PlanetTileMap>() : null;
         if (_planet == null)
             Debug.LogWarning("[PlanetGrassStreamer] No planet assigned and none found in the scene — grass streaming disabled.", this);
-        MigrateLegacyPrefabs();
+        FillMissingPrefabsFromAssets();
 
         if (regionSet == null)
         {
@@ -217,22 +214,15 @@ public class PlanetGrassStreamer : MonoBehaviour
         Refresh();
     }
 
-    /// <summary>Force an immediate rescan (e.g. after teleporting the player).</summary>
+    /// <summary>Queue a rescan on the next Update (e.g. after teleporting the player).</summary>
     [ContextMenu("Refresh Now")]
     public void ForceRefresh()
     {
         _refreshTimer = 0f;
-        if (_tiles != null && _tiles.HasValidMap())
-            Refresh();
     }
 
-    void MigrateLegacyPrefabs()
+    void FillMissingPrefabsFromAssets()
     {
-        if (grass1Prefab == null && grassPrefabs != null && grassPrefabs.Length > 0)
-            grass1Prefab = grassPrefabs[0];
-        if (grass2Prefab == null && grassPrefabs != null && grassPrefabs.Length > 1)
-            grass2Prefab = grassPrefabs[1];
-
 #if UNITY_EDITOR
         // Safety net when the scene component is missing newer serialized fields (Unity sometimes
         // drops them if the scene was saved before the script recompiled).
@@ -557,8 +547,8 @@ public class PlanetGrassStreamer : MonoBehaviour
         return true;
     }
 
-    /// <summary>Jittered surface pose for a clump at (lat, lon)/slot — shared by the legacy and
-    /// region-driven spawn paths so both place/orient instances identically.</summary>
+    /// <summary>Jittered surface pose for a clump at (lat, lon)/slot — shared by the named-prefab
+    /// and region-driven spawn paths so both place/orient instances identically.</summary>
     bool TryComputePose(int lat, int lon, int slot, out Vector3 position, out Quaternion rotation)
     {
         position = default;
@@ -645,9 +635,7 @@ public class PlanetGrassStreamer : MonoBehaviour
                 return pooled;
         }
 
-        GameObject instance = Instantiate(prefab, _root);
-        PrepareInstance(instance);
-        return instance;
+        return CreateInstance(prefab);
     }
 
     GameObject RentRegion(GameObject prefab)
@@ -660,7 +648,15 @@ public class PlanetGrassStreamer : MonoBehaviour
                 return pooled;
         }
 
-        GameObject instance = Instantiate(prefab, _root);
+        return CreateInstance(prefab);
+    }
+
+    GameObject CreateInstance(GameObject prefab)
+    {
+        // Instantiate unparented so the clone can finish Awake before we parent it.
+        // Instantiate(prefab, parent) SendMessages OnTransformChildrenChanged during that Awake.
+        GameObject instance = Instantiate(prefab);
+        instance.transform.SetParent(_root, false);
         PrepareInstance(instance);
         return instance;
     }

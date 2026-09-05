@@ -47,7 +47,7 @@ public static class ChainHitEffect
 
     static Creature FindNearestCreature(Vector3 origin, float radius, HashSet<Creature> excluded)
     {
-        Creature[] creatures = Object.FindObjectsByType<Creature>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        Creature[] creatures = Object.FindObjectsByType<Creature>(FindObjectsInactive.Exclude);
         Vector3? planetCenter = SphericalPlanet.Instance != null ? SphericalPlanet.Instance.Center : (Vector3?)null;
 
         Creature best = null;

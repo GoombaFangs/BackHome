@@ -437,7 +437,7 @@ public static class HudScenePresence
 
     static bool RestyleJoystickPrefab()
     {
-        const string path = "Assets/AssetStore/UnityTechnologies/StarterAssets/Mobile/Prefabs/VirtualInputs/UI_Virtual_Joystick.prefab";
+        const string path = "Assets/Resources/HUD/Mobile/UI_Virtual_Joystick.prefab";
         GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
         if (prefab == null)
             return false;

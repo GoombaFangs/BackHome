@@ -4,7 +4,7 @@ using UnityEngine.InputSystem;
 using StarterAssets;
 
 /// <summary>
-/// Top-down walk/run for Robot Kyle.
+/// Top-down walk/run.
 /// CharacterController + StarterAssetsInputs (WASD / mobile move joystick only).
 /// </summary>
 [RequireComponent(typeof(CharacterController))]

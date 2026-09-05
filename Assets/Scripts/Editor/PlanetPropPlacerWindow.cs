@@ -171,7 +171,7 @@ public class PlanetPropPlacerWindow : EditorWindow
             }
         }
 
-        _planet = Object.FindFirstObjectByType<SphericalPlanet>();
+        _planet = Object.FindAnyObjectByType<SphericalPlanet>();
     }
 
     void RefreshPrefabList(bool force)

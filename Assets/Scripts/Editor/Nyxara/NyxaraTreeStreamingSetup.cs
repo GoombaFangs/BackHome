@@ -50,7 +50,7 @@ public static class NyxaraTreeStreamingSetup
     {
         OpenSceneIfNeeded();
 
-        SphericalPlanet planet = UnityEngine.Object.FindFirstObjectByType<SphericalPlanet>();
+        SphericalPlanet planet = UnityEngine.Object.FindAnyObjectByType<SphericalPlanet>();
         if (planet == null)
         {
             Debug.LogError("[BackHome] Tree Streaming: no SphericalPlanet found in the scene.");

@@ -26,18 +26,6 @@ public class GalaxyGate : MonoBehaviour
     /// <summary>Trigger radius used when CharacterController trigger events are unavailable.</summary>
     public float ProximityFallbackRadius => proximityFallbackRadius;
 
-    /// <summary>Minimum scatter radius that stays outside <paramref name="gate"/>'s re-teleport
-    /// zone (plus a small margin), clamped so it never exceeds <paramref name="maxRadius"/>.
-    /// Returns 0 if <paramref name="gate"/> is null.</summary>
-    public static float GetSafeMinSpawnRadius(GalaxyGate gate, float maxRadius)
-    {
-        if (gate == null)
-            return 0f;
-
-        const float safetyMargin = 0.75f;
-        return Mathf.Min(gate.proximityFallbackRadius + safetyMargin, maxRadius * 0.9f);
-    }
-
     [Header("Teleport VFX")]
     [Tooltip("Hovl Studio Teleport prefab (or any particle effect). Played at the player's feet. " +
         "Leave empty to cut instantly.")]
@@ -155,6 +143,10 @@ public class GalaxyGate : MonoBehaviour
 
         _loading = true;
         player = ResolvePlayerRoot(player);
+
+        PortalSignBillboard sign = GetComponentInChildren<PortalSignBillboard>(true);
+        if (sign != null)
+            sign.PlayUseExcited();
 
         if (teleportEffectPrefab == null || effectDuration <= 0f)
         {
@@ -453,8 +445,11 @@ public class GalaxyGate : MonoBehaviour
         Rigidbody body = player.GetComponent<Rigidbody>();
         if (body != null)
         {
-            body.linearVelocity = Vector3.zero;
-            body.angularVelocity = Vector3.zero;
+            if (!body.isKinematic)
+            {
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
             body.isKinematic = true;
         }
 

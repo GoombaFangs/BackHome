@@ -60,7 +60,7 @@ public static class NyxaraGrassScatter
     {
         OpenSceneIfNeeded();
 
-        SphericalPlanet planet = UnityEngine.Object.FindFirstObjectByType<SphericalPlanet>();
+        SphericalPlanet planet = UnityEngine.Object.FindAnyObjectByType<SphericalPlanet>();
         if (planet == null)
         {
             Debug.LogError("[BackHome] Grass Streaming: no SphericalPlanet found in the scene.");
@@ -118,7 +118,7 @@ public static class NyxaraGrassScatter
     {
         OpenSceneIfNeeded();
 
-        SphericalPlanet planet = UnityEngine.Object.FindFirstObjectByType<SphericalPlanet>();
+        SphericalPlanet planet = UnityEngine.Object.FindAnyObjectByType<SphericalPlanet>();
         if (planet == null)
             return;
 
@@ -156,7 +156,7 @@ public static class NyxaraGrassScatter
     {
         OpenSceneIfNeeded();
 
-        SphericalPlanet planet = UnityEngine.Object.FindFirstObjectByType<SphericalPlanet>();
+        SphericalPlanet planet = UnityEngine.Object.FindAnyObjectByType<SphericalPlanet>();
         if (planet == null)
             throw new InvalidOperationException("No SphericalPlanet found in PlanetNyxara scene.");
 

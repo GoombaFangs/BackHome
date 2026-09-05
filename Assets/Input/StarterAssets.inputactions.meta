@@ -12,10 +12,3 @@ ScriptedImporter:
   wrapperCodePath: 
   wrapperClassName: 
   wrapperCodeNamespace: 
-AssetOrigin:
-  serializedVersion: 1
-  productId: 4696
-  packageName: Robot Kyle | URP
-  packageVersion: 4.0
-  assetPath: Assets/UnityTechnologies/StarterAssets/InputSystem/StarterAssets.inputactions
-  uploadId: 847474

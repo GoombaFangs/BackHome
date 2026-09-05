@@ -59,7 +59,7 @@ public static class AreaBlastEffect
             new BlastHit { Creature = primaryTarget, KnockFrom = knockFrom, Dir = Vector3.forward, PlayHitVfx = false }
         };
 
-        Creature[] creatures = Object.FindObjectsByType<Creature>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        Creature[] creatures = Object.FindObjectsByType<Creature>(FindObjectsInactive.Exclude);
         Vector3? planetCenter = SphericalPlanet.Instance != null ? SphericalPlanet.Instance.Center : (Vector3?)null;
 
         for (int i = 0; i < creatures.Length; i++)

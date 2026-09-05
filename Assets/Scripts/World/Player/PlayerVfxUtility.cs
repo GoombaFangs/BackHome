@@ -2,9 +2,9 @@ using UnityEngine;
 using UnityEngine.Rendering;
 
 /// <summary>
-/// Shared procedural building blocks for the player capsule crash VFX (<see cref="PlayerFireTrail"/>,
-/// <see cref="PlayerCrashImpact"/>, <see cref="PlayerReentryGlow"/>). Everything here is generated
-/// in code - no texture/material/mesh assets required - so every effect stays a drop-in component.
+/// Shared procedural building blocks for the player crash VFX (<see cref="PlayerFireTrail"/>,
+/// <see cref="PlayerCrashImpact"/>). Generated in code so drop-in fallbacks still work when
+/// authored prefabs are missing.
 /// </summary>
 public static class PlayerVfxUtility
 {
@@ -158,56 +158,6 @@ public static class PlayerVfxUtility
             new[] { new GradientColorKey(Color.white, 0f), new GradientColorKey(endColor, 1f) },
             new[] { new GradientAlphaKey(1f, 0f), new GradientAlphaKey(0f, 0.85f), new GradientAlphaKey(0f, 1f) });
         return gradient;
-    }
-
-    /// <summary>Combined world-space bounds of every renderer under root - used to auto-fit
-    /// effects to whatever the actual capsule model's size turns out to be.</summary>
-    public static bool TryGetRendererBounds(Transform root, out Bounds bounds)
-    {
-        Renderer[] renderers = root.GetComponentsInChildren<Renderer>();
-        if (renderers.Length == 0)
-        {
-            bounds = new Bounds(root.position, Vector3.one);
-            return false;
-        }
-
-        bounds = renderers[0].bounds;
-        for (int i = 1; i < renderers.Length; i++)
-            bounds.Encapsulate(renderers[i].bounds);
-        return true;
-    }
-
-    /// <summary>Like <see cref="TryGetRendererBounds"/> but ignores particle/line/trail renderers -
-    /// their "bounds" describe simulated VFX extents (fire trails, sparks, smoke puffs), which can
-    /// be many times larger than the actual physical object and are meaningless for things like
-    /// ground-clearance/embed checks that want the solid mesh's real size. Returns false (and an
-    /// empty bounds at root.position) if nothing but VFX renderers are found - e.g. a capsule that
-    /// is itself just a fire-trail effect with no body mesh, in which case callers should treat the
-    /// object as having ~zero physical size rather than the VFX's simulated extent.</summary>
-    public static bool TryGetSolidRendererBounds(Transform root, out Bounds bounds)
-    {
-        Renderer[] renderers = root.GetComponentsInChildren<Renderer>();
-        bounds = new Bounds(root.position, Vector3.zero);
-        bool found = false;
-
-        for (int i = 0; i < renderers.Length; i++)
-        {
-            Renderer r = renderers[i];
-            if (r == null || r is ParticleSystemRenderer || r is LineRenderer || r is TrailRenderer)
-                continue;
-
-            if (!found)
-            {
-                bounds = r.bounds;
-                found = true;
-            }
-            else
-            {
-                bounds.Encapsulate(r.bounds);
-            }
-        }
-
-        return found;
     }
 
     /// <summary>Moves <paramref name="root"/> so the lowest solid-mesh point sits on
