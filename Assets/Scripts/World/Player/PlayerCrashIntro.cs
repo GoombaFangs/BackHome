@@ -386,12 +386,15 @@ public class PlayerCrashIntro : MonoBehaviour
 
         Renderer[] renderers = _player.GetComponentsInChildren<Renderer>(true);
         var hidden = new System.Collections.Generic.List<Renderer>(renderers.Length);
+        VitalsBarsView vitalsView = _player.GetComponentInChildren<VitalsBarsView>(true);
         for (int i = 0; i < renderers.Length; i++)
         {
             Renderer renderer = renderers[i];
             if (renderer == null || !renderer.enabled)
                 continue;
             if (IsCinematicVisual(renderer.transform))
+                continue;
+            if (vitalsView != null && renderer.transform.IsChildOf(vitalsView.transform))
                 continue;
             renderer.enabled = false;
             hidden.Add(renderer);

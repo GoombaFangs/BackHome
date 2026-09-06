@@ -1,24 +1,30 @@
+using TMPro;
 using UnityEngine;
 
 /// <summary>
-/// Visual HP + Oxygen bars. Edit this on the VitalsBars prefab.
-/// Uses unlit quads so fill colors stay readable in edit mode and in-game.
+/// Billboard HP / oxygen art. Frame, fills, and labels are authored on the prefab;
+/// runtime only changes fill width and label text.
 /// </summary>
-[ExecuteAlways]
 public class VitalsBarsView : MonoBehaviour
 {
     static readonly int ColorId = Shader.PropertyToID("_Color");
+    static readonly int MainTexId = Shader.PropertyToID("_MainTex");
+    const int LabelSortingOrder = 50;
 
-    [Header("Layout")]
-    [SerializeField] Vector2 barSize = new Vector2(1.1f, 0.14f);
-    [SerializeField] float barSpacing = 0.08f;
-    [SerializeField, Range(0.4f, 1f)] float fillHeightRatio = 0.72f;
+    struct AuthoredFill
+    {
+        public bool valid;
+        public Vector3 localPosition;
+        public Vector3 localScale;
+        public Vector2 spriteSize;
+        public bool sliced;
+    }
+
+    [Header("Bars")]
     [SerializeField] bool showOxygen = true;
 
     [Header("Value Labels")]
     [SerializeField] bool showValueLabels = true;
-    [SerializeField] float labelOffsetX = 0.68f;
-    [SerializeField] float labelCharacterSize = 0.065f;
     [SerializeField] Color labelColor = new Color(1f, 1f, 1f, 0.95f);
 
     [Header("Colors")]
@@ -26,23 +32,22 @@ public class VitalsBarsView : MonoBehaviour
     [SerializeField] Color healthLowColor = new Color(0.9f, 0.2f, 0.2f, 1f);
     [SerializeField] Color healthHitFlashColor = new Color(1f, 1f, 1f, 1f);
     [SerializeField] Color oxygenFillColor = new Color(0.25f, 0.65f, 1f, 1f);
-    [SerializeField] Color backgroundColor = new Color(0.05f, 0.05f, 0.08f, 0.85f);
     [SerializeField, Min(0.01f)] float hitFlashDuration = 0.12f;
 
     [Header("References")]
-    [SerializeField] Transform healthBar;
-    [SerializeField] Transform oxygenBar;
+    [SerializeField] Renderer frameRenderer;
     [SerializeField] Transform healthFill;
     [SerializeField] Transform oxygenFill;
     [SerializeField] Renderer healthFillRenderer;
     [SerializeField] Renderer oxygenFillRenderer;
-    [SerializeField] Renderer healthBgRenderer;
-    [SerializeField] Renderer oxygenBgRenderer;
     [SerializeField] Material barMaterial;
-    [SerializeField] TextMesh healthLabel;
-    [SerializeField] TextMesh oxygenLabel;
+    [SerializeField] Material fillMaterial;
+    [SerializeField] TMP_Text healthLabel;
+    [SerializeField] TMP_Text oxygenLabel;
 
     MaterialPropertyBlock _block;
+    AuthoredFill _healthAuthored;
+    AuthoredFill _oxygenAuthored;
     float _previewHealth = 1f;
     float _previewOxygen = 1f;
     float _healthCurrent = 1f;
@@ -51,6 +56,11 @@ public class VitalsBarsView : MonoBehaviour
     float _oxygenMax = 1f;
     float _hitFlashTimer;
     float _alpha = 1f;
+
+    void Awake()
+    {
+        CaptureAuthoredLayout();
+    }
 
     void Update()
     {
@@ -67,64 +77,42 @@ public class VitalsBarsView : MonoBehaviour
 
     void OnEnable()
     {
+        CaptureAuthoredLayout();
         EnsureValueLabels();
-        ApplyLayout();
-        SetHealth(_previewHealth);
-        SetOxygen(_previewOxygen);
-        RefreshValueLabels();
-    }
-
-    void OnValidate()
-    {
-        _previewHealth = 1f;
-        _previewOxygen = 1f;
-        EnsureValueLabels();
-        ApplyLayout();
-        SetHealth(1f);
-        SetOxygen(1f);
-        if (_healthMax <= 0f)
-            _healthMax = 1f;
-        if (_oxygenMax <= 0f)
-            _oxygenMax = 1f;
+        EnsureMaterials();
+        ApplyOxygenVisibility();
         RefreshValueLabels();
     }
 
     public void SetOxygenVisible(bool visible)
     {
         showOxygen = visible;
-        ApplyLayout();
+        ApplyOxygenVisibility();
         RefreshValueLabels();
     }
 
-    /// <summary>
-    /// Sets fill from normalized 0-1. Prefer <see cref="SetHealthValues"/> when you have real HP numbers.
-    /// </summary>
     public void SetHealth(float normalized)
     {
         normalized = Mathf.Clamp01(normalized);
         _previewHealth = normalized;
-        if (healthFill != null)
-            ApplyFill(healthFill, normalized);
+        ApplyFill(ref _healthAuthored, healthFill, healthFillRenderer, normalized);
 
         if (_hitFlashTimer <= 0f)
             ApplyHealthFillColor(normalized);
     }
 
-    /// <summary>0 = fully transparent, 1 = fully visible.</summary>
     public void SetAlpha(float alpha)
     {
         _alpha = Mathf.Clamp01(alpha);
+        SetRendererColor(frameRenderer, Color.white);
         if (_hitFlashTimer > 0f)
             SetRendererColor(healthFillRenderer, healthHitFlashColor);
         else
             ApplyHealthFillColor(_previewHealth);
         SetRendererColor(oxygenFillRenderer, oxygenFillColor);
-        SetRendererColor(healthBgRenderer, backgroundColor);
-        SetRendererColor(oxygenBgRenderer, backgroundColor);
         ApplyLabelAlpha();
     }
 
-    /// <summary>Brief white flash on the health fill when taking a hit.</summary>
     public void FlashHealthHit()
     {
         _hitFlashTimer = hitFlashDuration;
@@ -138,9 +126,6 @@ public class VitalsBarsView : MonoBehaviour
             Color.Lerp(healthLowColor, healthFillColor, Mathf.Clamp01(normalized * 1.5f)));
     }
 
-    /// <summary>
-    /// Sets fill + label from current/max HP (from PlayerStats / CreatureStats).
-    /// </summary>
     public void SetHealthValues(float current, float max)
     {
         _healthMax = Mathf.Max(0f, max);
@@ -157,8 +142,7 @@ public class VitalsBarsView : MonoBehaviour
         if (!showOxygen)
             return;
 
-        if (oxygenFill != null)
-            ApplyFill(oxygenFill, normalized);
+        ApplyFill(ref _oxygenAuthored, oxygenFill, oxygenFillRenderer, normalized);
         SetRendererColor(oxygenFillRenderer, oxygenFillColor);
     }
 
@@ -173,82 +157,88 @@ public class VitalsBarsView : MonoBehaviour
 
     public void ApplyLayout()
     {
-        if (oxygenBar != null)
-            oxygenBar.gameObject.SetActive(showOxygen);
-
-        if (showOxygen)
-        {
-            float halfGap = barSize.y * 0.5f + barSpacing * 0.5f;
-            if (healthBar != null)
-                healthBar.localPosition = new Vector3(0f, halfGap, 0f);
-            if (oxygenBar != null)
-                oxygenBar.localPosition = new Vector3(0f, -halfGap, 0f);
-        }
-        else if (healthBar != null)
-        {
-            healthBar.localPosition = Vector3.zero;
-        }
-
-        if (healthBgRenderer != null)
-        {
-            healthBgRenderer.transform.localPosition = Vector3.zero;
-            healthBgRenderer.transform.localScale = new Vector3(barSize.x, barSize.y, 1f);
-            SetRendererColor(healthBgRenderer, backgroundColor);
-        }
-
-        if (showOxygen && oxygenBgRenderer != null)
-        {
-            oxygenBgRenderer.transform.localPosition = Vector3.zero;
-            oxygenBgRenderer.transform.localScale = new Vector3(barSize.x, barSize.y, 1f);
-            SetRendererColor(oxygenBgRenderer, backgroundColor);
-        }
-
-        PositionValueLabels();
+        ApplyOxygenVisibility();
         EnsureMaterials();
+    }
+
+    void ApplyOxygenVisibility()
+    {
+        if (oxygenFill != null)
+            oxygenFill.gameObject.SetActive(showOxygen);
+        if (oxygenLabel != null)
+            oxygenLabel.gameObject.SetActive(showValueLabels && showOxygen);
+    }
+
+    void CaptureAuthoredLayout()
+    {
+        CaptureFill(ref _healthAuthored, healthFill, healthFillRenderer);
+        CaptureFill(ref _oxygenAuthored, oxygenFill, oxygenFillRenderer);
+    }
+
+    static void CaptureFill(ref AuthoredFill authored, Transform fill, Renderer renderer)
+    {
+        if (authored.valid || fill == null)
+            return;
+
+        authored.localPosition = fill.localPosition;
+        authored.localScale = fill.localScale;
+        authored.spriteSize = Vector2.one;
+        authored.sliced = false;
+
+        if (renderer is SpriteRenderer spriteRenderer)
+        {
+            authored.sliced = spriteRenderer.drawMode == SpriteDrawMode.Sliced
+                || spriteRenderer.drawMode == SpriteDrawMode.Tiled;
+            if (authored.sliced)
+                authored.spriteSize = spriteRenderer.size;
+            else if (spriteRenderer.sprite != null)
+                authored.spriteSize = spriteRenderer.sprite.bounds.size;
+        }
+
+        authored.spriteSize.x = Mathf.Max(0.0001f, authored.spriteSize.x);
+        authored.spriteSize.y = Mathf.Max(0.0001f, authored.spriteSize.y);
+        authored.valid = true;
     }
 
     void EnsureValueLabels()
     {
-        // Labels live on the VitalsBars prefab — never spawn them at runtime.
-        if (healthLabel == null && healthBar != null)
-        {
-            Transform t = healthBar.Find("HealthValue");
-            if (t != null)
-                healthLabel = t.GetComponent<TextMesh>();
-        }
+        if (healthLabel == null)
+            healthLabel = FindLabel("HealthValue");
+        if (oxygenLabel == null)
+            oxygenLabel = FindLabel("OxygenValue");
 
-        if (oxygenLabel == null && oxygenBar != null)
-        {
-            Transform t = oxygenBar.Find("OxygenValue");
-            if (t != null)
-                oxygenLabel = t.GetComponent<TextMesh>();
-        }
-
-        PositionValueLabels();
+        EnsureWorldSpaceLabel(healthLabel);
+        EnsureWorldSpaceLabel(oxygenLabel);
     }
 
-    void PositionValueLabels()
+    static void EnsureWorldSpaceLabel(TMP_Text label)
     {
-        // Place just to the right of the bar track.
-        float x = barSize.x * 0.5f + Mathf.Max(0.02f, labelOffsetX * 0.12f);
+        if (label == null)
+            return;
 
-        if (healthLabel != null)
+        Canvas canvas = label.GetComponent<Canvas>();
+        if (canvas == null)
+            canvas = label.gameObject.AddComponent<Canvas>();
+
+        canvas.renderMode = RenderMode.WorldSpace;
+        canvas.overrideSorting = true;
+        canvas.sortingOrder = LabelSortingOrder;
+        canvas.additionalShaderChannels =
+            AdditionalCanvasShaderChannels.TexCoord1
+            | AdditionalCanvasShaderChannels.Normal
+            | AdditionalCanvasShaderChannels.Tangent;
+    }
+
+    TMP_Text FindLabel(string objectName)
+    {
+        Transform[] children = GetComponentsInChildren<Transform>(true);
+        for (int i = 0; i < children.Length; i++)
         {
-            healthLabel.characterSize = labelCharacterSize;
-            ApplyLabelColor(healthLabel);
-            healthLabel.transform.localPosition = new Vector3(x, 0f, -0.03f);
-            healthLabel.transform.localRotation = Quaternion.identity;
-            healthLabel.gameObject.SetActive(showValueLabels);
+            if (children[i] != null && children[i].name == objectName)
+                return children[i].GetComponent<TMP_Text>();
         }
 
-        if (oxygenLabel != null)
-        {
-            oxygenLabel.characterSize = labelCharacterSize;
-            ApplyLabelColor(oxygenLabel);
-            oxygenLabel.transform.localPosition = new Vector3(x, 0f, -0.03f);
-            oxygenLabel.transform.localRotation = Quaternion.identity;
-            oxygenLabel.gameObject.SetActive(showValueLabels && showOxygen);
-        }
+        return null;
     }
 
     void RefreshValueLabels()
@@ -267,6 +257,8 @@ public class VitalsBarsView : MonoBehaviour
             return;
 
         healthLabel.text = FormatValue(_healthCurrent, _healthMax);
+        ApplyLabelColor(healthLabel);
+        healthLabel.ForceMeshUpdate();
     }
 
     void RefreshOxygenLabel()
@@ -280,6 +272,8 @@ public class VitalsBarsView : MonoBehaviour
             return;
 
         oxygenLabel.text = FormatValue(_oxygenCurrent, _oxygenMax);
+        ApplyLabelColor(oxygenLabel);
+        oxygenLabel.ForceMeshUpdate();
     }
 
     static string FormatValue(float current, float max)
@@ -289,29 +283,75 @@ public class VitalsBarsView : MonoBehaviour
         return $"{cur}/{mx}";
     }
 
-    void ApplyFill(Transform fill, float normalized)
+    void ApplyFill(ref AuthoredFill authored, Transform fill, Renderer renderer, float normalized)
     {
-        float fillHeight = barSize.y * fillHeightRatio;
-        float width = barSize.x * Mathf.Max(0f, normalized);
-        fill.localScale = new Vector3(Mathf.Max(0.0001f, width), fillHeight, 1f);
-        // Keep fill in front of the background track.
-        fill.localPosition = new Vector3(-barSize.x * 0.5f + width * 0.5f, 0f, -0.02f);
+        if (fill == null)
+            return;
+
+        CaptureFill(ref authored, fill, renderer);
+        if (!authored.valid)
+            return;
+
+        normalized = Mathf.Clamp01(normalized);
+        Vector3 position = authored.localPosition;
+        Vector3 scale = authored.localScale;
+        float fullWidth = authored.spriteSize.x * Mathf.Abs(scale.x);
+        float width = Mathf.Max(0.0001f, fullWidth * normalized);
+
+        fill.localPosition = new Vector3(
+            position.x - fullWidth * 0.5f + width * 0.5f,
+            position.y,
+            position.z);
+
+        if (renderer is SpriteRenderer spriteRenderer && authored.sliced)
+        {
+            fill.localScale = scale;
+            spriteRenderer.size = new Vector2(
+                Mathf.Max(0.0001f, authored.spriteSize.x * normalized),
+                authored.spriteSize.y);
+            return;
+        }
+
+        fill.localScale = new Vector3(
+            scale.x * Mathf.Max(0.0001f, normalized),
+            scale.y,
+            scale.z);
     }
 
     void EnsureMaterials()
     {
-        AssignSharedMaterial(healthBgRenderer);
-        AssignSharedMaterial(oxygenBgRenderer);
-        AssignSharedMaterial(healthFillRenderer);
-        AssignSharedMaterial(oxygenFillRenderer);
+        AssignSharedMaterial(frameRenderer, barMaterial);
+        Material fill = fillMaterial != null ? fillMaterial : barMaterial;
+        AssignSharedMaterial(healthFillRenderer, fill);
+        AssignSharedMaterial(oxygenFillRenderer, fill);
     }
 
-    void AssignSharedMaterial(Renderer renderer)
+    void AssignSharedMaterial(Renderer renderer, Material material)
     {
-        if (renderer == null || barMaterial == null)
+        if (renderer == null || material == null)
             return;
-        if (renderer.sharedMaterial != barMaterial)
-            renderer.sharedMaterial = barMaterial;
+        if (renderer.sharedMaterial != material)
+            renderer.sharedMaterial = material;
+        if (renderer is SpriteRenderer spriteRenderer)
+            BindSpriteTexture(spriteRenderer);
+    }
+
+    Material FillMaterial()
+    {
+        return fillMaterial != null ? fillMaterial : barMaterial;
+    }
+
+    void BindSpriteTexture(SpriteRenderer spriteRenderer)
+    {
+        if (spriteRenderer.sprite == null)
+            return;
+
+        if (_block == null)
+            _block = new MaterialPropertyBlock();
+
+        spriteRenderer.GetPropertyBlock(_block);
+        _block.SetTexture(MainTexId, spriteRenderer.sprite.texture);
+        spriteRenderer.SetPropertyBlock(_block);
     }
 
     void SetRendererColor(Renderer renderer, Color color)
@@ -319,12 +359,20 @@ public class VitalsBarsView : MonoBehaviour
         if (renderer == null)
             return;
 
-        AssignSharedMaterial(renderer);
+        AssignSharedMaterial(renderer, renderer == frameRenderer ? barMaterial : FillMaterial());
+        color.a *= _alpha;
+
+        if (renderer is SpriteRenderer spriteRenderer)
+        {
+            spriteRenderer.color = color;
+            BindSpriteTexture(spriteRenderer);
+            return;
+        }
+
         if (_block == null)
             _block = new MaterialPropertyBlock();
 
         renderer.GetPropertyBlock(_block);
-        color.a *= _alpha;
         _block.SetColor(ColorId, color);
         renderer.SetPropertyBlock(_block);
     }
@@ -335,7 +383,7 @@ public class VitalsBarsView : MonoBehaviour
         ApplyLabelColor(oxygenLabel);
     }
 
-    void ApplyLabelColor(TextMesh label)
+    void ApplyLabelColor(TMP_Text label)
     {
         if (label == null)
             return;

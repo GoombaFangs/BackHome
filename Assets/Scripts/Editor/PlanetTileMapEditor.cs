@@ -210,11 +210,13 @@ public class PlanetTileMapEditor : Editor
 
         try
         {
+            // Overlay uses GUILayout inside Handles.BeginGUI — must run on Layout and Repaint.
+            DrawSceneOverlay(map);
+
             if (e.type == EventType.Repaint)
             {
                 if (_showGrid)
                     DrawGridPreview(map);
-                DrawSceneOverlay(map);
                 if (_paintMode)
                     DrawBrushPreview(map);
             }

@@ -29,8 +29,12 @@ public class PlanetTileMap : MonoBehaviour
     [SerializeField] PlanetTileset tileset;
 
     [Header("Mesh")]
-    [Tooltip("Slight scale to hide seams when blocks are off. Ignored while blocks are enabled.")]
+    [Tooltip("Slight radial scale to hide seams when blocks are off. Ignored while blocks are enabled.")]
     [SerializeField] float overlap = 1f;
+    [Tooltip("How far neighboring shell tiles overlap, as a fraction of cell size. Closes cracks on the sphere.")]
+    [SerializeField, Range(0f, 0.05f)] float seamOverlap = 0.012f;
+    [Tooltip("Split each shell tile so it follows the planet curve. 1 = one flat quad.")]
+    [SerializeField, Range(1, 4)] int cellSubdivisions = 2;
     [Tooltip("Lift the tile mesh above the planet surface.")]
     [SerializeField] float surfaceLift = 0.08f;
     [Tooltip("Hide the planet MeshRenderer while tiles are shown.")]
@@ -58,7 +62,7 @@ public class PlanetTileMap : MonoBehaviour
     [SerializeField, Range(0f, 0.3f)] float blockGap = 0.1f;
     [Tooltip("Alternate cell tint for a clearer grid read.")]
     [FormerlySerializedAs("checkerTint")]
-    [SerializeField] bool alternateTint = true;
+    [SerializeField] bool alternateTint;
     [Tooltip("Tint for even cells (lat + lon even).")]
     [FormerlySerializedAs("checkerA")]
     [SerializeField] Color tintEven = Color.white;
@@ -187,6 +191,8 @@ public class PlanetTileMap : MonoBehaviour
     {
         tilesAroundEquator = Mathf.Clamp(tilesAroundEquator, 16, 256);
         overlap = Mathf.Max(1f, overlap);
+        seamOverlap = Mathf.Clamp(seamOverlap, 0f, 0.05f);
+        cellSubdivisions = Mathf.Clamp(cellSubdivisions, 1, 4);
         blockGap = Mathf.Clamp(blockGap, 0f, 0.3f);
         blockHeight = Mathf.Clamp(blockHeight, 0.05f, 0.55f);
         if (_planet == null)
@@ -488,6 +494,8 @@ public class PlanetTileMap : MonoBehaviour
         float cubeH = GetCubeHeight();
         float inset = enableBlocks ? Mathf.Clamp01(blockGap) : 0f;
         float meshOverlap = enableBlocks ? 1f : overlap;
+        float shellSeam = !enableBlocks ? seamOverlap : 0f;
+        int subdiv = enableBlocks ? 1 : Mathf.Max(1, cellSubdivisions);
         int fallback = Mathf.Max(0, tileset.IndexOfId("Fill_Grass"));
 
         for (int lat = 0; lat < latitudeBands; lat++)
@@ -532,6 +540,8 @@ public class PlanetTileMap : MonoBehaviour
                     uvNW = new Vector2(0f, 1f);
                 }
 
+                float cellLat0 = lat0;
+                float cellLat1 = lat1;
                 float lon0 = lon * lonStep;
                 float lon1 = (lon + 1) * lonStep;
                 if (inset > 0f)
@@ -539,6 +549,18 @@ public class PlanetTileMap : MonoBehaviour
                     float d = lonStep * inset * 0.5f * lonInsetScale;
                     lon0 += d;
                     lon1 -= d;
+                }
+                else if (shellSeam > 0f)
+                {
+                    float dLat = latStep * shellSeam * 0.5f;
+                    float dLon = lonStep * shellSeam * 0.5f * lonInsetScale;
+                    if (!southPole && !northPole)
+                    {
+                        cellLat0 -= dLat;
+                        cellLat1 += dLat;
+                    }
+                    lon0 -= dLon;
+                    lon1 += dLon;
                 }
 
                 Color topTint = Color.white;
@@ -556,7 +578,7 @@ public class PlanetTileMap : MonoBehaviour
                 {
                     AddPolarCell(
                         northPole,
-                        southPole ? lat1 : lat0,
+                        southPole ? cellLat1 : cellLat0,
                         lon0,
                         lon1,
                         lift,
@@ -564,48 +586,38 @@ public class PlanetTileMap : MonoBehaviour
                         uvSW, uvSE, uvNE, uvNW,
                         topTint,
                         sideTint,
+                        !enableBlocks,
                         vertices, normals, uvs, colors, triangles);
                     continue;
                 }
 
                 if (enableBlocks)
                 {
-                    Vector3 bSW = LocalSurfacePoint(lat0, lon0, lift);
-                    Vector3 bSE = LocalSurfacePoint(lat0, lon1, lift);
-                    Vector3 bNE = LocalSurfacePoint(lat1, lon1, lift);
-                    Vector3 bNW = LocalSurfacePoint(lat1, lon0, lift);
-                    Vector3 tSW = LocalSurfacePoint(lat0, lon0, lift + cubeH);
-                    Vector3 tSE = LocalSurfacePoint(lat0, lon1, lift + cubeH);
-                    Vector3 tNE = LocalSurfacePoint(lat1, lon1, lift + cubeH);
-                    Vector3 tNW = LocalSurfacePoint(lat1, lon0, lift + cubeH);
+                    Vector3 bSW = LocalSurfacePoint(cellLat0, lon0, lift);
+                    Vector3 bSE = LocalSurfacePoint(cellLat0, lon1, lift);
+                    Vector3 bNE = LocalSurfacePoint(cellLat1, lon1, lift);
+                    Vector3 bNW = LocalSurfacePoint(cellLat1, lon0, lift);
+                    Vector3 tSW = LocalSurfacePoint(cellLat0, lon0, lift + cubeH);
+                    Vector3 tSE = LocalSurfacePoint(cellLat0, lon1, lift + cubeH);
+                    Vector3 tNE = LocalSurfacePoint(cellLat1, lon1, lift + cubeH);
+                    Vector3 tNW = LocalSurfacePoint(cellLat1, lon0, lift + cubeH);
 
                     if (!IsUsableFace(bSW, bSE, bNE, bNW))
                         continue;
 
-                    AddQuad(tSW, tSE, tNE, tNW, uvSW, uvSE, uvNE, uvNW, topTint, vertices, normals, uvs, colors, triangles);
-                    AddQuad(bSW, bSE, tSE, tSW, uvSW, uvSE, uvSE, uvSW, sideTint, vertices, normals, uvs, colors, triangles);
-                    AddQuad(bSE, bNE, tNE, tSE, uvSE, uvNE, uvNE, uvSE, sideTint, vertices, normals, uvs, colors, triangles);
-                    AddQuad(bNE, bNW, tNW, tNE, uvNE, uvNW, uvNW, uvNE, sideTint, vertices, normals, uvs, colors, triangles);
-                    AddQuad(bNW, bSW, tSW, tNW, uvNW, uvSW, uvSW, uvNW, sideTint, vertices, normals, uvs, colors, triangles);
+                    AddQuad(tSW, tSE, tNE, tNW, uvSW, uvSE, uvNE, uvNW, topTint, true, vertices, normals, uvs, colors, triangles);
+                    AddQuad(bSW, bSE, tSE, tSW, uvSW, uvSE, uvSE, uvSW, sideTint, false, vertices, normals, uvs, colors, triangles);
+                    AddQuad(bSE, bNE, tNE, tSE, uvSE, uvNE, uvNE, uvSE, sideTint, false, vertices, normals, uvs, colors, triangles);
+                    AddQuad(bNE, bNW, tNW, tNE, uvNE, uvNW, uvNW, uvNE, sideTint, false, vertices, normals, uvs, colors, triangles);
+                    AddQuad(bNW, bSW, tSW, tNW, uvNW, uvSW, uvSW, uvNW, sideTint, false, vertices, normals, uvs, colors, triangles);
                 }
                 else
                 {
-                    Vector3 sw = LocalSurfacePoint(lat0, lon0, lift);
-                    Vector3 se = LocalSurfacePoint(lat0, lon1, lift);
-                    Vector3 ne = LocalSurfacePoint(lat1, lon1, lift);
-                    Vector3 nw = LocalSurfacePoint(lat1, lon0, lift);
-                    if (meshOverlap > 1.0001f)
-                    {
-                        sw *= meshOverlap;
-                        se *= meshOverlap;
-                        ne *= meshOverlap;
-                        nw *= meshOverlap;
-                    }
-
-                    if (!IsUsableFace(sw, se, ne, nw))
-                        continue;
-
-                    AddQuad(sw, se, ne, nw, uvSW, uvSE, uvNE, uvNW, topTint, vertices, normals, uvs, colors, triangles);
+                    AddShellCell(
+                        cellLat0, cellLat1, lon0, lon1,
+                        uvSW, uvSE, uvNE, uvNW,
+                        topTint, lift, meshOverlap, subdiv,
+                        vertices, normals, uvs, colors, triangles);
                 }
             }
         }
@@ -636,6 +648,69 @@ public class PlanetTileMap : MonoBehaviour
         EnsureWalkColliders();
     }
 
+    void AddShellCell(
+        float lat0,
+        float lat1,
+        float lon0,
+        float lon1,
+        Vector2 uvSW,
+        Vector2 uvSE,
+        Vector2 uvNE,
+        Vector2 uvNW,
+        Color tint,
+        float lift,
+        float meshOverlap,
+        int subdiv,
+        List<Vector3> vertices,
+        List<Vector3> normals,
+        List<Vector2> uvs,
+        List<Color> colors,
+        List<int> triangles)
+    {
+        subdiv = Mathf.Max(1, subdiv);
+        for (int y = 0; y < subdiv; y++)
+        {
+            float ty0 = y / (float)subdiv;
+            float ty1 = (y + 1) / (float)subdiv;
+            float la0 = Mathf.Lerp(lat0, lat1, ty0);
+            float la1 = Mathf.Lerp(lat0, lat1, ty1);
+            Vector2 uvW0 = Vector2.Lerp(uvSW, uvNW, ty0);
+            Vector2 uvE0 = Vector2.Lerp(uvSE, uvNE, ty0);
+            Vector2 uvW1 = Vector2.Lerp(uvSW, uvNW, ty1);
+            Vector2 uvE1 = Vector2.Lerp(uvSE, uvNE, ty1);
+
+            for (int x = 0; x < subdiv; x++)
+            {
+                float tx0 = x / (float)subdiv;
+                float tx1 = (x + 1) / (float)subdiv;
+                Vector3 sw = LocalSurfacePoint(la0, Mathf.Lerp(lon0, lon1, tx0), lift);
+                Vector3 se = LocalSurfacePoint(la0, Mathf.Lerp(lon0, lon1, tx1), lift);
+                Vector3 ne = LocalSurfacePoint(la1, Mathf.Lerp(lon0, lon1, tx1), lift);
+                Vector3 nw = LocalSurfacePoint(la1, Mathf.Lerp(lon0, lon1, tx0), lift);
+                if (meshOverlap > 1.0001f)
+                {
+                    sw *= meshOverlap;
+                    se *= meshOverlap;
+                    ne *= meshOverlap;
+                    nw *= meshOverlap;
+                }
+
+                if (!IsUsableFace(sw, se, ne, nw))
+                    continue;
+
+                AddQuad(
+                    sw, se, ne, nw,
+                    Vector2.Lerp(uvW0, uvE0, tx0),
+                    Vector2.Lerp(uvW0, uvE0, tx1),
+                    Vector2.Lerp(uvW1, uvE1, tx1),
+                    Vector2.Lerp(uvW1, uvE1, tx0),
+                    tint,
+                    true,
+                    vertices, normals, uvs, colors, triangles);
+            }
+        }
+    }
+
     void AddPolarCell(
         bool northPole,
         float ringLat,
@@ -649,6 +724,7 @@ public class PlanetTileMap : MonoBehaviour
         Vector2 uvNW,
         Color topTint,
         Color sideTint,
+        bool sphericalNormals,
         List<Vector3> vertices,
         List<Vector3> normals,
         List<Vector2> uvs,
@@ -660,9 +736,8 @@ public class PlanetTileMap : MonoBehaviour
 
         // Average UVs toward tile center so the pole tip doesn't stretch a corner texel.
         Vector2 uvPole = (uvSW + uvSE + uvNE + uvNW) * 0.25f;
-        Vector2 uvRing0 = northPole ? uvSW : uvNW;
-        Vector2 uvRing1 = northPole ? uvSE : uvNE;
-        // Prefer equator-facing edge UVs of the tile.
+        Vector2 uvRing0;
+        Vector2 uvRing1;
         if (northPole)
         {
             uvRing0 = uvSW;
@@ -686,31 +761,27 @@ public class PlanetTileMap : MonoBehaviour
             if ((b0 - bPole).sqrMagnitude < 1e-8f || (b1 - bPole).sqrMagnitude < 1e-8f)
                 return;
 
-            // Top wedge
             if (northPole)
-                AddTri(tPole, t0, t1, uvPole, uvRing0, uvRing1, topTint, vertices, normals, uvs, colors, triangles);
+                AddTri(tPole, t0, t1, uvPole, uvRing0, uvRing1, topTint, true, vertices, normals, uvs, colors, triangles);
             else
-                AddTri(tPole, t1, t0, uvPole, uvRing1, uvRing0, topTint, vertices, normals, uvs, colors, triangles);
+                AddTri(tPole, t1, t0, uvPole, uvRing1, uvRing0, topTint, true, vertices, normals, uvs, colors, triangles);
 
-            // Outer ring wall
-            AddQuad(b0, b1, t1, t0, uvRing0, uvRing1, uvRing1, uvRing0, sideTint, vertices, normals, uvs, colors, triangles);
-            // Radial walls
-            AddQuad(bPole, b0, t0, tPole, uvPole, uvRing0, uvRing0, uvPole, sideTint, vertices, normals, uvs, colors, triangles);
-            AddQuad(b1, bPole, tPole, t1, uvRing1, uvPole, uvPole, uvRing1, sideTint, vertices, normals, uvs, colors, triangles);
+            AddQuad(b0, b1, t1, t0, uvRing0, uvRing1, uvRing1, uvRing0, sideTint, false, vertices, normals, uvs, colors, triangles);
+            AddQuad(bPole, b0, t0, tPole, uvPole, uvRing0, uvRing0, uvPole, sideTint, false, vertices, normals, uvs, colors, triangles);
+            AddQuad(b1, bPole, tPole, t1, uvRing1, uvPole, uvPole, uvRing1, sideTint, false, vertices, normals, uvs, colors, triangles);
+            return;
         }
+
+        Vector3 pole = LocalSurfacePoint(poleLat, lonMid, lift);
+        Vector3 r0 = LocalSurfacePoint(ringLat, lon0, lift);
+        Vector3 r1 = LocalSurfacePoint(ringLat, lon1, lift);
+        if ((r0 - pole).sqrMagnitude < 1e-8f || (r1 - pole).sqrMagnitude < 1e-8f)
+            return;
+
+        if (northPole)
+            AddTri(pole, r0, r1, uvPole, uvRing0, uvRing1, topTint, sphericalNormals, vertices, normals, uvs, colors, triangles);
         else
-        {
-            Vector3 pole = LocalSurfacePoint(poleLat, lonMid, lift);
-            Vector3 r0 = LocalSurfacePoint(ringLat, lon0, lift);
-            Vector3 r1 = LocalSurfacePoint(ringLat, lon1, lift);
-            if ((r0 - pole).sqrMagnitude < 1e-8f || (r1 - pole).sqrMagnitude < 1e-8f)
-                return;
-
-            if (northPole)
-                AddTri(pole, r0, r1, uvPole, uvRing0, uvRing1, topTint, vertices, normals, uvs, colors, triangles);
-            else
-                AddTri(pole, r1, r0, uvPole, uvRing1, uvRing0, topTint, vertices, normals, uvs, colors, triangles);
-        }
+            AddTri(pole, r1, r0, uvPole, uvRing1, uvRing0, topTint, sphericalNormals, vertices, normals, uvs, colors, triangles);
     }
 
     static bool IsUsableFace(Vector3 a, Vector3 b, Vector3 c, Vector3 d)
@@ -721,6 +792,11 @@ public class PlanetTileMap : MonoBehaviour
         return n.sqrMagnitude > planetScale * 1e-10f;
     }
 
+    static Vector3 RadialNormal(Vector3 point, Vector3 fallback)
+    {
+        return point.sqrMagnitude > 1e-8f ? point.normalized : fallback;
+    }
+
     static void AddTri(
         Vector3 a,
         Vector3 b,
@@ -729,6 +805,7 @@ public class PlanetTileMap : MonoBehaviour
         Vector2 uvB,
         Vector2 uvC,
         Color color,
+        bool sphericalNormals,
         List<Vector3> vertices,
         List<Vector3> normals,
         List<Vector2> uvs,
@@ -756,9 +833,18 @@ public class PlanetTileMap : MonoBehaviour
         vertices.Add(a);
         vertices.Add(b);
         vertices.Add(c);
-        normals.Add(n);
-        normals.Add(n);
-        normals.Add(n);
+        if (sphericalNormals)
+        {
+            normals.Add(RadialNormal(a, n));
+            normals.Add(RadialNormal(b, n));
+            normals.Add(RadialNormal(c, n));
+        }
+        else
+        {
+            normals.Add(n);
+            normals.Add(n);
+            normals.Add(n);
+        }
         uvs.Add(uvA);
         uvs.Add(uvB);
         uvs.Add(uvC);
@@ -780,6 +866,7 @@ public class PlanetTileMap : MonoBehaviour
         Vector2 uvC,
         Vector2 uvD,
         Color color,
+        bool sphericalNormals,
         List<Vector3> vertices,
         List<Vector3> normals,
         List<Vector2> uvs,
@@ -812,10 +899,20 @@ public class PlanetTileMap : MonoBehaviour
         vertices.Add(b);
         vertices.Add(c);
         vertices.Add(d);
-        normals.Add(n);
-        normals.Add(n);
-        normals.Add(n);
-        normals.Add(n);
+        if (sphericalNormals)
+        {
+            normals.Add(RadialNormal(a, n));
+            normals.Add(RadialNormal(b, n));
+            normals.Add(RadialNormal(c, n));
+            normals.Add(RadialNormal(d, n));
+        }
+        else
+        {
+            normals.Add(n);
+            normals.Add(n);
+            normals.Add(n);
+            normals.Add(n);
+        }
         uvs.Add(uvA);
         uvs.Add(uvB);
         uvs.Add(uvC);
@@ -847,6 +944,10 @@ public class PlanetTileMap : MonoBehaviour
             mat.SetColor("_BaseColor", Color.white);
         else
             mat.color = Color.white;
+        if (mat.HasProperty("_ShadeFloor"))
+            mat.SetFloat("_ShadeFloor", enableBlocks ? 0.55f : 0.82f);
+        if (mat.HasProperty("_ShadeCeil"))
+            mat.SetFloat("_ShadeCeil", enableBlocks ? 1.05f : 1.02f);
 
         Texture2D tex = tileset.Texture;
         if (tex != null)

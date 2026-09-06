@@ -1,9 +1,12 @@
-Shader "BackHome/Hud/VitalsBarUnlit"
+Shader "BackHome/Hud/VitalsBarText"
 {
     Properties
     {
-        [PerRendererData] _MainTex("Sprite Texture", 2D) = "white" {}
+        [PerRendererData] _MainTex("Font Atlas", 2D) = "white" {}
         _Color("Tint", Color) = (1, 1, 1, 1)
+        _FaceColor("Face Color", Color) = (1, 1, 1, 1)
+        _OutlineColor("Outline Color", Color) = (0, 0, 0, 0.85)
+        _OutlineWidth("Outline", Range(0, 0.5)) = 0.18
     }
 
     SubShader
@@ -11,10 +14,9 @@ Shader "BackHome/Hud/VitalsBarUnlit"
         Tags
         {
             "RenderType" = "Transparent"
-            "Queue" = "Transparent"
+            "Queue" = "Overlay+100"
             "RenderPipeline" = "UniversalPipeline"
             "IgnoreProjector" = "True"
-            "CanUseSpriteAtlas" = "True"
         }
 
         Pass
@@ -38,6 +40,9 @@ Shader "BackHome/Hud/VitalsBarUnlit"
             CBUFFER_START(UnityPerMaterial)
                 float4 _MainTex_ST;
                 half4 _Color;
+                half4 _FaceColor;
+                half4 _OutlineColor;
+                half _OutlineWidth;
             CBUFFER_END
 
             struct Attributes
@@ -59,14 +64,19 @@ Shader "BackHome/Hud/VitalsBarUnlit"
                 Varyings output;
                 output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
                 output.uv = TRANSFORM_TEX(input.uv, _MainTex);
-                output.color = input.color * _Color;
+                output.color = input.color * _Color * _FaceColor;
                 return output;
             }
 
             half4 frag(Varyings input) : SV_Target
             {
-                half4 tex = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
-                return tex * input.color;
+                half sdf = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv).a;
+                half smoothing = max(fwidth(sdf) * 0.75, 0.04);
+                half fill = smoothstep(0.5 - smoothing, 0.5 + smoothing, sdf);
+                half outline = smoothstep(0.5 - _OutlineWidth - smoothing, 0.5 - _OutlineWidth + smoothing, sdf);
+                half4 color = lerp(_OutlineColor, input.color, fill);
+                color.a *= max(fill, outline * _OutlineColor.a);
+                return color;
             }
             ENDHLSL
         }

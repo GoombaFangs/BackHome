@@ -169,8 +169,7 @@ public class VitalsBars : MonoBehaviour
         if (HideUntilDamaged)
             return;
 
-        if (!bars.gameObject.activeSelf)
-            bars.gameObject.SetActive(true);
+        ShowBarsImmediate();
     }
 
     void OnDamaged(float _)
@@ -222,6 +221,21 @@ public class VitalsBars : MonoBehaviour
         bars.SetAlpha(1f);
     }
 
+    void ShowBarsImmediate()
+    {
+        _revealTimer = 0f;
+        _alpha = 1f;
+        if (bars == null)
+            return;
+
+        if (!bars.gameObject.activeSelf)
+            bars.gameObject.SetActive(true);
+        // HideBarsImmediate zeros alpha. Player bars do not use the damage-fade path, so
+        // activating the object alone would leave them fully transparent.
+        bars.SetAlpha(1f);
+        EnsureBarRenderersEnabled();
+    }
+
     void HideBarsImmediate()
     {
         _revealTimer = 0f;
@@ -232,6 +246,16 @@ public class VitalsBars : MonoBehaviour
         bars.SetAlpha(0f);
         if (bars.gameObject.activeSelf)
             bars.gameObject.SetActive(false);
+    }
+
+    void EnsureBarRenderersEnabled()
+    {
+        Renderer[] renderers = bars.GetComponentsInChildren<Renderer>(true);
+        for (int i = 0; i < renderers.Length; i++)
+        {
+            if (renderers[i] != null)
+                renderers[i].enabled = true;
+        }
     }
 
     static float ApproxInverse(float value)

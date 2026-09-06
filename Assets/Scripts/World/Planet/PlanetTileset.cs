@@ -150,8 +150,8 @@ public class PlanetTileset : ScriptableObject
         float b = rowFromBottom / (float)rows;
         float c = (col + 1) / (float)cols;
         float d = (rowFromBottom + 1) / (float)rows;
-        float padU = 0.5f / texture.width;
-        float padV = 0.5f / texture.height;
+        float padU = 1.5f / texture.width;
+        float padV = 1.5f / texture.height;
         a += padU;
         b += padV;
         c -= padU;

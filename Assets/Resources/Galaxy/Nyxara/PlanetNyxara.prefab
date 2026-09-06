@@ -77,6 +77,18 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 500003, guid: aa06111e000000000000000000000006, type: 3}
+      propertyPath: alternateTint
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 500003, guid: aa06111e000000000000000000000006, type: 3}
+      propertyPath: seamOverlap
+      value: 0.012
+      objectReference: {fileID: 0}
+    - target: {fileID: 500003, guid: aa06111e000000000000000000000006, type: 3}
+      propertyPath: cellSubdivisions
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 500003, guid: aa06111e000000000000000000000006, type: 3}
       propertyPath: longitudeBands
       value: 72
       objectReference: {fileID: 0}

@@ -5,19 +5,20 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// Imports a 32×32 Nyxara tilesheet into a single PlanetTileset asset.
-/// Expects a proper tileset (any size divisible by 32). Skips black/empty cells.
-/// Classifies Grass / Shadow Grass corners; synthesizes missing orientations via UV flips only when needed.
+/// Imports a Nyxara wang tilesheet into a single PlanetTileset asset.
+/// Classic layout is 5 columns × 4 rows. Cell size is detected from the PNG
+/// (32, 64, 128, 256, or width/5 when the sheet is that 5×4 grid).
+/// Skips black/empty cells. Classifies Grass / Shadow Grass corners; synthesizes
+/// missing orientations via UV flips only when needed.
 /// </summary>
 public static class NyxaraTileAtlasImporter
 {
-    const string SourceTexture = "Assets/Resources/Galaxy/Planets/Nyxara/Tiles/Textures/NyxaraTileMap.png";
-    const string TilesetPath = "Assets/Resources/Galaxy/Planets/Nyxara/Tiles/NyxaraTileset.asset";
-    const int TileSize = 32;
+    const string SourceTexture = "Assets/Resources/Galaxy/Nyxara/Tiles/Textures/NyxaraTileMap.png";
+    const string TilesetPath = "Assets/Resources/Galaxy/Nyxara/Tiles/NyxaraTileset.asset";
 
-    // Tuned for current Nyxara grass / shadow-grass palette.
-    static readonly Color32 GrassRgb = new Color32(51, 176, 51, 255);
-    static readonly Color32 ShadowGrassRgb = new Color32(141, 94, 61, 255);
+    // Tuned for the current lime-grass / dark-green shadow-grass palette.
+    static readonly Color32 GrassRgb = new Color32(123, 216, 60, 255);
+    static readonly Color32 ShadowGrassRgb = new Color32(36, 151, 57, 255);
 
     struct SrcTile
     {
@@ -47,11 +48,14 @@ public static class NyxaraTileAtlasImporter
             return;
         }
 
-        if (source.width % TileSize != 0 || source.height % TileSize != 0)
+        int tileSize = DetectTileSize(source.width, source.height);
+        if (tileSize <= 0
+            || source.width % tileSize != 0
+            || source.height % tileSize != 0)
         {
             EditorUtility.DisplayDialog(
                 "Nyxara Tileset",
-                $"Tilesheet must be divisible by {TileSize}px.\nGot {source.width}×{source.height}.",
+                $"Tilesheet must be a regular grid (5×4 wang sheet, or cells of 16–256px).\nGot {source.width}×{source.height}.",
                 "OK");
             return;
         }
@@ -60,8 +64,8 @@ public static class NyxaraTileAtlasImporter
         source = AssetDatabase.LoadAssetAtPath<Texture2D>(SourceTexture);
         ConfigureSourceImporter(SourceTexture);
 
-        int cols = source.width / TileSize;
-        int rows = source.height / TileSize;
+        int cols = source.width / tileSize;
+        int rows = source.height / tileSize;
         Color32[] pixels = source.GetPixels32();
 
         var unique = new List<SrcTile>();
@@ -72,13 +76,13 @@ public static class NyxaraTileAtlasImporter
         {
             for (int col = 0; col < cols; col++)
             {
-                if (IsMostlyBlack(pixels, source.width, source.height, col, row, TileSize))
+                if (IsMostlyBlack(pixels, source.width, source.height, col, row, tileSize))
                 {
                     skippedEmpty++;
                     continue;
                 }
 
-                string key = Convert.ToBase64String(HashTile(pixels, source.width, source.height, col, row, TileSize));
+                string key = Convert.ToBase64String(HashTile(pixels, source.width, source.height, col, row, tileSize));
                 if (!seen.Add(key))
                     continue;
 
@@ -86,7 +90,7 @@ public static class NyxaraTileAtlasImporter
                 {
                     col = col,
                     row = row,
-                    dirtCorners = SampleDirtCorners(pixels, source.width, source.height, col, row, TileSize)
+                    dirtCorners = SampleDirtCorners(pixels, source.width, source.height, col, row, tileSize)
                 });
             }
         }
@@ -177,7 +181,7 @@ public static class NyxaraTileAtlasImporter
         }
 
         atlasTiles.Sort((a, b) => string.CompareOrdinal(a.id, b.id));
-        WriteTileset(source, atlasTiles, cornersToId);
+        WriteTileset(source, tileSize, atlasTiles, cornersToId);
 
         EnsureReadable(SourceTexture, false);
         AssetDatabase.SaveAssets();
@@ -192,7 +196,7 @@ public static class NyxaraTileAtlasImporter
         }
 
         Debug.Log(
-            $"[BackHome] Nyxara tilesheet {source.width}×{source.height} ({cols}×{rows} @ {TileSize}px). " +
+            $"[BackHome] Nyxara tilesheet {source.width}×{source.height} ({cols}×{rows} @ {tileSize}px). " +
             $"Unique={unique.Count}, empty skipped={skippedEmpty}, entries={atlasTiles.Count} (natural={natural}).");
 
         EditorUtility.DisplayDialog(
@@ -235,7 +239,27 @@ public static class NyxaraTileAtlasImporter
         b = t;
     }
 
-    static void WriteTileset(Texture2D source, List<AtlasTile> tiles, Dictionary<int, string> cornerToAtlasId)
+    static int DetectTileSize(int width, int height)
+    {
+        if (width <= 0 || height <= 0)
+            return 0;
+
+        // Classic Nyxara wang sheet: 5 columns × 4 rows, any cell size.
+        if (width % 5 == 0 && height % 4 == 0 && width / 5 == height / 4)
+            return width / 5;
+
+        int[] candidates = { 256, 128, 96, 64, 48, 32, 16 };
+        for (int i = 0; i < candidates.Length; i++)
+        {
+            int size = candidates[i];
+            if (width % size == 0 && height % size == 0)
+                return size;
+        }
+
+        return 0;
+    }
+
+    static void WriteTileset(Texture2D source, int tileSize, List<AtlasTile> tiles, Dictionary<int, string> cornerToAtlasId)
     {
         var entries = new PlanetTileset.Entry[tiles.Count];
         for (int i = 0; i < tiles.Count; i++)
@@ -257,7 +281,7 @@ public static class NyxaraTileAtlasImporter
         {
             id = "Grass",
             displayName = "Grass",
-            previewColor = new Color(0.2f, 0.69f, 0.2f),
+            previewColor = new Color(0.48f, 0.85f, 0.24f),
             walkable = true,
             zoneId = "grass",
             fillAtlasId = "Fill_Grass",
@@ -270,7 +294,7 @@ public static class NyxaraTileAtlasImporter
         {
             id = "ShadowGrass",
             displayName = "Shadow Grass",
-            previewColor = new Color(0.22f, 0.38f, 0.18f),
+            previewColor = new Color(0.14f, 0.59f, 0.22f),
             walkable = true,
             zoneId = "shadow_grass",
             fillAtlasId = "Fill_ShadowGrass",
@@ -305,7 +329,7 @@ public static class NyxaraTileAtlasImporter
             AssetDatabase.CreateAsset(tileset, TilesetPath);
         }
 
-        tileset.Configure(source, TileSize, entries, new[] { grass, shadowGrass });
+        tileset.Configure(source, tileSize, entries, new[] { grass, shadowGrass });
         EditorUtility.SetDirty(tileset);
     }
 
@@ -378,14 +402,17 @@ public static class NyxaraTileAtlasImporter
     {
         int baseX = col * size;
         int topY = height - row * size - 1;
+        int corner = Mathf.Max(4, size / 4);
+        int inset = Mathf.Max(1, size / 32);
+        int far = Mathf.Max(inset, size - inset - corner);
 
         bool CornerDirt(int x0, int y0FromTop)
         {
             int dirt = 0;
             int n = 0;
-            for (int y = y0FromTop; y < y0FromTop + 8 && y < size; y++)
+            for (int y = y0FromTop; y < y0FromTop + corner && y < size; y++)
             {
-                for (int x = x0; x < x0 + 8 && x < size; x++)
+                for (int x = x0; x < x0 + corner && x < size; x++)
                 {
                     Color32 c = pixels[(topY - y) * width + (baseX + x)];
                     if (c.r < 25 && c.g < 25 && c.b < 25)
@@ -398,10 +425,10 @@ public static class NyxaraTileAtlasImporter
         }
 
         int bits = 0;
-        if (CornerDirt(1, 1)) bits |= 8;
-        if (CornerDirt(size - 9, 1)) bits |= 4;
-        if (CornerDirt(size - 9, size - 9)) bits |= 2;
-        if (CornerDirt(1, size - 9)) bits |= 1;
+        if (CornerDirt(inset, inset)) bits |= 8;
+        if (CornerDirt(far, inset)) bits |= 4;
+        if (CornerDirt(far, far)) bits |= 2;
+        if (CornerDirt(inset, far)) bits |= 1;
         return bits;
     }
 
@@ -456,7 +483,7 @@ public static class NyxaraTileAtlasImporter
         importer.textureType = TextureImporterType.Default;
         importer.mipmapEnabled = false;
         importer.sRGBTexture = true;
-        importer.filterMode = FilterMode.Point;
+        importer.filterMode = FilterMode.Bilinear;
         importer.wrapMode = TextureWrapMode.Clamp;
         importer.npotScale = TextureImporterNPOTScale.None;
         importer.textureCompression = TextureImporterCompression.Uncompressed;

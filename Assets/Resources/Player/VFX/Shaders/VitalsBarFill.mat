@@ -7,8 +7,8 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: VitalsBarUnlit
-  m_Shader: {fileID: 4800000, guid: d4e5f6a7b8c90123456789abcdef0123, type: 3}
+  m_Name: VitalsBarFill
+  m_Shader: {fileID: 4800000, guid: c8d1e4a27b9f4c03a6e58d14f2c90b7a, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -29,7 +29,14 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     m_Ints: []
-    m_Floats: []
+    m_Floats:
+    - _BandScale: 6.2
+    - _BubbleAmount: 0.28
+    - _DepthShade: 0.22
+    - _FlowSpeed: 0.26
+    - _Highlight: 0.42
+    - _Meniscus: 0.5
+    - _WaveHeight: 0.032
     m_Colors:
     - _Color: {r: 1, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []
