@@ -5,16 +5,10 @@ using UnityEngine;
 /// Shared, seed-driven biome layout for a planet: partitions the sphere into a handful of
 /// organic blob-shaped regions (nearest-seed / Voronoi-style, same deterministic-noise spirit as
 /// <see cref="PlanetBlobAutotile.GenerateContinents"/>), and lists which tree/grass/rock prefabs
-/// are allowed to spawn in each one.
-///
-/// <see cref="PlanetGrassStreamer"/>, <see cref="PlanetTreeStreamer"/> and <see cref="PlanetRockStreamer"/>
-/// reference the same asset instance so their region boundaries line up spatially — a tile that's
-/// "Region A" for grass is also "Region A" for trees/rocks.
+/// belong in each one.
 ///
 /// Creatures are configured separately via <see cref="CreatureSpawner"/> (spawnEntries / spawnPoints)
 /// — this asset is environment-only.
-///
-/// Menu: BackHome → Setup Nyxara Environment Regions (creates + wires an example asset).
 /// </summary>
 [CreateAssetMenu(menuName = "BackHome/Planet Environment Region Set", fileName = "PlanetEnvironmentRegionSet")]
 public class PlanetEnvironmentRegionSet : ScriptableObject
@@ -31,19 +25,19 @@ public class PlanetEnvironmentRegionSet : ScriptableObject
     public class Region
     {
         public string name = "Region";
-        [Tooltip("Tree variants allowed in this region (streamed by PlanetTreeStreamer).")]
+        [Tooltip("Tree variants allowed in this region.")]
         public WeightedPrefab[] trees = Array.Empty<WeightedPrefab>();
-        [Tooltip("Grass variants allowed in this region (streamed by PlanetGrassStreamer).")]
+        [Tooltip("Grass variants allowed in this region.")]
         public WeightedPrefab[] grass = Array.Empty<WeightedPrefab>();
-        [Tooltip("Rock variants allowed in this region (streamed by PlanetRockStreamer).")]
+        [Tooltip("Rock variants allowed in this region.")]
         public WeightedPrefab[] rocks = Array.Empty<WeightedPrefab>();
 
         [Header("Amount (per region)")]
-        [Tooltip("Multiplier on PlanetTreeStreamer's global density in this region. 0 = no trees, 1 = same as streamer, 2 = twice as many.")]
+        [Tooltip("Multiplier on global tree density in this region. 0 = no trees, 1 = same as global, 2 = twice as many.")]
         [Min(0f)] public float treeDensity = 1f;
-        [Tooltip("Multiplier on PlanetGrassStreamer's global density in this region. Also scales bonus clump chance.")]
+        [Tooltip("Multiplier on global grass density in this region.")]
         [Min(0f)] public float grassDensity = 1f;
-        [Tooltip("Multiplier on PlanetRockStreamer's global density in this region.")]
+        [Tooltip("Multiplier on global rock density in this region.")]
         [Min(0f)] public float rockDensity = 1f;
     }
 
@@ -62,7 +56,7 @@ public class PlanetEnvironmentRegionSet : ScriptableObject
     [NonSerialized] int _cachedRegionCount;
     [NonSerialized] bool _cacheBuilt;
 
-    /// <summary>Debug/gizmo access to the cached blob seeds — lets streamers sketch region layout
+    /// <summary>Debug/gizmo access to the cached blob seeds — lets tools sketch region layout
     /// in the Scene view without duplicating the seed-generation logic.</summary>
     public int DebugSeedCount
     {
@@ -83,7 +77,7 @@ public class PlanetEnvironmentRegionSet : ScriptableObject
         return regions[index];
     }
 
-    /// <summary>Effective spawn density for a category: streamer global density × this region's multiplier (clamped 0–1).</summary>
+    /// <summary>Effective spawn density for a category: global density × this region's multiplier (clamped 0–1).</summary>
     public float GetEffectiveDensity(float streamerDensity, int regionIndex, float regionMultiplier)
     {
         if (regionIndex < 0)

@@ -12,7 +12,7 @@ using UnityEngine;
 /// </summary>
 public static class NyxaraPropPrefabSetup
 {
-    const string Root = "Assets/Resources/Galaxy/Planets/Nyxara";
+    const string Root = "Assets/Resources/Galaxy/Nyxara";
     const string EnvironmentRoot = Root + "/Environment";
     const string GroundLayerName = "Ground";
 

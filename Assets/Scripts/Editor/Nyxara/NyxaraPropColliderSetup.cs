@@ -20,7 +20,7 @@ using UnityEngine;
 /// </summary>
 public static class NyxaraPropColliderSetup
 {
-    const string PrefabsFolder = "Assets/Resources/Galaxy/Planets/Nyxara/Environment";
+    const string PrefabsFolder = "Assets/Resources/Galaxy/Nyxara/Environment";
     const string GroundLayerName = "Ground";
 
     /// <summary>Max boxes generated per mesh — keeps physics cheap while still hugging the shape.</summary>

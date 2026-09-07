@@ -487,8 +487,8 @@ MonoBehaviour:
   recoverThreshold: 0.33
   minBpm: 72
   maxBpm: 148
-  minShake: 0.04
-  maxShake: 0.09
+  minShake: 0.028
+  maxShake: 0.06
   overlayMaterial: {fileID: 2100000, guid: 7f8091a2b34c5d6e7f8091a2b34c5d6e, type: 2}
   fadeIn: 0.22
   fadeOut: 0.35

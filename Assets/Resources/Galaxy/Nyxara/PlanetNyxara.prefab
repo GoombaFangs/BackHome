@@ -1,5 +1,36 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &6923468453969249752
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7555233394709475846}
+  m_Layer: 3
+  m_Name: Areas
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &7555233394709475846
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6923468453969249752}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3984841002101490396}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &3984841002101531645
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -8,6 +39,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: -5432105065406432200, guid: aa06111e000000000000000000000006, type: 3}
+      propertyPath: m_Radius
+      value: 75
+      objectReference: {fileID: 0}
     - target: {fileID: -4894461237539558959, guid: aa06111e000000000000000000000006, type: 3}
       propertyPath: m_Enabled
       value: 0
@@ -61,6 +96,10 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 500002, guid: aa06111e000000000000000000000006, type: 3}
+      propertyPath: radius
+      value: 75
+      objectReference: {fileID: 0}
+    - target: {fileID: 500002, guid: aa06111e000000000000000000000006, type: 3}
       propertyPath: albedoTexture
       value: 
       objectReference: {fileID: 2800000, guid: c0b7d1e0a070e1000000000000000013, type: 3}
@@ -73,6 +112,10 @@ PrefabInstance:
       value: 0.05
       objectReference: {fileID: 0}
     - target: {fileID: 500003, guid: aa06111e000000000000000000000006, type: 3}
+      propertyPath: seamOverlap
+      value: 0.012
+      objectReference: {fileID: 0}
+    - target: {fileID: 500003, guid: aa06111e000000000000000000000006, type: 3}
       propertyPath: enableBlocks
       value: 0
       objectReference: {fileID: 0}
@@ -81,16 +124,12 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 500003, guid: aa06111e000000000000000000000006, type: 3}
-      propertyPath: seamOverlap
-      value: 0.012
+      propertyPath: longitudeBands
+      value: 72
       objectReference: {fileID: 0}
     - target: {fileID: 500003, guid: aa06111e000000000000000000000006, type: 3}
       propertyPath: cellSubdivisions
       value: 2
-      objectReference: {fileID: 0}
-    - target: {fileID: 500003, guid: aa06111e000000000000000000000006, type: 3}
-      propertyPath: longitudeBands
-      value: 72
       objectReference: {fileID: 0}
     - target: {fileID: 500003, guid: aa06111e000000000000000000000006, type: 3}
       propertyPath: terrainIds.Array.size
@@ -15770,6 +15809,14 @@ PrefabInstance:
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
-    m_AddedGameObjects: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: 500001, guid: aa06111e000000000000000000000006, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 7555233394709475846}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: aa06111e000000000000000000000006, type: 3}
+--- !u!4 &3984841002101490396 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 500001, guid: aa06111e000000000000000000000006, type: 3}
+  m_PrefabInstance: {fileID: 3984841002101531645}
+  m_PrefabAsset: {fileID: 0}

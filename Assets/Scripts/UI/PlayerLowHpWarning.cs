@@ -27,8 +27,8 @@ public class PlayerLowHpWarning : MonoBehaviour
     [Header("Heartbeat")]
     [SerializeField, Min(30f)] float minBpm = 72f;
     [SerializeField, Min(30f)] float maxBpm = 148f;
-    [SerializeField, Min(0f)] float minShake = 0.04f;
-    [SerializeField, Min(0f)] float maxShake = 0.09f;
+    [SerializeField, Min(0f)] float minShake = 0.028f;
+    [SerializeField, Min(0f)] float maxShake = 0.06f;
 
     [Header("Overlay")]
     [SerializeField] Material overlayMaterial;

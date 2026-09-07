@@ -30,11 +30,6 @@ public class PlayerCrashIntro : MonoBehaviour
         "Leave empty to load ImpactVfx from Resources (see PlayerDiveDownCapsulePaths).")]
     [SerializeField] GameObject impactEffectPrefab;
 
-    [Header("Landing Site")]
-    [Tooltip("Clears streamed planet environment (grass/trees/rocks) in a disk around the crash " +
-        "site. Also used if SceneBootstrap has to place the player without running this cinematic.")]
-    [SerializeField, Min(0f)] float spawnRadius = 4f;
-
     [Header("Incoming Portal")]
     [Tooltip("Portal that falls in after the player. Leave empty to load Portal/Portal from Resources.")]
     [SerializeField] GameObject portalPrefab;
@@ -91,9 +86,6 @@ public class PlayerCrashIntro : MonoBehaviour
 
     /// <summary>Raised once locomotion is unlocked (land clip finished or skipped by move).</summary>
     public event Action OnLanded;
-
-    /// <summary>World-space radius of the environment exclusion disk around the crash site.</summary>
-    public float SpawnRadius => spawnRadius;
 
     const string DefaultPortalResource = "Portal/Portal";
     const string DefaultPortalImpactResource = "Portal/PortalImpactVfx";
@@ -655,11 +647,6 @@ public class PlayerCrashIntro : MonoBehaviour
         if (portal.GetComponent<PlayerCapsuleBeacon>() == null)
             portal.AddComponent<PlayerCapsuleBeacon>();
 
-        PlanetEnvironmentExclusionZone zone = portal.GetComponent<PlanetEnvironmentExclusionZone>();
-        if (zone == null)
-            zone = portal.AddComponent<PlanetEnvironmentExclusionZone>();
-        zone.SetPlayerSpawnRadius(spawnRadius);
-
         if (_landingSite != null)
         {
             PlayerCapsuleBeacon siteBeacon = _landingSite.GetComponent<PlayerCapsuleBeacon>();
@@ -745,9 +732,8 @@ public class PlayerCrashIntro : MonoBehaviour
         return true;
     }
 
-    /// <summary>Invisible marker at the crash site: keeps grass/trees off the landing disk and
-    /// hosts <see cref="PlayerCapsuleBeacon"/> so the home arrow still points here after the
-    /// cinematic capsule is hidden.</summary>
+    /// <summary>Invisible marker at the crash site: hosts <see cref="PlayerCapsuleBeacon"/> so
+    /// the home arrow still points here after the cinematic capsule is hidden.</summary>
     void EnsureLandingSite(Vector3 position, Quaternion rotation)
     {
         if (_landingSite != null)
@@ -755,9 +741,6 @@ public class PlayerCrashIntro : MonoBehaviour
 
         GameObject site = new GameObject("CrashLandingSite");
         site.transform.SetPositionAndRotation(position, rotation);
-
-        PlanetEnvironmentExclusionZone zone = site.AddComponent<PlanetEnvironmentExclusionZone>();
-        zone.SetPlayerSpawnRadius(spawnRadius);
 
         if (site.GetComponent<PlayerCapsuleBeacon>() == null)
             site.AddComponent<PlayerCapsuleBeacon>();
