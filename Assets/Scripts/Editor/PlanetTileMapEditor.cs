@@ -53,7 +53,15 @@ public class PlanetTileMapEditor : Editor
         }
 
         EditorGUILayout.Space(8);
-        DrawPropertiesExcluding(serializedObject, "m_Script", "tilesAroundEquator", "tileIndices", "terrainIds");
+        DrawWorkPlanInspector();
+        EditorGUILayout.Space(8);
+        DrawPropertiesExcluding(
+            serializedObject,
+            "m_Script",
+            "tilesAroundEquator",
+            "tileIndices",
+            "terrainIds",
+            "workPlan");
         serializedObject.ApplyModifiedProperties();
 
         EditorGUILayout.Space(10);
@@ -590,5 +598,22 @@ public class PlanetTileMapEditor : Editor
         EditorUtility.SetDirty(map);
         if (PrefabUtility.IsPartOfPrefabInstance(map))
             PrefabUtility.RecordPrefabInstancePropertyModifications(map);
+    }
+
+    void DrawWorkPlanInspector()
+    {
+        SerializedProperty plan = serializedObject.FindProperty("workPlan");
+        if (plan == null)
+            return;
+
+        EditorGUILayout.LabelField("Terrain Work Plan", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+            "Ridge/cliff planning on this PlanetTileMap. Generation still ignores it until a later stage. " +
+            "Enable only in the A2 study scene. Do not Apply Prefab overrides back onto PlanetNyxara.",
+            MessageType.Info);
+        EditorGUI.BeginChangeCheck();
+        EditorGUILayout.PropertyField(plan, includeChildren: true);
+        if (EditorGUI.EndChangeCheck())
+            serializedObject.ApplyModifiedProperties();
     }
 }

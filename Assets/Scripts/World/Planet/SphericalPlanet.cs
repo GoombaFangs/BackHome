@@ -64,6 +64,28 @@ public class SphericalPlanet : MonoBehaviour
 
     public Vector3 Center => transform.position;
     public float Radius => radius;
+
+    /// <summary>
+    /// Planet-local +Y. Agreed north for Nyxara layout: positive latitude, away from the south cliff.
+    /// </summary>
+    public Vector3 LocalNorth => transform.up;
+
+    /// <summary>Planet-local space to world. Identity while the planet sits at the origin with scale 1.</summary>
+    public Matrix4x4 PlanetLocalToWorld => transform.localToWorldMatrix;
+
+    /// <summary>World to planet-local space. Inverse of <see cref="PlanetLocalToWorld"/>.</summary>
+    public Matrix4x4 WorldToPlanetLocal => transform.worldToLocalMatrix;
+
+    /// <summary>
+    /// Signed radial offset from the gameplay radius, in planet-local units.
+    /// Positive is a ridge (away from center); negative is a cliff (toward center).
+    /// </summary>
+    public float GetRadialHeight(Vector3 worldPosition)
+    {
+        Vector3 local = WorldToPlanetLocal.MultiplyPoint3x4(worldPosition);
+        return local.magnitude - radius;
+    }
+
     public bool HasHeightTerrain =>
         useVisualShell
         && shellHeightMap != null

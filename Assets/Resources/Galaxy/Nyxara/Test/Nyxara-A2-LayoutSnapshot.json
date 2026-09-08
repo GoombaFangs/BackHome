@@ -1,0 +1,87 @@
+{
+  "sourcePrefab": "Assets/Resources/Galaxy/Nyxara/PlanetNyxara.prefab",
+  "sourceScene": "Assets/Scenes/PlanetNyxara.unity",
+  "studyScene": "Assets/Scenes/PlanetNyxaraTerrainStudy.unity",
+  "coordinateFrames": {
+    "north": "Planet-local +Y (positive latitude)",
+    "height": "Radial distance from planet center minus SphericalPlanet.radius",
+    "planetLocalToWorld": [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],
+    "worldToPlanetLocal": [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],
+    "planetRootLocalPosition": [0,0,0],
+    "planetRootLocalRotation": [0,0,0,1],
+    "planetRootLocalScale": [1,1,1],
+    "planetTileMapLongitude": "atan2(z, x), 0 at local +X, + toward +Z",
+    "studyLongitude": "atan2(x, z), 0 at local +Z, + toward +X",
+    "notes": "Current PlanetNyxara scene instance has identity TRS, so planet-local equals world. Do not mix longitude frames."
+  },
+  "planetRadiusLocal": 75,
+  "areaCount": 9,
+  "wallCount": 24,
+  "sectorA2": {
+    "sectorId": "A2",
+    "planetTileMapLongitude": [40, 70],
+    "studyLongitude": [20, 50],
+    "latitude": [-28, 36],
+    "ridgeHeightTest": 24,
+    "cliffDepthTest": 13,
+    "cliffDepthProposedRange": [12, 14],
+    "playableMargin": 1,
+    "detailLevel": 2,
+    "useOptionalSouthCliffShift": false,
+    "optionalSouthCliffShiftUnits": 7.487462491055678
+  },
+  "areas": [
+    {"name":"A5","localPosition":[-67.7,12.5,-38.4],"localRotation":[-0.074,-0.957,-0.021,-0.279],"localScale":[25,25,25],"planetLocalRadius":78.83,"studyLongitude":-119.56,"studyLatitude":9.12,"tileMapLongitude":209.562,"tileMapLatitude":9.124,"isTrigger":true},
+    {"name":"H","localPosition":[74.8,0,-13.2],"localRotation":[0,0,0,1],"localScale":[30,30,30],"planetLocalRadius":75.96,"studyLongitude":100.01,"studyLatitude":0,"tileMapLongitude":349.992,"tileMapLatitude":0,"isTrigger":true},
+    {"name":"A2","localPosition":[43.2,-7,62.8],"localRotation":[-0.009,-0.539,0.014,0.842],"localScale":[25,25,25],"planetLocalRadius":76.54,"studyLongitude":34.52,"studyLatitude":-5.25,"tileMapLongitude":55.476,"tileMapLatitude":-5.247,"isTrigger":true},
+    {"name":"B","localPosition":[18.7,8,-53.5],"localRotation":[-0.004,-0.57,-0.006,-0.822],"localScale":[60,60,60],"planetLocalRadius":57.24,"studyLongitude":160.73,"studyLatitude":8.03,"tileMapLongitude":289.266,"tileMapLatitude":8.035,"isTrigger":true},
+    {"name":"A1","localPosition":[64.6,23.6,36],"localRotation":[-0.043,-0.223,0.185,0.956],"localScale":[25,25,25],"planetLocalRadius":77.63,"studyLongitude":60.87,"studyLatitude":17.7,"tileMapLongitude":29.13,"tileMapLatitude":17.699,"isTrigger":true},
+    {"name":"A4","localPosition":[-63.6,13.7,44],"localRotation":[-0.075,-0.976,0.016,0.205],"localScale":[25,25,25],"planetLocalRadius":78.54,"studyLongitude":-55.32,"studyLatitude":10.05,"tileMapLongitude":145.324,"tileMapLatitude":10.046,"isTrigger":true},
+    {"name":"R2","localPosition":[-72.4,5.3,7.8],"localRotation":[0,-1,0,-0.025],"localScale":[20,20,20],"planetLocalRadius":73.01,"studyLongitude":-83.85,"studyLatitude":4.16,"tileMapLongitude":173.851,"tileMapLatitude":4.163,"isTrigger":true},
+    {"name":"A3","localPosition":[-17.3,-22.6,72.2],"localRotation":[-0.013,-0.801,0.01,0.599],"localScale":[25,25,25],"planetLocalRadius":77.61,"studyLongitude":-13.47,"studyLatitude":-16.93,"tileMapLongitude":103.475,"tileMapLatitude":-16.93,"isTrigger":true},
+    {"name":"R1","localPosition":[8.4,12.9,76.5],"localRotation":[0,-0.592,0,0.806],"localScale":[20,20,20],"planetLocalRadius":78.03,"studyLongitude":6.27,"studyLatitude":9.52,"tileMapLongitude":83.734,"tileMapLatitude":9.518,"isTrigger":true}
+  ],
+  "walls": [
+    {"name":"Cube (22)","localPosition":[48.4,37.6,-45.9],"localRotation":[-0.748,-0.368,0.466,-0.297],"localScale":[56.7,43.9,2],"planetLocalRadius":76.57,"studyLongitude":133.48,"studyLatitude":29.41,"tileMapLongitude":316.519,"tileMapLatitude":29.409,"isTrigger":false},
+    {"name":"Cube (9)","localPosition":[-41.9,-47.7,54.7],"localRotation":[-0.559,0.044,-0.338,0.756],"localScale":[56.7,60.7,2],"planetLocalRadius":83.8,"studyLongitude":-37.45,"studyLatitude":-34.69,"tileMapLongitude":127.45,"tileMapLatitude":-34.687,"isTrigger":false},
+    {"name":"Cube (7)","localPosition":[18.3,-21.4,67.5],"localRotation":[0.368,-0.592,0.296,0.653],"localScale":[56.7,43.9,2],"planetLocalRadius":73.14,"studyLongitude":15.17,"studyLatitude":-17.01,"tileMapLongitude":74.831,"tileMapLatitude":-17.014,"isTrigger":false},
+    {"name":"Cube (17)","localPosition":[-6.4,51.4,-62.4],"localRotation":[-0.527,-0.584,0.509,-0.35],"localScale":[56.7,43.9,2],"planetLocalRadius":81.1,"studyLongitude":-174.14,"studyLatitude":39.33,"tileMapLongitude":264.144,"tileMapLatitude":39.332,"isTrigger":false},
+    {"name":"Cube (11)","localPosition":[-53.4,31,54.6],"localRotation":[0.205,-0.75,0.535,0.331],"localScale":[56.7,43.9,2],"planetLocalRadius":82.42,"studyLongitude":-44.36,"studyLatitude":22.09,"tileMapLongitude":134.363,"tileMapLatitude":22.093,"isTrigger":false},
+    {"name":"Cube","localPosition":[65.13,27.4,-7.4],"localRotation":[0.572,-0.011,0.016,0.82],"localScale":[35,75.2,2],"planetLocalRadius":71.05,"studyLongitude":96.48,"studyLatitude":22.69,"tileMapLongitude":353.518,"tileMapLatitude":22.685,"isTrigger":false},
+    {"name":"Cube (14)","localPosition":[-76.2,-10.7,5.5],"localRotation":[0.085,-0.724,0.673,0.125],"localScale":[56.7,43.9,2],"planetLocalRadius":77.14,"studyLongitude":-85.87,"studyLatitude":-7.97,"tileMapLongitude":175.872,"tileMapLatitude":-7.973,"isTrigger":false},
+    {"name":"Cube (18)","localPosition":[-13,-35.4,-62.5],"localRotation":[-0.527,-0.584,0.509,-0.35],"localScale":[56.7,43.9,2],"planetLocalRadius":73,"studyLongitude":-168.25,"studyLatitude":-29.01,"tileMapLongitude":258.25,"tileMapLatitude":-29.01,"isTrigger":false},
+    {"name":"Cube (19)","localPosition":[-43.1,45.3,-57.9],"localRotation":[0.27,-0.806,0.525,0.043],"localScale":[56.7,43.9,2],"planetLocalRadius":85.22,"studyLongitude":-143.34,"studyLatitude":32.11,"tileMapLongitude":233.336,"tileMapLatitude":32.112,"isTrigger":false},
+    {"name":"Cube (5)","localPosition":[2.4,26.1,66.9],"localRotation":[0.62,-0.346,0.356,0.607],"localScale":[56.7,43.9,2],"planetLocalRadius":71.85,"studyLongitude":2.05,"studyLatitude":21.3,"tileMapLongitude":87.945,"tileMapLatitude":21.3,"isTrigger":false},
+    {"name":"Cube (23)","localPosition":[52.5,24.9,-40],"localRotation":[-0.88,-0.243,0.284,-0.294],"localScale":[56.7,43.9,2],"planetLocalRadius":70.54,"studyLongitude":127.3,"studyLatitude":20.67,"tileMapLongitude":322.696,"tileMapLatitude":20.67,"isTrigger":false},
+    {"name":"Cube (3)","localPosition":[37.4,39.7,40.4],"localRotation":[0.68,-0.213,0.22,0.666],"localScale":[56.7,70.1,2],"planetLocalRadius":67.87,"studyLongitude":42.79,"studyLatitude":35.8,"tileMapLongitude":47.208,"tileMapLatitude":35.796,"isTrigger":false},
+    {"name":"Cube (6)","localPosition":[-25.5,25.2,72.9],"localRotation":[0.395,-0.582,0.596,0.388],"localScale":[56.7,43.9,2],"planetLocalRadius":81.24,"studyLongitude":-19.28,"studyLatitude":18.07,"tileMapLongitude":109.28,"tileMapLatitude":18.071,"isTrigger":false},
+    {"name":"Cube (16)","localPosition":[-78,-8,-23.7],"localRotation":[-0.191,-0.763,0.614,-0.07],"localScale":[56.7,43.9,2],"planetLocalRadius":81.91,"studyLongitude":-106.9,"studyLatitude":-5.6,"tileMapLongitude":196.901,"tileMapLatitude":-5.605,"isTrigger":false},
+    {"name":"Cube (10)","localPosition":[-60.8,-29.2,36.6],"localRotation":[-0.551,-0.104,-0.524,0.641],"localScale":[56.7,60.7,2],"planetLocalRadius":76.74,"studyLongitude":-58.95,"studyLatitude":-22.37,"tileMapLongitude":148.953,"tileMapLatitude":-22.365,"isTrigger":false},
+    {"name":"Cube (15)","localPosition":[-68.9,28.6,-26.2],"localRotation":[-0.191,-0.763,0.614,-0.07],"localScale":[56.7,43.9,2],"planetLocalRadius":79.07,"studyLongitude":-110.82,"studyLatitude":21.21,"tileMapLongitude":200.82,"tileMapLatitude":21.206,"isTrigger":false},
+    {"name":"Cube (4)","localPosition":[27.9,30.5,58.5],"localRotation":[-0.466,-0.367,-0.127,0.795],"localScale":[46,28.6,2],"planetLocalRadius":71.63,"studyLongitude":25.5,"studyLatitude":25.2,"tileMapLongitude":64.502,"tileMapLatitude":25.201,"isTrigger":false},
+    {"name":"Cube (2)","localPosition":[49.2,-11.7,49.6],"localRotation":[0.939,-0.181,0.055,0.287],"localScale":[35,70.1,2],"planetLocalRadius":70.84,"studyLongitude":44.77,"studyLatitude":-9.51,"tileMapLongitude":45.232,"tileMapLatitude":-9.507,"isTrigger":false},
+    {"name":"Cube (1)","localPosition":[65,-9.2,7.2],"localRotation":[0.424,-0.008,0.017,0.905],"localScale":[35,70.1,2],"planetLocalRadius":66.04,"studyLongitude":83.68,"studyLatitude":-8.01,"tileMapLongitude":6.321,"tileMapLatitude":-8.008,"isTrigger":false},
+    {"name":"Cube (20)","localPosition":[-54.2,-15.6,-53.5],"localRotation":[0.042,-0.646,0.639,0.415],"localScale":[56.7,43.9,2],"planetLocalRadius":77.74,"studyLongitude":-134.63,"studyLatitude":-11.58,"tileMapLongitude":224.628,"tileMapLatitude":-11.576,"isTrigger":false},
+    {"name":"Cube (8)","localPosition":[-6.1,-37.3,67.1],"localRotation":[-0.287,0.541,-0.697,0.374],"localScale":[56.7,60.7,2],"planetLocalRadius":77.01,"studyLongitude":-5.19,"studyLatitude":-28.97,"tileMapLongitude":95.194,"tileMapLatitude":-28.969,"isTrigger":false},
+    {"name":"Cube (13)","localPosition":[-72.2,21.5,4.5],"localRotation":[-0.006,-0.786,0.613,0.076],"localScale":[56.7,43.9,2],"planetLocalRadius":75.47,"studyLongitude":-86.43,"studyLatitude":16.55,"tileMapLongitude":176.434,"tileMapLatitude":16.552,"isTrigger":false},
+    {"name":"Cube (12)","localPosition":[-67.2,30.4,31.1],"localRotation":[0.219,-0.463,0.85,0.124],"localScale":[56.7,43.9,2],"planetLocalRadius":80.05,"studyLongitude":-65.17,"studyLatitude":22.32,"tileMapLongitude":155.165,"tileMapLatitude":22.32,"isTrigger":false},
+    {"name":"Cube (21)","localPosition":[17.6,47.3,-58.3],"localRotation":[-0.646,-0.476,0.355,-0.48],"localScale":[56.7,43.9,2],"planetLocalRadius":77.11,"studyLongitude":163.2,"studyLatitude":37.84,"tileMapLongitude":286.798,"tileMapLatitude":37.836,"isTrigger":false}
+  ],
+  "a2Blockages": {
+    "northWalls": ["Cube (4)", "Cube (5)", "Cube (3)"],
+    "southWalls": ["Cube (7)", "Cube (2)"],
+    "keepBlocked": ["north ridge of A2", "south cliff of A2"],
+    "keepOpen": ["west toward R1", "east toward A1"]
+  },
+  "openings": {
+    "westTowardR1": {
+      "northSouthClearanceAtStudyLon20": {"studyLongitude":20,"northWallNames":["Cube (3)","Cube (4)","Cube (5)"],"southWallNames":["Cube (2)","Cube (7)"],"northInnerLatitude":19,"southInnerLatitude":-18.9,"northSouthOpeningArcUnits":49.611},
+      "eastWestGapJustWestOfSector": {"studyLongitudeStart":20,"studyLongitudeEnd":-40,"surfaceArcUnits":78.21,"startBlockedBy":null,"endBlockedBy":null}
+    },
+    "eastTowardA1": {
+      "northSouthClearanceAtStudyLon50": {"studyLongitude":50,"northWallNames":["Cube (3)"],"southWallNames":["Cube (2)"],"northInnerLatitude":31.3,"southInnerLatitude":-5.8,"northSouthOpeningArcUnits":48.564},
+      "eastWestGapJustEastOfSector": {"studyLongitudeStart":50,"studyLongitudeEnd":50.5,"surfaceArcUnits":0.652,"startBlockedBy":null,"endBlockedBy":"Cube (2)"}
+    },
+    "notes": "Use northSouthOpeningArcUnits as the A2 passage width at each sector edge (meridian arc on radius 75): ~49.6 west, ~48.6 east. West of study lon 20 at A2 latitude the playable band stays open toward R1 for at least 60 study degrees (sample limit). East of lon 50 at A2 latitude hits Cube (2) immediately; the east exit toward A1 is the N-S corridor between Cube (3) and Cube (2), not a hole at the A2 trigger center. Trigger volume A2 is not the walkable floor."
+  }
+}

@@ -49,17 +49,23 @@ public class CreatureSpawner : MonoBehaviour
     [Serializable]
     public struct SpawnPoint
     {
-        [Tooltip("Marker Transform placed on the planet surface (e.g. an empty/mesh named 'Spawn Point'). " +
+        [Tooltip("Marker Transform placed on the planet surface (e.g. an empty named 'A1'). " +
             "Creatures below spawn/respawn clustered tightly around it and are parented under this " +
-            "Transform in the hierarchy for easy tracking.")]
+            "Transform in the hierarchy for easy tracking. Keep this at scale 1 — never parent " +
+            "creatures under the Areas cubes (those are scaled).")]
         public Transform anchor;
 
-        [Tooltip("Max distance (world units) from the anchor creatures can land. Small = a tight, dense cluster.")]
+        [Tooltip("Max distance (world units) from the origin creatures can land. Small = a tight, dense cluster.")]
         [Min(0.1f)]
         public float radius;
 
         [Tooltip("Creatures confined to this spawn point, additive to spawnEntries.")]
         public SpawnEntry[] creatures;
+
+        [Tooltip("Optional planet Areas child name (A1–A5). When set, this den clusters around that " +
+            "encounter volume's world position instead of the hand-placed marker. The area cube is " +
+            "never used as a parent.")]
+        public string areaId;
     }
 
     /// <summary>One combined-list entry: a global row from <see cref="spawnEntries"/> (unrestricted,
@@ -183,6 +189,7 @@ public class CreatureSpawner : MonoBehaviour
             return;
         }
 
+        BindSpawnPointAnchors();
         BuildAllEntries();
 
         int totalRequested = GetTotalRequestedCount();
@@ -259,6 +266,37 @@ public class CreatureSpawner : MonoBehaviour
     /// specific entry (e.g. a dense spawn-point cluster) pack much tighter than everything else.</summary>
     static float ResolveMinSeparationDegrees(SpawnEntry entry) =>
         entry.minSeparationDegrees > 0.01f ? entry.minSeparationDegrees : MinSeparationDegrees;
+
+    [ContextMenu("Snap Spawn Points To Areas")]
+    public void BindSpawnPointAnchors()
+    {
+        if (spawnPoints == null || spawnPoints.Length == 0)
+            return;
+
+        if (!TryResolvePlanet())
+            return;
+
+        for (int p = 0; p < spawnPoints.Length; p++)
+        {
+            SpawnPoint point = spawnPoints[p];
+            if (string.IsNullOrWhiteSpace(point.areaId))
+                continue;
+
+            Transform area = FindPlanetArea(point.areaId);
+            if (area == null)
+            {
+                Debug.LogWarning(
+                    $"{name}: spawn point {p} area '{point.areaId}' was not found under {planet.name}/Areas.",
+                    this);
+                continue;
+            }
+
+            if (point.anchor == null)
+                continue;
+
+            point.anchor.position = area.position;
+        }
+    }
 
     [ContextMenu("Clear Spawned")]
     public void ClearSpawned()
@@ -544,7 +582,7 @@ public class CreatureSpawner : MonoBehaviour
 
         bool useSpawnPoint = spawnPointIndex >= 0 && spawnPoints != null && spawnPointIndex < spawnPoints.Length;
         SpawnPoint spawnPoint = useSpawnPoint ? spawnPoints[spawnPointIndex] : default;
-        if (useSpawnPoint && spawnPoint.anchor == null)
+        if (useSpawnPoint && spawnPoint.anchor == null && FindPlanetArea(spawnPoint.areaId) == null)
             useSpawnPoint = false;
 
         for (int attempt = 0; attempt < MaxPlacementAttempts; attempt++)
@@ -552,7 +590,7 @@ public class CreatureSpawner : MonoBehaviour
             Vector3 candidate;
             if (useSpawnPoint)
             {
-                if (!TryGetRandomPointNearAnchor(spawnPoint.anchor, spawnPoint.radius, out candidate))
+                if (!TryGetRandomPointNearSpawnPoint(spawnPoint, out candidate))
                     continue;
             }
             else
@@ -598,18 +636,63 @@ public class CreatureSpawner : MonoBehaviour
         return false;
     }
 
-    /// <summary>Samples a direction within <paramref name="worldRadius"/> world units of
-    /// <paramref name="anchor"/>'s position (projected onto the planet), area-uniformly across the
-    /// disk. Shared math lives in <see cref="PlanetRadialSampling"/> so other systems that scatter
-    /// points around an anchor (e.g. a crash-landing portal) use the exact same
-    /// distribution instead of a copy-pasted version.</summary>
-    bool TryGetRandomPointNearAnchor(Transform anchor, float worldRadius, out Vector3 dir)
+    /// <summary>Samples a direction within the spawn point's radius of its origin (area volume or
+    /// hand-placed marker), area-uniformly across the disk. Shared math lives in
+    /// <see cref="PlanetRadialSampling"/>.</summary>
+    bool TryGetRandomPointNearSpawnPoint(SpawnPoint spawnPoint, out Vector3 dir)
     {
         dir = Vector3.up;
-        if (anchor == null || planet == null)
+        if (planet == null)
             return false;
 
-        return PlanetRadialSampling.TryGetRandomPointNear(planet, anchor.position, worldRadius, out dir);
+        Vector3 origin = GetSpawnOrigin(spawnPoint);
+        if (origin.sqrMagnitude < 0.0001f && spawnPoint.anchor == null && FindPlanetArea(spawnPoint.areaId) == null)
+            return false;
+
+        return PlanetRadialSampling.TryGetRandomPointNear(planet, origin, spawnPoint.radius, out dir);
+    }
+
+    /// <summary>
+    /// World origin of a spawn den. Prefers the named Areas child (A1–A5) so dens follow the
+    /// encounter volumes even when the planet is rotated; falls back to the hand-placed marker.
+    /// </summary>
+    Vector3 GetSpawnOrigin(SpawnPoint spawnPoint)
+    {
+        Transform area = FindPlanetArea(spawnPoint.areaId);
+        if (area != null)
+            return area.position;
+
+        return spawnPoint.anchor != null ? spawnPoint.anchor.position : Vector3.zero;
+    }
+
+    Transform FindPlanetArea(string areaId)
+    {
+        if (string.IsNullOrWhiteSpace(areaId) || planet == null)
+            return null;
+
+        Transform areas = planet.transform.Find("Areas");
+        if (areas == null)
+            return null;
+
+        return areas.Find(areaId.Trim());
+    }
+
+    void OnDrawGizmosSelected()
+    {
+        if (spawnPoints == null || spawnPoints.Length == 0)
+            return;
+
+        TryResolvePlanet();
+        Gizmos.color = new Color(1f, 0.45f, 0.15f, 0.9f);
+        for (int i = 0; i < spawnPoints.Length; i++)
+        {
+            SpawnPoint point = spawnPoints[i];
+            Vector3 origin = GetSpawnOrigin(point);
+            if (origin.sqrMagnitude < 0.0001f)
+                continue;
+
+            Gizmos.DrawWireSphere(origin, point.radius);
+        }
     }
 
     bool TryGetSurfacePose(Vector3 directionFromCenter, out Vector3 position, out Quaternion rotation)
@@ -674,39 +757,17 @@ public class CreatureSpawner : MonoBehaviour
             GroundLayer,
             QueryTriggerInteraction.Ignore);
 
-        if (hits == null || hits.Length == 0)
-            return false;
-
-        float bestDist = float.MaxValue;
-        bool found = false;
-        RaycastHit best = default;
-
-        for (int i = 0; i < hits.Length; i++)
+        RaycastHit best;
+        if (_tiles != null && _tiles.TryPickWalkSurfaceHit(hits, planet.Center, -radial, out best))
         {
-            Collider col = hits[i].collider;
-            if (col == null)
-                continue;
-
-            if (col.transform != planet.transform && !col.transform.IsChildOf(planet.transform))
-                continue;
-
-            if (hits[i].distance < bestDist)
-            {
-                bestDist = hits[i].distance;
-                best = hits[i];
-                found = true;
-            }
+            normal = best.normal.sqrMagnitude > 0.001f ? best.normal.normalized : radial;
+            if (Vector3.Dot(normal, radial) < 0f)
+                normal = -normal;
+            feetPosition = best.point + normal * FootOffset;
+            return true;
         }
 
-        if (!found)
-            return false;
-
-        normal = best.normal.sqrMagnitude > 0.001f ? best.normal.normalized : radial;
-        if (Vector3.Dot(normal, radial) < 0f)
-            normal = -normal;
-
-        feetPosition = best.point + normal * FootOffset;
-        return true;
+        return false;
     }
 
     void ApplyInitialAnimatorState(GameObject creature)

@@ -46,6 +46,9 @@ public class PlanetWalker : MonoBehaviour
     bool _pendingFootResnap;
     float _footDropBelowPivot = -1f;
     float _runHoverBlend;
+    Vector3 _routeAnchor;
+    bool _hasRouteAnchor;
+    bool _routeIgnoresApplied;
 
     /// <summary>When true, planet locomotion is frozen (crash-land intro plays on this Animator).</summary>
     public bool LockLocomotion { get; set; }
@@ -214,6 +217,7 @@ public class PlanetWalker : MonoBehaviour
             return;
 
         _ownsControl = false;
+        ClearRouteCollisionIgnores();
         _planet = null;
         _tiles = null;
 
@@ -247,6 +251,7 @@ public class PlanetWalker : MonoBehaviour
         _triggerBody.center = _controller != null ? _controller.center : new Vector3(0f, 0.9f, 0f);
         _triggerBody.isTrigger = true;
         _triggerBody.enabled = true;
+        ApplyRouteCollisionIgnores();
     }
 
     void TickPlanetWalk()
@@ -282,7 +287,14 @@ public class PlanetWalker : MonoBehaviour
 
         float step = targetSpeed * Time.deltaTime;
         Vector3 moveDelta = moveDir.sqrMagnitude > 0.001f ? moveDir * step : Vector3.zero;
-        moveDelta = ResolveObstacleMove(moveDelta, up);
+        float hover = GetPivotClearance(up);
+        if (!_routeIgnoresApplied)
+            ApplyRouteCollisionIgnores();
+        moveDelta = NyxaraRouteBounds.FilterMove(_planet, _tiles, transform.position, moveDelta, hover);
+        if (!NyxaraRouteBounds.IsActive(_tiles))
+            moveDelta = ResolveObstacleMove(moveDelta, up);
+        else
+            moveDelta = ResolvePropMove(moveDelta, up);
 
         Vector3 probeOrigin = transform.position + moveDelta;
 
@@ -333,6 +345,12 @@ public class PlanetWalker : MonoBehaviour
             _fallVelocity = Vector3.zero;
         }
 
+        next = NyxaraRouteBounds.ClampPosition(_planet, _tiles, next, GetPivotClearance((next - _planet.Center).normalized));
+        next = RecoverOrRememberRoute(next);
+        fromCenterFinal = next - _planet.Center;
+        if (fromCenterFinal.sqrMagnitude > 0.0001f)
+            up = fromCenterFinal.normalized;
+
         Vector3 faceDir = moveDir.sqrMagnitude > 0.001f
             ? Vector3.ProjectOnPlane(moveDir, up)
             : Vector3.ProjectOnPlane(transform.forward, up);
@@ -343,9 +361,11 @@ public class PlanetWalker : MonoBehaviour
         UpdateAnimator(targetSpeed, inputMagnitude);
     }
 
+    static readonly RaycastHit[] ObstacleHits = new RaycastHit[24];
+
     /// <summary>
-    /// Capsule-cast along tangent move. Steep walls block; outward slopes / walkable tops are allowed
-    /// so the player can step onto rocks and props (height comes from radial snap).
+    /// Capsule-cast along tangent move. Used when the Nyxara route band is off (other planets,
+    /// or production Nyxara with workPlan disabled). Border cubes still block.
     /// </summary>
     Vector3 ResolveObstacleMove(Vector3 desiredDelta, Vector3 up)
     {
@@ -363,26 +383,112 @@ public class PlanetWalker : MonoBehaviour
         float skin = 0.04f;
         Vector3 radial = (transform.position - _planet.Center).normalized;
 
-        if (!Physics.CapsuleCast(
-                bottom,
-                top,
-                radius,
-                dir,
-                out RaycastHit hit,
-                dist + skin,
-                groundLayer,
-                QueryTriggerInteraction.Ignore))
+        if (TryNearestBlockingWall(bottom, top, radius, dir, dist + skin, out RaycastHit wallHit))
+            return LimitAndSlideAlongWall(desiredDelta, dir, skin, up, radial, bottom, top, radius, wallHit);
+
+        if (TryNearestBlockingProp(bottom, top, radius, dir, dist + skin, up, radial, out RaycastHit propHit))
+            return LimitAndSlideAlongWall(desiredDelta, dir, skin, up, radial, bottom, top, radius, propHit);
+
+        return desiredDelta;
+    }
+
+    bool TryNearestBlockingWall(
+        Vector3 bottom,
+        Vector3 top,
+        float radius,
+        Vector3 dir,
+        float maxDistance,
+        out RaycastHit best)
+    {
+        best = default;
+        int count = Physics.CapsuleCastNonAlloc(
+            bottom,
+            top,
+            radius,
+            dir,
+            ObstacleHits,
+            maxDistance,
+            groundLayer,
+            QueryTriggerInteraction.Ignore);
+        if (count <= 0)
+            return false;
+
+        float nearest = float.MaxValue;
+        bool found = false;
+        int n = Mathf.Min(count, ObstacleHits.Length);
+        for (int i = 0; i < n; i++)
         {
-            return desiredDelta;
+            RaycastHit hit = ObstacleHits[i];
+            if (hit.collider == null || !NyxaraTerrainCollision.IsBlockingWall(hit.collider))
+                continue;
+            if (NyxaraRouteBounds.ShouldIgnorePhysicsWall(hit.collider, _tiles))
+                continue;
+            if (!IsPlanetObstacle(hit.collider))
+                continue;
+            if (hit.distance >= nearest)
+                continue;
+            nearest = hit.distance;
+            best = hit;
+            found = true;
         }
 
-        if (!IsPlanetObstacle(hit.collider))
-            return desiredDelta;
+        return found;
+    }
 
-        // Floor or outward-facing slope — walk onto it; radial snap sets height.
-        if (IsWalkableObstacleHit(hit.normal, up, radial))
-            return desiredDelta;
+    bool TryNearestBlockingProp(
+        Vector3 bottom,
+        Vector3 top,
+        float radius,
+        Vector3 dir,
+        float maxDistance,
+        Vector3 up,
+        Vector3 radial,
+        out RaycastHit best)
+    {
+        best = default;
+        int count = Physics.CapsuleCastNonAlloc(
+            bottom,
+            top,
+            radius,
+            dir,
+            ObstacleHits,
+            maxDistance,
+            groundLayer,
+            QueryTriggerInteraction.Ignore);
+        if (count <= 0)
+            return false;
 
+        float nearest = float.MaxValue;
+        bool found = false;
+        int n = Mathf.Min(count, ObstacleHits.Length);
+        for (int i = 0; i < n; i++)
+        {
+            RaycastHit hit = ObstacleHits[i];
+            if (!IsPlanetObstacle(hit.collider))
+                continue;
+            if (IsWalkableObstacleHit(hit.collider, hit.normal, up, radial))
+                continue;
+            if (hit.distance >= nearest)
+                continue;
+            nearest = hit.distance;
+            best = hit;
+            found = true;
+        }
+
+        return found;
+    }
+
+    Vector3 LimitAndSlideAlongWall(
+        Vector3 desiredDelta,
+        Vector3 dir,
+        float skin,
+        Vector3 up,
+        Vector3 radial,
+        Vector3 bottom,
+        Vector3 top,
+        float radius,
+        RaycastHit hit)
+    {
         float allowed = Mathf.Max(0f, hit.distance - skin);
         Vector3 limited = dir * allowed;
         Vector3 remainder = desiredDelta - limited;
@@ -394,17 +500,27 @@ public class PlanetWalker : MonoBehaviour
 
         float slideDist = slide.magnitude;
         Vector3 slideDir = slide / slideDist;
-        if (Physics.CapsuleCast(
+        if (TryNearestBlockingWall(
                 bottom + limited,
                 top + limited,
                 radius,
                 slideDir,
-                out RaycastHit slideHit,
                 slideDist + skin,
-                groundLayer,
-                QueryTriggerInteraction.Ignore)
-            && IsPlanetObstacle(slideHit.collider)
-            && !IsWalkableObstacleHit(slideHit.normal, up, radial))
+                out RaycastHit slideWall))
+        {
+            float slideAllowed = Mathf.Max(0f, slideWall.distance - skin);
+            return limited + slideDir * slideAllowed;
+        }
+
+        if (TryNearestBlockingProp(
+                bottom + limited,
+                top + limited,
+                radius,
+                slideDir,
+                slideDist + skin,
+                up,
+                radial,
+                out RaycastHit slideHit))
         {
             float slideAllowed = Mathf.Max(0f, slideHit.distance - skin);
             return limited + slideDir * slideAllowed;
@@ -413,8 +529,73 @@ public class PlanetWalker : MonoBehaviour
         return limited + slide;
     }
 
-    static bool IsWalkableObstacleHit(Vector3 normal, Vector3 up, Vector3 radial)
+    /// <summary>
+    /// Props only. Nyxara route edges are kinematic (see <see cref="NyxaraRouteBounds"/>).
+    /// </summary>
+    Vector3 ResolvePropMove(Vector3 desiredDelta, Vector3 up)
     {
+        if (desiredDelta.sqrMagnitude < 0.0000001f)
+            return desiredDelta;
+
+        float scale = Mathf.Max(transform.lossyScale.x, transform.lossyScale.y, transform.lossyScale.z);
+        float radius = (_controller != null ? Mathf.Max(0.2f, _controller.radius * 0.9f) : 0.28f) * scale;
+        float height = (_controller != null ? Mathf.Max(1.4f, _controller.height) : 1.8f) * scale;
+        Vector3 bottom = transform.position + up * (radius + 0.05f);
+        Vector3 top = transform.position + up * (height - radius);
+        float dist = desiredDelta.magnitude;
+        Vector3 dir = desiredDelta / dist;
+        float skin = 0.04f;
+        Vector3 radial = (transform.position - _planet.Center).normalized;
+
+        if (TryNearestBlockingProp(bottom, top, radius, dir, dist + skin, up, radial, out RaycastHit hit))
+            return LimitAndSlideAlongWall(desiredDelta, dir, skin, up, radial, bottom, top, radius, hit);
+
+        return desiredDelta;
+    }
+
+    void ApplyRouteCollisionIgnores()
+    {
+        if (_triggerBody == null || _planet == null)
+            return;
+        NyxaraRouteBounds.ApplyIgnoreCollisions(_triggerBody, _planet, _tiles);
+        _routeIgnoresApplied = true;
+    }
+
+    void ClearRouteCollisionIgnores()
+    {
+        if (_triggerBody != null && _planet != null)
+            NyxaraRouteBounds.ApplyIgnoreCollisions(_triggerBody, _planet, null);
+        _routeIgnoresApplied = false;
+    }
+
+    Vector3 RecoverOrRememberRoute(Vector3 next)
+    {
+        if (_planet == null || _tiles == null)
+            return next;
+
+        float hover = GetPivotClearance((next - _planet.Center).normalized);
+        if (NyxaraRouteBounds.TryRecover(
+                _planet, _tiles, next, hover, _hasRouteAnchor, _routeAnchor, out Vector3 recovered))
+        {
+            _grounded = true;
+            _fallVelocity = Vector3.zero;
+            return recovered;
+        }
+
+        if (NyxaraRouteBounds.IsComfortable(_planet, _tiles, next))
+        {
+            _routeAnchor = next;
+            _hasRouteAnchor = true;
+        }
+
+        return next;
+    }
+
+    static bool IsWalkableObstacleHit(Collider col, Vector3 normal, Vector3 up, Vector3 radial)
+    {
+        if (NyxaraTerrainCollision.IsBlockingWall(col))
+            return false;
+
         if (normal.sqrMagnitude < 0.001f)
             return false;
 
@@ -435,6 +616,12 @@ public class PlanetWalker : MonoBehaviour
             return false;
 
         if (!col.transform.IsChildOf(_planet.transform))
+            return false;
+
+        if (_tiles != null && _tiles.IsWalkSurfaceCollider(col))
+            return false;
+
+        if (NyxaraRouteBounds.ShouldIgnorePhysicsWall(col, _tiles))
             return false;
 
         return !IsNonBlockingPropCollider(col);
@@ -570,11 +757,11 @@ public class PlanetWalker : MonoBehaviour
         if (hits == null || hits.Length == 0)
             return false;
 
-        Vector3 radial = direction.sqrMagnitude > 0.001f ? -direction.normalized : Vector3.up;
-        MeshCollider tileCollider = _tiles != null ? _tiles.WalkMeshCollider : null;
-        bool tilesProvideWalkSurface = _tiles != null && _tiles.ProvidesWalkSurface;
-        float minAcceptableRadius = GetFallbackSurfaceRadius(radial) - 0.05f;
+        if (_tiles != null && _planet != null)
+            return _tiles.TryPickWalkSurfaceHit(hits, _planet.Center, direction, out best);
 
+        Vector3 radial = direction.sqrMagnitude > 0.001f ? -direction.normalized : Vector3.up;
+        float minAcceptableRadius = GetFallbackSurfaceRadius(radial) - 0.05f;
         float bestRadius = -1f;
         bool found = false;
         for (int i = 0; i < hits.Length; i++)
@@ -582,8 +769,7 @@ public class PlanetWalker : MonoBehaviour
             Collider col = hits[i].collider;
             if (col == null || _planet == null)
                 continue;
-
-            if (!IsWalkSurfaceCollider(col, tileCollider, tilesProvideWalkSurface))
+            if (col.GetComponent<SphericalPlanet>() == null)
                 continue;
 
             Vector3 normal = hits[i].normal.sqrMagnitude > 0.001f
@@ -605,20 +791,6 @@ public class PlanetWalker : MonoBehaviour
         }
 
         return found;
-    }
-
-    static bool IsWalkSurfaceCollider(Collider col, MeshCollider tileCollider, bool tilesProvideWalkSurface)
-    {
-        if (col == null)
-            return false;
-
-        if (tilesProvideWalkSurface && tileCollider != null && tileCollider.enabled)
-            return col == tileCollider;
-
-        if (col is SphereCollider && col.GetComponent<SphericalPlanet>() != null)
-            return !tilesProvideWalkSurface || tileCollider == null || !tileCollider.enabled;
-
-        return false;
     }
 
     static bool IsNonBlockingPropCollider(Collider col)
@@ -710,6 +882,12 @@ public class PlanetWalker : MonoBehaviour
             point = _planet.Center + radialUp * floorRadius;
             normal = radialUp;
         }
+
+        point = NyxaraRouteBounds.ClampPosition(_planet, _tiles, point, GetPivotClearance(radialUp));
+        point = RecoverOrRememberRoute(point);
+        fromCenter = point - _planet.Center;
+        if (fromCenter.sqrMagnitude > 0.0001f)
+            normal = fromCenter.normalized;
 
         transform.position = point;
         up = normal;

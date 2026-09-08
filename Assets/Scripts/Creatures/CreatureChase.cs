@@ -377,6 +377,7 @@ public class CreatureChase : MonoBehaviour
         if (TryStickToCollider(radial, out next, out Vector3 surfaceUp))
         {
             up = surfaceUp;
+            ClampToNyxaraRoute(ref next, ref up);
             return;
         }
 
@@ -385,6 +386,18 @@ public class CreatureChase : MonoBehaviour
         Vector3 fromCenter = next - _planet.Center;
         if (fromCenter.magnitude < minDist)
             next = _planet.Center + fromCenter.normalized * minDist;
+        up = _planet.GetUpAt(next);
+        ClampToNyxaraRoute(ref next, ref up);
+    }
+
+    void ClampToNyxaraRoute(ref Vector3 next, ref Vector3 up)
+    {
+        if (_tiles == null || _planet == null)
+            return;
+        next = NyxaraRouteBounds.ClampPosition(_planet, _tiles, next, footOffset);
+        if (NyxaraRouteBounds.IsOffRoute(_planet, _tiles, next) &&
+            NyxaraRouteBounds.TrySnapToCenter(_planet, _tiles, next, footOffset, out Vector3 kept))
+            next = kept;
         up = _planet.GetUpAt(next);
     }
 
@@ -474,39 +487,17 @@ public class CreatureChase : MonoBehaviour
             groundLayer,
             QueryTriggerInteraction.Ignore);
 
-        if (hits == null || hits.Length == 0)
-            return false;
-
-        float bestDist = float.MaxValue;
-        bool found = false;
-        RaycastHit best = default;
-
-        for (int i = 0; i < hits.Length; i++)
+        RaycastHit best;
+        if (_tiles != null && _tiles.TryPickWalkSurfaceHit(hits, _planet.Center, -radial, out best))
         {
-            Collider col = hits[i].collider;
-            if (col == null)
-                continue;
-
-            if (col.transform != _planet.transform && !col.transform.IsChildOf(_planet.transform))
-                continue;
-
-            if (hits[i].distance < bestDist)
-            {
-                bestDist = hits[i].distance;
-                best = hits[i];
-                found = true;
-            }
+            normal = best.normal.sqrMagnitude > 0.001f ? best.normal.normalized : radial;
+            if (Vector3.Dot(normal, radial) < 0f)
+                normal = -normal;
+            feetPosition = best.point + normal * footOffset;
+            return true;
         }
 
-        if (!found)
-            return false;
-
-        normal = best.normal.sqrMagnitude > 0.001f ? best.normal.normalized : radial;
-        if (Vector3.Dot(normal, radial) < 0f)
-            normal = -normal;
-
-        feetPosition = best.point + normal * footOffset;
-        return true;
+        return false;
     }
 
     float GetFallbackSurfaceRadius(Vector3 radial)

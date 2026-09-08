@@ -21,6 +21,92 @@ public class PlanetTileMap : MonoBehaviour
         public string zoneId;
     }
 
+    /// <summary>
+    /// Longitude convention used by sector bounds. Do not mix frames without converting.
+    /// </summary>
+    public enum LongitudeFrame
+    {
+        /// <summary>atan2(z, x), 0° at local +X, + toward +Z. Same as WorldToCell / LocalSurfacePoint.</summary>
+        PlanetTileMap = 0,
+        /// <summary>atan2(x, z), 0° at local +Z, + toward +X. Used by the A2 fit-study JSON.</summary>
+        StudyFromPositiveZ = 1
+    }
+
+    /// <summary>
+    /// Editable ridge/cliff planning. When enabled, tile generation lowers cells south of
+    /// the serialized south lip so the cliff pit is not covered. Production planets leave this off.
+    /// </summary>
+    [Serializable]
+    public class TerrainWorkPlan
+    {
+        [Tooltip("When off, tile generation ignores the cliff pit. Leave off on production planets.")]
+        public bool enabled;
+
+        [Tooltip("If true, ridge/cliff follow every north/south wall around the planet. Gaps without walls stay open.")]
+        public bool coverFullRing;
+
+        [Tooltip("Layout sector this plan is limited to. A2, or Ring when coverFullRing is on.")]
+        public string sectorId = "A2";
+
+        [Tooltip("Frame for sectorLongitudeMin/Max. Production math uses PlanetTileMap.")]
+        public LongitudeFrame longitudeFrame = LongitudeFrame.PlanetTileMap;
+
+        [Tooltip("Inclusive sector longitude in the frame above (PlanetTileMap: A2 ≈ 40°–70°).")]
+        public float sectorLongitudeMin = 40f;
+
+        [Tooltip("Inclusive sector longitude in the frame above (PlanetTileMap: A2 ≈ 40°–70°).")]
+        public float sectorLongitudeMax = 70f;
+
+        [Tooltip("Inclusive sector latitude. Same in both frames. +latitude is local +Y (north).")]
+        public float sectorLatitudeMin = -28f;
+
+        [Tooltip("Inclusive sector latitude. Same in both frames. +latitude is local +Y (north).")]
+        public float sectorLatitudeMax = 36f;
+
+        [Tooltip("Same A2 sector in the fit-study frame (atan2(x,z), 0° at +Z). Documentation only.")]
+        public float studyLongitudeMin = 20f;
+
+        [Tooltip("Same A2 sector in the fit-study frame (atan2(x,z), 0° at +Z). Documentation only.")]
+        public float studyLongitudeMax = 50f;
+
+        [Tooltip("Local radial ridge height above the planet radius. A2 test proposal, not final.")]
+        public float ridgeHeight = 24f;
+
+        [Tooltip("Local radial cliff depth below the planet radius. A2 test value inside 12–14.")]
+        public float cliffDepth = 13f;
+
+        [Tooltip("Proposed cliff depth range minimum (local units).")]
+        public float cliffDepthMin = 12f;
+
+        [Tooltip("Proposed cliff depth range maximum (local units).")]
+        public float cliffDepthMax = 14f;
+
+        [Tooltip("Keep this many local units of walkable surface inside the authored walls.")]
+        public float playableMargin = 1f;
+
+        [Tooltip("Mesh subdivision density for later ridge/cliff builds. 1 = coarse, 4 = fine.")]
+        [Range(1, 4)]
+        public int detailLevel = 2;
+
+        [Tooltip("If true, later stages may use the optional ~7.49 south-cliff shift. Default is authored walls.")]
+        public bool useOptionalSouthCliffShift;
+
+        [Tooltip("How far south of the lip the pit extends, in latitude degrees.")]
+        public float cliffSpanDegrees = 18f;
+
+        [Tooltip("Study-frame longitudes of the serialized south lip (authored wall). Filled by the study session.")]
+        public float[] cliffLipStudyLongitudes;
+
+        [Tooltip("Matching south-lip latitudes. Playable floor stays north of this polyline.")]
+        public float[] cliffLipLatitudes;
+
+        [Tooltip("Study-frame longitudes of the serialized north lip (authored wall). Filled by the study session.")]
+        public float[] northLipStudyLongitudes;
+
+        [Tooltip("Matching north-lip latitudes. Ridge starts on the blocked (north) side.")]
+        public float[] northLipLatitudes;
+    }
+
     [Header("Tile Size")]
     [Tooltip("Tiles around the planet equator. Higher = smaller tiles.")]
     [SerializeField, Range(16, 256)] int tilesAroundEquator = 72;
@@ -79,6 +165,9 @@ public class PlanetTileMap : MonoBehaviour
     [SerializeField] int[] terrainIds = Array.Empty<int>();
     [SerializeField] int[] tileIndices = Array.Empty<int>();
 
+    [Header("Terrain Work Plan")]
+    [SerializeField] TerrainWorkPlan workPlan = new TerrainWorkPlan();
+
     SphericalPlanet _planet;
     Transform _tilesRoot;
     MeshFilter _tilesFilter;
@@ -95,6 +184,62 @@ public class PlanetTileMap : MonoBehaviour
     public bool ShowTileVisuals => showTileVisuals;
     public bool ProvidesWalkSurface => showTileVisuals;
     public MeshCollider WalkMeshCollider => _tilesCollider;
+    public TerrainWorkPlan WorkPlan => workPlan;
+
+    public void SetWorkPlan(TerrainWorkPlan plan)
+    {
+        workPlan = plan ?? new TerrainWorkPlan();
+        ClampWorkPlan();
+        if (isActiveAndEnabled)
+            RebuildVisuals();
+    }
+
+    /// <summary>
+    /// PlanetTileMap longitude (0–360, 0° at local +X) and latitude (−90–+90, +Y = north).
+    /// </summary>
+    public static void DirectionToTileMapLonLat(Vector3 directionFromCenter, out float longitudeDeg, out float latitudeDeg)
+    {
+        Vector3 dir = directionFromCenter.sqrMagnitude > 0.0001f
+            ? directionFromCenter.normalized
+            : Vector3.up;
+        latitudeDeg = Mathf.Asin(Mathf.Clamp(dir.y, -1f, 1f)) * Mathf.Rad2Deg;
+        longitudeDeg = Mathf.Atan2(dir.z, dir.x) * Mathf.Rad2Deg;
+        if (longitudeDeg < 0f)
+            longitudeDeg += 360f;
+    }
+
+    /// <summary>Unit direction in planet-local space from PlanetTileMap lon/lat degrees.</summary>
+    public static Vector3 TileMapLonLatToDirection(float longitudeDeg, float latitudeDeg)
+    {
+        float lat = latitudeDeg * Mathf.Deg2Rad;
+        float lon = longitudeDeg * Mathf.Deg2Rad;
+        return new Vector3(
+            Mathf.Cos(lat) * Mathf.Cos(lon),
+            Mathf.Sin(lat),
+            Mathf.Cos(lat) * Mathf.Sin(lon));
+    }
+
+    /// <summary>
+    /// Fit-study longitude (0° at local +Z, + toward +X). Latitude matches the tilemap frame.
+    /// </summary>
+    public static void DirectionToStudyLonLat(Vector3 directionFromCenter, out float longitudeDeg, out float latitudeDeg)
+    {
+        Vector3 dir = directionFromCenter.sqrMagnitude > 0.0001f
+            ? directionFromCenter.normalized
+            : Vector3.up;
+        latitudeDeg = Mathf.Asin(Mathf.Clamp(dir.y, -1f, 1f)) * Mathf.Rad2Deg;
+        longitudeDeg = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
+    }
+
+    public static Vector3 StudyLonLatToDirection(float longitudeDeg, float latitudeDeg)
+    {
+        float lat = latitudeDeg * Mathf.Deg2Rad;
+        float lon = longitudeDeg * Mathf.Deg2Rad;
+        return new Vector3(
+            Mathf.Cos(lat) * Mathf.Sin(lon),
+            Mathf.Sin(lat),
+            Mathf.Cos(lat) * Mathf.Cos(lon));
+    }
 
     public float GetWalkSurfaceRadius(Vector3 directionFromCenter)
     {
@@ -111,7 +256,131 @@ public class PlanetTileMap : MonoBehaviour
         float radius = _planet.GetTerrainRadius(up) + lift + GetCubeHeight();
         if (!enableBlocks && overlap > 1.0001f)
             radius *= overlap;
+        // Do not subtract the cliff pit: PlanetWalker uses this as a floor it cannot go below.
+        // Descent is blocked by the authored lip colliders, not by a fall mechanic.
         return radius;
+    }
+
+    /// <summary>
+    /// True if this collider is the walk surface (tile mesh, or the planet sphere when tiles are off).
+    /// Wall boxes are blockers, not floors.
+    /// </summary>
+    public bool IsWalkSurfaceCollider(Collider col)
+    {
+        if (col == null)
+            return false;
+
+        if (showTileVisuals && useTileMeshCollider && _tilesCollider != null && _tilesCollider.enabled)
+            return col == _tilesCollider;
+
+        return col is SphereCollider && col.GetComponent<SphericalPlanet>() != null;
+    }
+
+    /// <summary>
+    /// Picks the outermost walk hit that is not below the analytic floor (A2 cliff pit is visual only).
+    /// </summary>
+    public bool TryPickWalkSurfaceHit(
+        RaycastHit[] hits,
+        Vector3 planetCenter,
+        Vector3 inwardRayDirection,
+        out RaycastHit best)
+    {
+        best = default;
+        if (hits == null || hits.Length == 0)
+            return false;
+
+        Vector3 radial = inwardRayDirection.sqrMagnitude > 0.001f
+            ? -inwardRayDirection.normalized
+            : Vector3.up;
+        float minRadius = GetWalkSurfaceRadius(radial) - 0.05f;
+        float bestRadius = -1f;
+        bool found = false;
+
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider col = hits[i].collider;
+            if (!IsWalkSurfaceCollider(col))
+                continue;
+
+            Vector3 normal = hits[i].normal.sqrMagnitude > 0.001f
+                ? hits[i].normal.normalized
+                : radial;
+            if (Vector3.Dot(normal, radial) < 0.35f)
+                continue;
+
+            float surfaceRadius = (hits[i].point - planetCenter).magnitude;
+            if (surfaceRadius < minRadius)
+                continue;
+
+            if (surfaceRadius > bestRadius)
+            {
+                bestRadius = surfaceRadius;
+                best = hits[i];
+                found = true;
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// Light clearing stays the tileset green. A thin dark-green soil band hugs the A2 lips only —
+    /// alien dirt, not a leaf layer. Openings (lon fade 0) stay untinted.
+    /// </summary>
+    Color GetA2ClearingTint(float latDeg, float lonDeg, Color baseTint)
+    {
+        if (workPlan == null || !workPlan.enabled)
+            return baseTint;
+
+        Vector3 dir = TileMapLonLatToDirection(lonDeg, latDeg);
+        DirectionToStudyLonLat(dir, out float studyLon, out float studyLat);
+        bool wrap = workPlan.coverFullRing;
+        float southPresence = wrap
+            ? NyxaraA2CliffProfile.LipPresence(
+                workPlan.cliffLipStudyLongitudes, workPlan.cliffLipLatitudes, studyLon, true)
+            : NyxaraA2CliffProfile.LonEdgeFade(studyLon, workPlan.studyLongitudeMin, workPlan.studyLongitudeMax);
+        float northPresence = wrap
+            ? NyxaraA2CliffProfile.LipPresence(
+                workPlan.northLipStudyLongitudes, workPlan.northLipLatitudes, studyLon, true)
+            : southPresence;
+        if (southPresence <= 0.02f && northPresence <= 0.02f)
+            return baseTint;
+
+        const float stripDeg = 2.2f;
+        float soil = 0f;
+        if (southPresence > 0.02f)
+        {
+            float southLip = NyxaraA2CliffProfile.SampleLipLatitude(workPlan, studyLon);
+            if (studyLat >= southLip && studyLat < southLip + stripDeg)
+                soil = Mathf.Max(soil, (1f - (studyLat - southLip) / stripDeg) * southPresence);
+        }
+
+        if (northPresence > 0.02f)
+        {
+            float northLip = NyxaraA2CliffProfile.SampleNorthLipLatitude(workPlan, studyLon);
+            if (studyLat <= northLip && studyLat > northLip - stripDeg)
+                soil = Mathf.Max(soil, (1f - (northLip - studyLat) / stripDeg) * northPresence);
+        }
+        if (soil <= 0.001f)
+            return baseTint;
+
+        soil = soil * soil;
+        var earth = new Color(0.46f, 0.50f, 0.34f, 1f);
+        return Color.Lerp(baseTint, earth, soil * 0.52f);
+    }
+
+    /// <summary>
+    /// Radial drop (≤ 0) applied to tile vertices in the A2 cliff pit. Zero on the playable floor.
+    /// </summary>
+    public float GetCliffRadialOffset(Vector3 directionFromCenter)
+    {
+        if (workPlan == null || !workPlan.enabled)
+            return 0f;
+        Vector3 dir = directionFromCenter.sqrMagnitude > 0.0001f
+            ? directionFromCenter.normalized
+            : Vector3.up;
+        DirectionToStudyLonLat(dir, out float studyLon, out float studyLat);
+        return NyxaraA2CliffProfile.RadialOffset(workPlan, studyLon, studyLat);
     }
 
     float GetCubeHeight()
@@ -195,6 +464,7 @@ public class PlanetTileMap : MonoBehaviour
         cellSubdivisions = Mathf.Clamp(cellSubdivisions, 1, 4);
         blockGap = Mathf.Clamp(blockGap, 0f, 0.3f);
         blockHeight = Mathf.Clamp(blockHeight, 0.05f, 0.55f);
+        ClampWorkPlan();
         if (_planet == null)
             _planet = GetComponent<SphericalPlanet>();
 
@@ -472,7 +742,6 @@ public class PlanetTileMap : MonoBehaviour
 
     void BuildCombinedMesh()
     {
-        CleanupRuntimeAssets();
         if (!HasValidMap() || tileset == null || tileset.Texture == null || tileset.Count == 0)
         {
             if (_tilesFilter != null)
@@ -622,7 +891,11 @@ public class PlanetTileMap : MonoBehaviour
             }
         }
 
-        _runtimeMesh = new Mesh { name = enableBlocks ? "PlanetTiles_Cubes" : "PlanetTiles_Atlas" };
+        if (_runtimeMesh == null)
+            _runtimeMesh = new Mesh();
+        else
+            _runtimeMesh.Clear();
+        _runtimeMesh.name = enableBlocks ? "PlanetTiles_Cubes" : "PlanetTiles_Atlas";
         _runtimeMesh.indexFormat = vertices.Count > 65535
             ? UnityEngine.Rendering.IndexFormat.UInt32
             : UnityEngine.Rendering.IndexFormat.UInt16;
@@ -704,7 +977,7 @@ public class PlanetTileMap : MonoBehaviour
                     Vector2.Lerp(uvW0, uvE0, tx1),
                     Vector2.Lerp(uvW1, uvE1, tx1),
                     Vector2.Lerp(uvW1, uvE1, tx0),
-                    tint,
+                    GetA2ClearingTint(0.5f * (la0 + la1), Mathf.Lerp(lon0, lon1, 0.5f * (tx0 + tx1)), tint),
                     true,
                     vertices, normals, uvs, colors, triangles);
             }
@@ -937,7 +1210,15 @@ public class PlanetTileMap : MonoBehaviour
         if (shader == null)
             shader = Shader.Find("Unlit/Texture");
 
-        var mat = new Material(shader) { name = "PlanetTiles_Cube" };
+        if (_runtimeMaterial != null && _runtimeMaterial.shader != shader)
+        {
+            DestroyRuntimeAsset(_runtimeMaterial);
+            _runtimeMaterial = null;
+        }
+
+        var mat = _runtimeMaterial != null
+            ? _runtimeMaterial
+            : new Material(shader) { name = "PlanetTiles_Cube" };
         if (mat.HasProperty("_Cull"))
             mat.SetFloat("_Cull", 2f);
         if (mat.HasProperty("_BaseColor"))
@@ -971,8 +1252,10 @@ public class PlanetTileMap : MonoBehaviour
             Mathf.Sin(lat),
             Mathf.Cos(lat) * Mathf.Sin(lon));
         float terrainRadius = _planet.GetTerrainRadius(up);
+        DirectionToStudyLonLat(up, out float studyLon, out float studyLat);
+        float cliff = NyxaraA2CliffProfile.RadialOffset(workPlan, studyLon, studyLat);
         float scale = Mathf.Max(transform.lossyScale.x, 0.0001f);
-        return up * ((terrainRadius + lift) / scale);
+        return up * ((terrainRadius + lift + cliff) / scale);
     }
 
     void EnsureRenderObjects()
@@ -1035,19 +1318,38 @@ public class PlanetTileMap : MonoBehaviour
 
     void CleanupRuntimeAssets()
     {
-        if (_runtimeMesh != null)
+        if (_tilesFilter != null && _tilesFilter.sharedMesh == _runtimeMesh)
+            _tilesFilter.sharedMesh = null;
+        if (_tilesCollider != null && _tilesCollider.sharedMesh == _runtimeMesh)
+            _tilesCollider.sharedMesh = null;
+        if (_tilesRenderer != null && _runtimeMaterial != null)
+            _tilesRenderer.sharedMaterials = System.Array.Empty<Material>();
+
+        DestroyRuntimeAsset(_runtimeMesh);
+        _runtimeMesh = null;
+        DestroyRuntimeAsset(_runtimeMaterial);
+        _runtimeMaterial = null;
+    }
+
+    static void DestroyRuntimeAsset(UnityEngine.Object asset)
+    {
+        if (asset == null)
+            return;
+        if (Application.isPlaying)
         {
-            if (Application.isPlaying) Destroy(_runtimeMesh);
-            else DestroyImmediate(_runtimeMesh);
-            _runtimeMesh = null;
+            Destroy(asset);
+            return;
         }
 
-        if (_runtimeMaterial != null)
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.delayCall += () =>
         {
-            if (Application.isPlaying) Destroy(_runtimeMaterial);
-            else DestroyImmediate(_runtimeMaterial);
-            _runtimeMaterial = null;
-        }
+            if (asset != null)
+                DestroyImmediate(asset);
+        };
+#else
+        DestroyImmediate(asset);
+#endif
     }
 
     int CellIndex(int lat, int lon) => lat * longitudeBands + lon;
@@ -1057,4 +1359,92 @@ public class PlanetTileMap : MonoBehaviour
         int m = value % modulus;
         return m < 0 ? m + modulus : m;
     }
+
+    void ClampWorkPlan()
+    {
+        if (workPlan == null)
+            workPlan = new TerrainWorkPlan();
+
+        if (string.IsNullOrWhiteSpace(workPlan.sectorId))
+            workPlan.sectorId = workPlan.coverFullRing ? "Ring" : "A2";
+
+        workPlan.ridgeHeight = Mathf.Max(0f, workPlan.ridgeHeight);
+        workPlan.cliffDepthMin = Mathf.Max(0f, workPlan.cliffDepthMin);
+        workPlan.cliffDepthMax = Mathf.Max(workPlan.cliffDepthMin, workPlan.cliffDepthMax);
+        workPlan.cliffDepth = Mathf.Clamp(workPlan.cliffDepth, workPlan.cliffDepthMin, workPlan.cliffDepthMax);
+        workPlan.playableMargin = Mathf.Max(0f, workPlan.playableMargin);
+        workPlan.detailLevel = Mathf.Clamp(workPlan.detailLevel, 1, 4);
+        workPlan.cliffSpanDegrees = Mathf.Max(8f, workPlan.cliffSpanDegrees);
+        workPlan.sectorLatitudeMin = Mathf.Clamp(workPlan.sectorLatitudeMin, -90f, 90f);
+        workPlan.sectorLatitudeMax = Mathf.Clamp(workPlan.sectorLatitudeMax, workPlan.sectorLatitudeMin, 90f);
+    }
+
+#if UNITY_EDITOR
+    void OnDrawGizmosSelected()
+    {
+        if (workPlan == null || !workPlan.enabled)
+            return;
+
+        if (_planet == null)
+            _planet = GetComponent<SphericalPlanet>();
+        if (_planet == null)
+            return;
+
+        DrawWorkPlanGizmos(_planet, workPlan);
+    }
+
+    public static void DrawWorkPlanGizmos(SphericalPlanet planet, TerrainWorkPlan plan)
+    {
+        if (planet == null || plan == null || !plan.enabled)
+            return;
+
+        float radius = Mathf.Max(0.01f, planet.Radius);
+        int steps = plan.coverFullRing ? 48 : 24;
+        bool tileMapFrame = plan.longitudeFrame == LongitudeFrame.PlanetTileMap;
+        float lon0 = tileMapFrame ? plan.sectorLongitudeMin : plan.studyLongitudeMin;
+        float lon1 = tileMapFrame ? plan.sectorLongitudeMax : plan.studyLongitudeMax;
+
+        Vector3 LocalToWorld(Vector3 local) => planet.PlanetLocalToWorld.MultiplyPoint3x4(local);
+
+        Vector3 Dir(float lonDeg, float latDeg) =>
+            plan.longitudeFrame == LongitudeFrame.PlanetTileMap
+                ? TileMapLonLatToDirection(lonDeg, latDeg)
+                : StudyLonLatToDirection(lonDeg, latDeg);
+
+        void DrawParallel(float latDeg, Color color, float radialOffset)
+        {
+            Gizmos.color = color;
+            Vector3 prev = Vector3.zero;
+            for (int i = 0; i <= steps; i++)
+            {
+                float t = i / (float)steps;
+                float lon = Mathf.Lerp(lon0, lon1, t);
+                Vector3 p = LocalToWorld(Dir(lon, latDeg) * (radius + radialOffset));
+                if (i > 0)
+                    Gizmos.DrawLine(prev, p);
+                prev = p;
+            }
+        }
+
+        DrawParallel(plan.sectorLatitudeMin, new Color(0.2f, 0.85f, 1f, 0.9f), 0.3f);
+        DrawParallel(plan.sectorLatitudeMax, new Color(0.2f, 0.85f, 1f, 0.9f), 0.3f);
+        DrawParallel(plan.sectorLatitudeMax, new Color(0.85f, 0.55f, 1f, 0.85f), plan.ridgeHeight);
+        DrawParallel(plan.sectorLatitudeMin, new Color(0.95f, 0.45f, 0.25f, 0.85f), -plan.cliffDepth);
+
+        if (!plan.coverFullRing)
+        {
+            Gizmos.color = new Color(0.2f, 0.85f, 1f, 0.9f);
+            Vector3 westMin = LocalToWorld(Dir(lon0, plan.sectorLatitudeMin) * (radius + 0.3f));
+            Vector3 westMax = LocalToWorld(Dir(lon0, plan.sectorLatitudeMax) * (radius + 0.3f));
+            Vector3 eastMin = LocalToWorld(Dir(lon1, plan.sectorLatitudeMin) * (radius + 0.3f));
+            Vector3 eastMax = LocalToWorld(Dir(lon1, plan.sectorLatitudeMax) * (radius + 0.3f));
+            Gizmos.DrawLine(westMin, westMax);
+            Gizmos.DrawLine(eastMin, eastMax);
+        }
+
+        Gizmos.color = new Color(0.35f, 0.9f, 0.45f, 0.95f);
+        Vector3 north = LocalToWorld(Vector3.up * (radius + Mathf.Max(4f, plan.ridgeHeight)));
+        Gizmos.DrawLine(planet.Center, north);
+    }
+#endif
 }
