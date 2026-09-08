@@ -1,0 +1,29 @@
+{
+  "checks": [
+    {
+      "mesh": "A2_Playable_Reference",
+      "vertices": 4477,
+      "triangles": 8640,
+      "min_radius": 74.99999999999999,
+      "max_radius": 75.00000000000001
+    },
+    {
+      "mesh": "A2_North_Ridge",
+      "vertices": 1089,
+      "triangles": 1920,
+      "min_radius": 74.99999999999999,
+      "max_radius": 98.99788364458114
+    },
+    {
+      "mesh": "A2_South_Cliff",
+      "vertices": 1210,
+      "triangles": 2160,
+      "min_radius": 60.999999999999986,
+      "max_radius": 75.00000000000001
+    }
+  ],
+  "unity_engine_tested": false,
+  "colliders_included": false,
+  "uvs_included": false,
+  "open_sector_edges": true
+}
