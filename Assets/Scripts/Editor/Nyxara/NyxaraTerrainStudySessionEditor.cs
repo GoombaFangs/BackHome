@@ -98,7 +98,7 @@ public class NyxaraTerrainStudySessionEditor : Editor
         EditorGUILayout.Space(8);
         EditorGUILayout.LabelField("Stage 6 — Placeholder walls", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
-            "After a full-ring bake, hide every Borders cube renderer (colliders stay). " +
+            "After a full-ring bake, hide every Borders cube renderer. In Play, solid Border colliders are off (triggers stay). " +
             "A2-only hide is Cube (2)/(3)/(4)/(7); Cube (5) stays until R1 is in the ring. " +
             "Do not Apply Prefab onto PlanetNyxara.",
             MessageType.Warning);

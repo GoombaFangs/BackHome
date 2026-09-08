@@ -221,14 +221,14 @@ public static class NyxaraA2NorthRidgeMeshBuilder
             return
                 $"Ring north mountain: {verts} verts, {tris} tris, max height {settings.ridgeHeight:0.#} local units. " +
                 "Mass sits on the blocked (north) side of every north wall. Gaps without a north wall stay open. " +
-                "Ground MeshCollider blocks like a wall; tiles stay the floor. " +
+                "Visual only; walk band is kinematic. " +
                 "Smooth base / slope / repeating lobes / back to the sphere.";
         }
 
         return
             $"A2 north mountain: {verts} verts, {tris} tris, max height {settings.ridgeHeight:0.#} local units. " +
             "Wide mass on the blocked (north) side of Cube (3)/(4). Cube (5) is shared with R1 and is not meshed over. " +
-            "No collider on the playable floor. West/east openings stay south of the wall. Smooth base / slope / two lobes / back to the sphere. Ground MeshCollider blocks the mountain like a wall.";
+            "No collider. West/east openings stay south of the wall. Smooth base / slope / two lobes / back to the sphere. Visual only; walk band is kinematic.";
     }
 
     static float NorthPresence(Settings settings, float studyLon)

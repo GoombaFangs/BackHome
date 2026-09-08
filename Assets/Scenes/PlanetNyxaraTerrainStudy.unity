@@ -3848,133 +3848,6 @@ Mesh:
       - serializedVersion: 1
         m_IndexStart: 0
         m_IndexCount: 0
---- !u!1 &506631892
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 506631893}
-  - component: {fileID: 506631897}
-  - component: {fileID: 506631896}
-  - component: {fileID: 506631895}
-  - component: {fileID: 506631894}
-  m_Layer: 3
-  m_Name: NyxaraA2LipWalls
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &506631893
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 506631892}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 920260002}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &506631894
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 506631892}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 91cab7f1054072149ba47cf1d076929a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::NyxaraA2LipWalls
-  bakedMesh: {fileID: 4300000, guid: 6e243fc188bc582449d6db9cca78662f, type: 2}
---- !u!64 &506631895
-MeshCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 506631892}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 0
-  serializedVersion: 5
-  m_Convex: 0
-  m_CookingOptions: 30
-  m_Mesh: {fileID: 0}
---- !u!23 &506631896
-MeshRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 506631892}
-  m_Enabled: 0
-  m_CastShadows: 1
-  m_ReceiveShadows: 1
-  m_DynamicOccludee: 1
-  m_StaticShadowCaster: 0
-  m_MotionVectors: 1
-  m_LightProbeUsage: 1
-  m_ReflectionProbeUsage: 1
-  m_RayTracingMode: 2
-  m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_ForceMeshLod: -1
-  m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
-  m_RendererPriority: 0
-  m_Materials:
-  - {fileID: 0}
-  m_StaticBatchInfo:
-    firstSubMesh: 0
-    subMeshCount: 0
-  m_StaticBatchRoot: {fileID: 0}
-  m_ProbeAnchor: {fileID: 0}
-  m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
-  m_ReceiveGI: 1
-  m_PreserveUVs: 0
-  m_IgnoreNormalsForChartDetection: 0
-  m_ImportantGI: 0
-  m_StitchLightmapSeams: 1
-  m_SelectedEditorRenderState: 3
-  m_MinimumChartSize: 4
-  m_AutoUVMaxDistance: 0.5
-  m_AutoUVMaxAngle: 89
-  m_LightmapParameters: {fileID: 0}
-  m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  m_MaskInteraction: 0
-  m_AdditionalVertexStreams: {fileID: 0}
---- !u!33 &506631897
-MeshFilter:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 506631892}
-  m_Mesh: {fileID: 4300000, guid: 6e243fc188bc582449d6db9cca78662f, type: 2}
 --- !u!1 &605354136
 GameObject:
   m_ObjectHideFlags: 0
@@ -5144,7 +5017,6 @@ Transform:
   m_Children:
   - {fileID: 920261002}
   - {fileID: 920262002}
-  - {fileID: 506631893}
   m_Father: {fileID: 176962285}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &920260003
@@ -8898,7 +8770,6 @@ GameObject:
   - component: {fileID: 920261003}
   - component: {fileID: 920261004}
   - component: {fileID: 920261005}
-  - component: {fileID: 920261006}
   m_Layer: 3
   m_Name: NyxaraA2NorthRidge
   m_TagString: Untagged
@@ -8994,30 +8865,8 @@ MonoBehaviour:
   ridgeMaterial: {fileID: 2100000, guid: c5d7e9f1a3b46587a0c1d2e3f4071829, type: 2}
   bakeReport: 'Ring north mountain: 2736 verts, 5184 tris, max height 18 local units.
     Mass sits on the blocked (north) side of every north wall. Gaps without a north
-    wall stay open. Ground MeshCollider blocks like a wall; tiles stay the floor.
+    wall stay open. Visual only; walk band is kinematic.
     Smooth base / slope / repeating lobes / back to the sphere.'
---- !u!64 &920261006
-MeshCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 920261001}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 0
-  serializedVersion: 5
-  m_Convex: 0
-  m_CookingOptions: 30
-  m_Mesh: {fileID: 0}
 --- !u!1 &920262001
 GameObject:
   m_ObjectHideFlags: 0
@@ -9030,7 +8879,6 @@ GameObject:
   - component: {fileID: 920262003}
   - component: {fileID: 920262004}
   - component: {fileID: 920262005}
-  - component: {fileID: 920262006}
   m_Layer: 3
   m_Name: NyxaraA2SouthCliff
   m_TagString: Untagged
@@ -9126,30 +8974,8 @@ MonoBehaviour:
   cliffMaterial: {fileID: 2100000, guid: d0e2f4a638057b9c1d3e5f7a9204b6c8, type: 2}
   bakeReport: "Ring south cliff: 1664 verts, 2712 tris, drop 13\u201314 local units
     toward center. Lip is each authored south wall. Tiles in the pit use the same
-    profile. Gaps without a south wall stay at full radius. Ground MeshCollider blocks
-    the face like a wall. Playable floor stays north of the lip."
---- !u!64 &920262006
-MeshCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 920262001}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 0
-  serializedVersion: 5
-  m_Convex: 0
-  m_CookingOptions: 30
-  m_Mesh: {fileID: 0}
+    profile. Gaps without a south wall stay at full radius. Visual only; walk band is
+    kinematic. Playable floor stays north of the lip."
 --- !u!1 &930000001
 GameObject:
   m_ObjectHideFlags: 0

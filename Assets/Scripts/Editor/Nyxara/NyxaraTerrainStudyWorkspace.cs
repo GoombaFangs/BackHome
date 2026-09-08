@@ -346,69 +346,10 @@ public static class NyxaraTerrainStudyWorkspace
         session.EnableFullRing();
         BakeNorthRidge();
         BakeSouthCliff();
-        BakeLipWalls();
         session.SetHideCoveredPlaceholderWallRenderers(true);
         EditorSceneManager.MarkSceneDirty(session.gameObject.scene);
         Debug.Log(
-            "[BackHome] Baked full-ring ridge and cliff. Walk band is kinematic (no lip/Border physics). Play Mode, Game View 9:16. Do not Apply Prefab onto PlanetNyxara.");
-    }
-
-    [MenuItem("BackHome/Nyxara Terrain Study/Bake Invisible Lip Walls")]
-    public static void BakeLipWalls()
-    {
-        if (IsOriginalPlaySceneOpen())
-        {
-            EditorUtility.DisplayDialog(
-                "Nyxara Terrain Study",
-                "Open PlanetNyxaraTerrainStudy first. The original play scene is never modified.",
-                "OK");
-            return;
-        }
-
-        NyxaraTerrainStudySession session = Object.FindAnyObjectByType<NyxaraTerrainStudySession>();
-        if (session == null)
-            return;
-
-        session.BindPlanet();
-        session.EnsureLipWalls();
-        NyxaraA2LipWalls walls = session.GetComponentInChildren<NyxaraA2LipWalls>(true);
-        if (walls == null)
-            return;
-
-        MeshFilter filter = walls.GetComponent<MeshFilter>();
-        Mesh mesh = filter != null ? filter.sharedMesh : null;
-        if (mesh == null)
-            return;
-
-        string folder = "Assets/Resources/Galaxy/Nyxara/Terrain/A2";
-        if (!AssetDatabase.IsValidFolder("Assets/Resources/Galaxy/Nyxara/Terrain"))
-            AssetDatabase.CreateFolder("Assets/Resources/Galaxy/Nyxara", "Terrain");
-        if (!AssetDatabase.IsValidFolder(folder))
-            AssetDatabase.CreateFolder("Assets/Resources/Galaxy/Nyxara/Terrain", "A2");
-
-        Mesh saved = AssetDatabase.LoadAssetAtPath<Mesh>(NyxaraA2LipWalls.MeshAssetPath);
-        if (saved == null)
-        {
-            Mesh copy = Object.Instantiate(mesh);
-            copy.name = NyxaraA2LipWallMeshBuilder.MeshName;
-            AssetDatabase.CreateAsset(copy, NyxaraA2LipWalls.MeshAssetPath);
-            saved = copy;
-        }
-        else
-        {
-            saved.Clear();
-            saved.indexFormat = mesh.indexFormat;
-            saved.vertices = mesh.vertices;
-            saved.triangles = mesh.triangles;
-            saved.normals = mesh.normals;
-            saved.RecalculateBounds();
-        }
-
-        EditorUtility.SetDirty(saved);
-        AssetDatabase.SaveAssets();
-        walls.SetBaked(saved);
-        EditorSceneManager.MarkSceneDirty(session.gameObject.scene);
-        Debug.Log("[BackHome] Baked lip wall mesh (collider stays off — kinematic walk band).");
+            "[BackHome] Baked full-ring ridge and cliff. Walk band is kinematic. Play Mode, Game View 9:16. Do not Apply Prefab onto PlanetNyxara.");
     }
 
     [MenuItem("BackHome/Nyxara Terrain Study/Hide A2 Placeholder Wall Renderers")]
@@ -518,8 +459,6 @@ public static class NyxaraTerrainStudyWorkspace
         session.BindPlanet();
         NyxaraA2NorthRidge ridge = EnsureNorthRidgeObject(session);
         NyxaraA2SouthCliff cliff = EnsureSouthCliffObject(session);
-        session.EnsureLipWalls();
-        NyxaraA2LipWalls lips = session.GetComponentInChildren<NyxaraA2LipWalls>(true);
         if (ridge == null || cliff == null)
             return;
 
@@ -534,8 +473,6 @@ public static class NyxaraTerrainStudyWorkspace
         {
             CloneIdentityChild(ridge.gameObject, root.transform);
             CloneIdentityChild(cliff.gameObject, root.transform);
-            if (lips != null)
-                CloneIdentityChild(lips.gameObject, root.transform);
             PrefabUtility.SaveAsPrefabAsset(root, TerrainPrefabPath);
         }
         finally
@@ -737,7 +674,6 @@ public static class NyxaraTerrainStudyWorkspace
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
         renderer.receiveShadows = true;
         go.layer = NyxaraTerrainCollision.GroundLayerIndex;
-        go.AddComponent<MeshCollider>();
         return Undo.AddComponent<NyxaraA2NorthRidge>(go);
     }
 
@@ -768,7 +704,6 @@ public static class NyxaraTerrainStudyWorkspace
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
         renderer.receiveShadows = true;
         go.layer = NyxaraTerrainCollision.GroundLayerIndex;
-        go.AddComponent<MeshCollider>();
         return Undo.AddComponent<NyxaraA2SouthCliff>(go);
     }
 

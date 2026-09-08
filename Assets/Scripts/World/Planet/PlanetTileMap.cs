@@ -91,7 +91,7 @@ public class PlanetTileMap : MonoBehaviour
         [Tooltip("If true, later stages may use the optional ~7.49 south-cliff shift. Default is authored walls.")]
         public bool useOptionalSouthCliffShift;
 
-        [Tooltip("How far south of the lip the pit extends, in latitude degrees.")]
+        [Tooltip("How many latitude degrees the steep drop takes to reach full pit depth. In full-ring mode the floor then continues to the south pole.")]
         public float cliffSpanDegrees = 18f;
 
         [Tooltip("Study-frame longitudes of the serialized south lip (authored wall). Filled by the study session.")]
@@ -256,8 +256,8 @@ public class PlanetTileMap : MonoBehaviour
         float radius = _planet.GetTerrainRadius(up) + lift + GetCubeHeight();
         if (!enableBlocks && overlap > 1.0001f)
             radius *= overlap;
-        // Do not subtract the cliff pit: PlanetWalker uses this as a floor it cannot go below.
-        // Descent is blocked by the authored lip colliders, not by a fall mechanic.
+        // Do not subtract the south basin: PlanetWalker uses this as a floor it cannot go below.
+        // The pit is visual only. The walk band stays on this radius.
         return radius;
     }
 

@@ -3,7 +3,7 @@ using UnityEngine;
 /// <summary>
 /// Kinematic north/south bounds for the Nyxara walk band. When the study work plan is on,
 /// the player is kept between the authored lips in code — no physics walls on those edges,
-/// so the capsule cannot snag on cubes, curtains, or rock slopes.
+/// so the capsule cannot snag on cubes or rock slopes.
 /// </summary>
 public static class NyxaraRouteBounds
 {
@@ -18,15 +18,13 @@ public static class NyxaraRouteBounds
     }
 
     /// <summary>
-    /// Border cubes, lip curtains, and rock meshes. Ignored by the walker while the route
+    /// Border cubes and leftover rock colliders. Ignored by the walker while the route
     /// band is active so those colliders cannot pin the player to a seam.
     /// </summary>
     public static bool ShouldIgnorePhysicsWall(Collider col, PlanetTileMap tiles)
     {
         if (!IsActive(tiles) || col == null)
             return false;
-        if (col.GetComponent<NyxaraA2LipWalls>() != null)
-            return true;
         if (col.GetComponent<NyxaraA2NorthRidge>() != null)
             return true;
         if (col.GetComponent<NyxaraA2SouthCliff>() != null)
@@ -46,8 +44,9 @@ public static class NyxaraRouteBounds
     }
 
     /// <summary>
-    /// Ignore physical contact with Borders / lip / rock so a kinematic body cannot snag.
-    /// Trigger volumes on Borders stay active. Call again with IsActive false to restore.
+    /// Ignore physical contact with Borders / leftover rock colliders so a kinematic body
+    /// cannot snag. Trigger volumes on Borders stay active. Call again with IsActive false
+    /// to restore.
     /// </summary>
     public static void ApplyIgnoreCollisions(Collider player, SphericalPlanet planet, PlanetTileMap tiles)
     {
@@ -68,9 +67,6 @@ public static class NyxaraRouteBounds
             }
         }
 
-        NyxaraA2LipWalls lips = planet.GetComponentInChildren<NyxaraA2LipWalls>(true);
-        if (lips != null)
-            IgnoreIfPresent(player, lips.GetComponent<Collider>(), ignore);
         NyxaraA2NorthRidge ridge = planet.GetComponentInChildren<NyxaraA2NorthRidge>(true);
         if (ridge != null)
             IgnoreIfPresent(player, ridge.GetComponent<Collider>(), ignore);

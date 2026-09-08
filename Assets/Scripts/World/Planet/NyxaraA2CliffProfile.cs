@@ -325,8 +325,10 @@ public static class NyxaraA2CliffProfile
     }
 
     /// <summary>
-    /// Negative radial offset (toward planet center) for the cliff pit. Zero on the playable
-    /// side of the authored south wall, on meridians with no south wall, and south of the drop.
+    /// Negative radial offset (toward planet center) for the south basin. Zero on the
+    /// playable side of the south rim. In full-ring mode the floor stays at pit depth
+    /// from the steep drop all the way to the south pole (one southern region). A2-only
+    /// still returns to the sphere south of <see cref="PlanetTileMap.TerrainWorkPlan.sectorLatitudeMin"/>.
     /// </summary>
     public static float RadialOffset(PlanetTileMap.TerrainWorkPlan plan, float studyLon, float studyLat)
     {
@@ -337,17 +339,14 @@ public static class NyxaraA2CliffProfile
         float lip;
         if (plan.coverFullRing)
         {
-            fade = LipPresence(
-                plan.cliffLipStudyLongitudes, plan.cliffLipLatitudes, studyLon, wrap: true);
-            if (fade <= 0.0001f)
-                return 0f;
-            if (!TrySampleLipLatitude(
+            if (!TryInterpolateValidLip(
                     plan.cliffLipStudyLongitudes,
                     plan.cliffLipLatitudes,
                     studyLon,
                     wrap: true,
                     out lip))
                 return 0f;
+            fade = 1f;
         }
         else
         {
@@ -361,22 +360,90 @@ public static class NyxaraA2CliffProfile
             return 0f;
 
         float span = Mathf.Max(8f, plan.cliffSpanDegrees);
-        float southLimit = plan.coverFullRing ? lip - span : plan.sectorLatitudeMin;
-        if (studyLat <= southLimit - SouthReturnDegrees)
-            return 0f;
-
         float southOfLip = (lip - LipBlendDegrees) - studyLat;
-        float t = Mathf.Clamp01(southOfLip / span);
-        float depth = Mathf.Lerp(plan.cliffDepth, Mathf.Max(plan.cliffDepth, plan.cliffDepthMax), Smooth01((t - 0.45f) / 0.4f));
+        float t = southOfLip <= 0f ? 0f : Mathf.Clamp01(southOfLip / span);
+        float depth = Mathf.Lerp(
+            plan.cliffDepth,
+            Mathf.Max(plan.cliffDepth, plan.cliffDepthMax),
+            Smooth01((t - 0.45f) / 0.4f));
         float drop = depth * DropShape(t);
 
-        if (studyLat < southLimit)
+        if (!plan.coverFullRing)
         {
-            float back = Smooth01((southLimit - studyLat) / SouthReturnDegrees);
-            drop *= 1f - back;
+            float southLimit = plan.sectorLatitudeMin;
+            if (studyLat <= southLimit - SouthReturnDegrees)
+                return 0f;
+            if (studyLat < southLimit)
+            {
+                float back = Smooth01((southLimit - studyLat) / SouthReturnDegrees);
+                drop *= 1f - back;
+            }
         }
 
         return -drop * fade;
+    }
+
+    /// <summary>
+    /// South-rim latitude at this longitude. Uses authored walls when present, otherwise
+    /// interpolates across gaps so the southern basin is one continuous floor.
+    /// </summary>
+    public static bool TryInterpolateValidLip(
+        float[] lons,
+        float[] lats,
+        float studyLon,
+        bool wrap,
+        out float latitude)
+    {
+        if (TrySampleLipLatitude(lons, lats, studyLon, wrap, out latitude))
+            return true;
+
+        latitude = 0f;
+        if (!wrap || lons == null || lats == null || lons.Length != lats.Length || lons.Length == 0)
+            return false;
+
+        studyLon = WrapStudyLon(studyLon);
+        int n = lons.Length;
+        int iLeft = -1;
+        int iRight = -1;
+        float bestLeft = 1e9f;
+        float bestRight = 1e9f;
+        for (int i = 0; i < n; i++)
+        {
+            if (!HasLip(lats[i]))
+                continue;
+            float east = Mathf.Repeat(lons[i] - studyLon, 360f);
+            float west = Mathf.Repeat(studyLon - lons[i], 360f);
+            if (east < bestRight)
+            {
+                bestRight = east;
+                iRight = i;
+            }
+
+            if (west < bestLeft)
+            {
+                bestLeft = west;
+                iLeft = i;
+            }
+        }
+
+        if (iLeft < 0 && iRight < 0)
+            return false;
+        if (iLeft < 0)
+        {
+            latitude = lats[iRight];
+            return true;
+        }
+
+        if (iRight < 0)
+        {
+            latitude = lats[iLeft];
+            return true;
+        }
+
+        float span = bestLeft + bestRight;
+        float t = span > 0.0001f ? bestLeft / span : 0f;
+        latitude = Mathf.Lerp(lats[iLeft], lats[iRight], t);
+        return true;
     }
 
     public static float LonEdgeFade(float studyLon, float lon0, float lon1)
@@ -391,7 +458,7 @@ public static class NyxaraA2CliffProfile
         return Smooth01(t / edge) * Smooth01((1f - t) / edge);
     }
 
-    /// <summary>0 at the lip, 1 at full depth. Steep drop just south of the wall, then a floor, then a return.</summary>
+    /// <summary>0 at the lip, 1 at full depth. Steep drop just south of the wall, then a floor.</summary>
     public static float DropShape(float t)
     {
         t = Mathf.Clamp01(t);

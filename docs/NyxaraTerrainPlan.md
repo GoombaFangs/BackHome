@@ -797,7 +797,7 @@ Re-bake after pulling: **Bake A2 North Ridge** and **Bake A2 South Cliff**.
 
 ## 23. Full-ring ridge and cliff (2026-09-08)
 
-Study scene only. `coverFullRing` on the study `TerrainWorkPlan`. Same rock objects as A2 (`NyxaraA2NorthRidge` / `NyxaraA2SouthCliff`); the bake overwrites those assets with a wrapped strip. Border GameObjects stay for layout compare. In study Play, solid Border BoxColliders are turned off (triggers stay). Collision is kinematic: `NyxaraRouteBounds` keeps latitude between the lips and lets the player slide along the edge. The walker also ignores the tile-mesh cliff face, lip curtains, and rock so a capsule cannot snag. Teleport only if the player is past the lip or in the pit. Production `PlanetNyxara` with `workPlan` off still uses Border BoxColliders. No Apply Prefab.
+Study scene only. `coverFullRing` on the study `TerrainWorkPlan`. Same rock objects as A2 (`NyxaraA2NorthRidge` / `NyxaraA2SouthCliff`); the bake overwrites those assets with a wrapped strip. Border GameObjects stay for layout compare. In study Play, solid Border BoxColliders are turned off (triggers stay). Collision is kinematic: `NyxaraRouteBounds` keeps latitude between the lips and lets the player slide along the edge. The walker ignores the tile-mesh cliff face and leftover rock colliders so a capsule cannot snag. Teleport only if the player is past the lip or in the pit. Production `PlanetNyxara` with `workPlan` off still uses Border BoxColliders. No Apply Prefab.
 
 **Game View, Play Mode, and a lap of R1 → A2 → A1 → H → B → A5 → R2 → A4 → A3 were not run.**
 

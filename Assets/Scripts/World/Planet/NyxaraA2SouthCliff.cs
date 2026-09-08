@@ -1,9 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Scene visual for the baked south cliff. Walk collision is kinematic
-/// (<see cref="NyxaraRouteBounds"/>). This mesh has no collider.
-/// Mesh is assigned by an editor bake, not rebuilt every frame.
+/// Scene visual for the south cliff rim. The lowered southern basin is the tile mesh.
+/// Walk collision is kinematic (<see cref="NyxaraRouteBounds"/>). This mesh has no collider.
 /// </summary>
 [ExecuteAlways]
 [DisallowMultipleComponent]
@@ -31,6 +30,20 @@ public class NyxaraA2SouthCliff : MonoBehaviour
         cliffMaterial = material;
         bakeReport = report;
         Assign(mesh, material);
+    }
+
+    public void RebuildFromPlan(PlanetTileMap.TerrainWorkPlan plan, float walkRadius)
+    {
+        Material mat = cliffMaterial;
+#if UNITY_EDITOR
+        if (mat == null)
+            mat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(MaterialAssetPath);
+#endif
+        ReleaseRuntimeMesh();
+        var settings = NyxaraA2SouthCliffMeshBuilder.FromPlan(plan, walkRadius);
+        _runtimeMesh = NyxaraA2SouthCliffMeshBuilder.Build(settings);
+        bakeReport = NyxaraA2SouthCliffMeshBuilder.Describe(settings, _runtimeMesh);
+        Assign(_runtimeMesh, mat);
     }
 
     void OnEnable()
@@ -71,6 +84,18 @@ public class NyxaraA2SouthCliff : MonoBehaviour
         if (_renderer == null)
             _renderer = GetComponent<MeshRenderer>();
 
+        var session = GetComponentInParent<NyxaraTerrainStudySession>();
+        var planet = GetComponentInParent<SphericalPlanet>();
+        PlanetTileMap tileMap = planet != null ? planet.GetComponent<PlanetTileMap>() : null;
+        if (session != null && NyxaraA2CliffProfile.PlanApplies(session.Plan))
+        {
+            float walk = tileMap != null
+                ? tileMap.GetWalkSurfaceRadius(PlanetTileMap.StudyLonLatToDirection(35f, -12f))
+                : (planet != null ? planet.Radius : 75f);
+            RebuildFromPlan(session.Plan, walk);
+            return;
+        }
+
         if (bakedMesh != null)
         {
             Assign(bakedMesh, cliffMaterial);
@@ -90,21 +115,13 @@ public class NyxaraA2SouthCliff : MonoBehaviour
             return;
         }
 
-        var session = GetComponentInParent<NyxaraTerrainStudySession>();
-        var planet = GetComponentInParent<SphericalPlanet>();
         if (planet == null)
             return;
-        var tileMap = planet.GetComponent<PlanetTileMap>();
-        var plan = session != null ? session.Plan : (tileMap != null ? tileMap.WorkPlan : null);
-        float walk = tileMap != null
+        var plan = tileMap != null ? tileMap.WorkPlan : null;
+        float previewWalk = tileMap != null
             ? tileMap.GetWalkSurfaceRadius(PlanetTileMap.StudyLonLatToDirection(35f, -12f))
             : planet.Radius;
-        var settings = NyxaraA2SouthCliffMeshBuilder.FromPlan(plan, walk);
-        ReleaseRuntimeMesh();
-        _runtimeMesh = NyxaraA2SouthCliffMeshBuilder.Build(settings);
-        bakeReport = NyxaraA2SouthCliffMeshBuilder.Describe(settings, _runtimeMesh) +
-                     " (in-memory preview — use Bake A2 South Cliff to save the asset).";
-        Assign(_runtimeMesh, mat);
+        RebuildFromPlan(plan, previewWalk);
 #endif
     }
 

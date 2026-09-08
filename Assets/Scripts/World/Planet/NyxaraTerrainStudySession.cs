@@ -43,7 +43,7 @@ public class NyxaraTerrainStudySession : MonoBehaviour
     [SerializeField] NyxaraA2BoundaryOverlay boundaryOverlay = new NyxaraA2BoundaryOverlay();
     [SerializeField] bool autoRebuildBoundaryOverlay = true;
     [SerializeField]
-    [Tooltip("Hide MeshRenderer on covered Border cubes after the mountain and cliff cover them. BoxColliders stay. Full ring hides every Borders cube; A2-only hides Cube (2)/(3)/(4)/(7) and leaves Cube (5) for R1.")]
+    [Tooltip("Hide MeshRenderer on covered Border cubes after the mountain and cliff cover them. GameObjects stay for layout compare. In Play, solid BoxColliders are off (triggers stay). Full ring hides every Borders cube; A2-only hides Cube (2)/(3)/(4)/(7) and leaves Cube (5) for R1.")]
     bool hideCoveredPlaceholderWallRenderers = true;
 
     public const string BoundaryOverlayAssetPath =
@@ -169,6 +169,7 @@ public class NyxaraTerrainStudySession : MonoBehaviour
         if (plan.cliffSpanDegrees < 8f)
             plan.cliffSpanDegrees = NyxaraA2CliffProfile.DefaultSpanDegrees;
         tileMap.SetWorkPlan(ClonePlan(plan));
+        RefreshSouthCliffMesh();
         DisableRoutePhysicsColliders();
 
 #if UNITY_EDITOR
@@ -184,10 +185,6 @@ public class NyxaraTerrainStudySession : MonoBehaviour
             return;
 
         BindPlanet();
-        NyxaraA2LipWalls lips = GetComponentInChildren<NyxaraA2LipWalls>(true);
-        if (lips != null)
-            NyxaraTerrainCollision.ClearBlockingMesh(lips.gameObject);
-
         NyxaraA2NorthRidge ridge = GetComponentInChildren<NyxaraA2NorthRidge>(true);
         if (ridge != null)
             NyxaraTerrainCollision.ClearBlockingMesh(ridge.gameObject);
@@ -201,9 +198,20 @@ public class NyxaraTerrainStudySession : MonoBehaviour
             SetBorderSolidCollidersEnabled(false);
     }
 
-    public void EnsureLipWalls()
+    void RefreshSouthCliffMesh()
     {
-        DisableRoutePhysicsColliders();
+        if (IsOriginalPlayScene())
+            return;
+
+        BindPlanet();
+        NyxaraA2SouthCliff cliff = GetComponentInChildren<NyxaraA2SouthCliff>(true);
+        if (cliff == null || plan == null)
+            return;
+
+        float walk = tileMap != null
+            ? tileMap.GetWalkSurfaceRadius(PlanetTileMap.StudyLonLatToDirection(35f, -12f))
+            : (planet != null ? planet.Radius : 75f);
+        cliff.RebuildFromPlan(plan, walk);
     }
 
     public void ClearPlanFromTileMap()

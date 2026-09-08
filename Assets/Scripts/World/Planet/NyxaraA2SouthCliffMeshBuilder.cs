@@ -174,15 +174,15 @@ public static class NyxaraA2SouthCliffMeshBuilder
         {
             return
                 $"Ring south cliff: {verts} verts, {tris} tris, drop {depth:0.#}–{settings.plan?.cliffDepthMax:0.#} local units toward center. " +
-                "Lip is each authored south wall. Tiles in the pit use the same profile. Gaps without a south wall stay at full radius. " +
-                "Ground MeshCollider blocks the face like a wall. Playable floor stays north of the lip.";
+                "Lip is each authored south wall. Tiles south of the rim stay at pit depth to the south pole. " +
+                "Visual only; walk band is kinematic. Playable floor stays north of the lip.";
         }
 
         return
             $"A2 south cliff: {verts} verts, {tris} tris, drop {depth:0.#}–{settings.plan?.cliffDepthMax:0.#} local units toward center. " +
             "Lip is the authored south wall (Cube 2 / Cube 7). Tiles in the pit use the same profile. " +
-            "Ground MeshCollider blocks the face like a wall. Playable floor and openings are north of the lip. " +
-            "Face follows the tile drop: lip, steep face, lower slope back to the sphere. Sector ends fade to existing ground.";
+            "Visual only; walk band is kinematic. Playable floor and openings are north of the lip. " +
+            "Face follows the tile drop: lip, steep face, then the sector pit. Sector ends fade to existing ground.";
     }
 
     static Color CliffVertexColor(float tLon, float tLat, float depth01)

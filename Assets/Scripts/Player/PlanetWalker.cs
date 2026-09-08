@@ -291,10 +291,7 @@ public class PlanetWalker : MonoBehaviour
         if (!_routeIgnoresApplied)
             ApplyRouteCollisionIgnores();
         moveDelta = NyxaraRouteBounds.FilterMove(_planet, _tiles, transform.position, moveDelta, hover);
-        if (!NyxaraRouteBounds.IsActive(_tiles))
-            moveDelta = ResolveObstacleMove(moveDelta, up);
-        else
-            moveDelta = ResolvePropMove(moveDelta, up);
+        moveDelta = ResolveObstacleMove(moveDelta, up, includeBorderWalls: !NyxaraRouteBounds.IsActive(_tiles));
 
         Vector3 probeOrigin = transform.position + moveDelta;
 
@@ -364,10 +361,10 @@ public class PlanetWalker : MonoBehaviour
     static readonly RaycastHit[] ObstacleHits = new RaycastHit[24];
 
     /// <summary>
-    /// Capsule-cast along tangent move. Used when the Nyxara route band is off (other planets,
-    /// or production Nyxara with workPlan disabled). Border cubes still block.
+    /// Capsule-cast along tangent move. Border cubes block only when the Nyxara route band
+    /// is off. Props still block in both modes. Tile mesh is the floor, not a wall.
     /// </summary>
-    Vector3 ResolveObstacleMove(Vector3 desiredDelta, Vector3 up)
+    Vector3 ResolveObstacleMove(Vector3 desiredDelta, Vector3 up, bool includeBorderWalls)
     {
         if (desiredDelta.sqrMagnitude < 0.0000001f)
             return desiredDelta;
@@ -383,7 +380,8 @@ public class PlanetWalker : MonoBehaviour
         float skin = 0.04f;
         Vector3 radial = (transform.position - _planet.Center).normalized;
 
-        if (TryNearestBlockingWall(bottom, top, radius, dir, dist + skin, out RaycastHit wallHit))
+        if (includeBorderWalls &&
+            TryNearestBlockingWall(bottom, top, radius, dir, dist + skin, out RaycastHit wallHit))
             return LimitAndSlideAlongWall(desiredDelta, dir, skin, up, radial, bottom, top, radius, wallHit);
 
         if (TryNearestBlockingProp(bottom, top, radius, dir, dist + skin, up, radial, out RaycastHit propHit))
@@ -527,30 +525,6 @@ public class PlanetWalker : MonoBehaviour
         }
 
         return limited + slide;
-    }
-
-    /// <summary>
-    /// Props only. Nyxara route edges are kinematic (see <see cref="NyxaraRouteBounds"/>).
-    /// </summary>
-    Vector3 ResolvePropMove(Vector3 desiredDelta, Vector3 up)
-    {
-        if (desiredDelta.sqrMagnitude < 0.0000001f)
-            return desiredDelta;
-
-        float scale = Mathf.Max(transform.lossyScale.x, transform.lossyScale.y, transform.lossyScale.z);
-        float radius = (_controller != null ? Mathf.Max(0.2f, _controller.radius * 0.9f) : 0.28f) * scale;
-        float height = (_controller != null ? Mathf.Max(1.4f, _controller.height) : 1.8f) * scale;
-        Vector3 bottom = transform.position + up * (radius + 0.05f);
-        Vector3 top = transform.position + up * (height - radius);
-        float dist = desiredDelta.magnitude;
-        Vector3 dir = desiredDelta / dist;
-        float skin = 0.04f;
-        Vector3 radial = (transform.position - _planet.Center).normalized;
-
-        if (TryNearestBlockingProp(bottom, top, radius, dir, dist + skin, up, radial, out RaycastHit hit))
-            return LimitAndSlideAlongWall(desiredDelta, dir, skin, up, radial, bottom, top, radius, hit);
-
-        return desiredDelta;
     }
 
     void ApplyRouteCollisionIgnores()
