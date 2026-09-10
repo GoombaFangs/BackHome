@@ -7,6 +7,7 @@ using UnityEngine;
 [ExecuteAlways]
 [DisallowMultipleComponent]
 [RequireComponent(typeof(MeshFilter))]
+[DefaultExecutionOrder(10)]
 public sealed class CasualWaterSphereMesh : MonoBehaviour
 {
     const int DefaultLat = 80;
@@ -52,6 +53,10 @@ public sealed class CasualWaterSphereMesh : MonoBehaviour
 
     void ApplyMesh()
     {
+        var seaFit = GetComponent<NyxaraSeaFit>();
+        if (seaFit != null)
+            return;
+
         _filter = GetComponent<MeshFilter>();
         if (_filter == null)
             return;

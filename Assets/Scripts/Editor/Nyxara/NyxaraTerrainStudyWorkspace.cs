@@ -9,7 +9,8 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// Creates and tears down the A2 ridge/cliff study workspace without touching play scenes.
+/// Creates and tears down the A2 ridge/cliff study workspace in PlanetNyxara.
+/// Do not Apply Prefab onto the PlanetNyxara prefab.
 /// </summary>
 public static class NyxaraTerrainStudyWorkspace
 {
@@ -37,11 +38,11 @@ public static class NyxaraTerrainStudyWorkspace
         NyxaraTerrainStudySession session = EnsureSessionInOpenScene();
         if (session != null)
         {
-            session.ApplyPlanToTileMap();
+            session.RebuildTerrainFromBorders();
             EditorSceneManager.MarkSceneDirty(session.gameObject.scene);
         }
 
-        Debug.Log("[BackHome] Opened Nyxara A2 terrain study. Do not Apply Prefab onto PlanetNyxara.");
+        Debug.Log("[BackHome] Opened PlanetNyxara terrain study. Do not Apply Prefab onto PlanetNyxara.");
     }
 
     [MenuItem("BackHome/Nyxara Terrain Study/Open Original PlanetNyxara Scene")]
@@ -55,21 +56,15 @@ public static class NyxaraTerrainStudyWorkspace
     [MenuItem("BackHome/Nyxara Terrain Study/Apply A2 Work Plan In Open Scene")]
     public static void ApplyPlanInOpenScene()
     {
-        if (IsOriginalPlaySceneOpen())
-        {
-            EditorUtility.DisplayDialog(
-                "Nyxara A2 Study",
-                "The original PlanetNyxara scene is open. Apply the work plan only in PlanetNyxaraTerrainStudy.",
-                "OK");
+        if (!RequirePlanetNyxaraScene())
             return;
-        }
 
         NyxaraTerrainStudySession session = EnsureSessionInOpenScene();
         if (session == null)
         {
             EditorUtility.DisplayDialog(
                 "Nyxara A2 Study",
-                "Open PlanetNyxaraTerrainStudy. The original play scene is never modified.",
+                "Open PlanetNyxara first.",
                 "OK");
             return;
         }
@@ -77,22 +72,13 @@ public static class NyxaraTerrainStudyWorkspace
         Undo.RecordObject(session, "Apply A2 Work Plan");
         if (session.TileMap != null)
             Undo.RecordObject(session.TileMap, "Apply A2 Work Plan");
-        session.ApplyPlanToTileMap();
+        session.RebuildTerrainFromBorders();
         EditorSceneManager.MarkSceneDirty(session.gameObject.scene);
     }
 
     [MenuItem("BackHome/Nyxara Terrain Study/Remove A2 Study Extras (Revert)")]
     public static void RevertStudyExtras()
     {
-        if (SceneManager.GetActiveScene().path == SourceScenePath)
-        {
-            EditorUtility.DisplayDialog(
-                "Nyxara A2 Study",
-                "The original PlanetNyxara scene is already open. Study extras live only in the study scene.",
-                "OK");
-            return;
-        }
-
         NyxaraTerrainStudySession[] sessions = Object.FindObjectsByType<NyxaraTerrainStudySession>(
             FindObjectsInactive.Include,
             FindObjectsSortMode.None);
@@ -120,20 +106,14 @@ public static class NyxaraTerrainStudyWorkspace
         if (scene.IsValid())
             EditorSceneManager.MarkSceneDirty(scene);
 
-        Debug.Log("[BackHome] Removed A2 terrain study extras. Open PlanetNyxara.unity for the original level.");
+        Debug.Log("[BackHome] Removed A2 terrain study extras from PlanetNyxara.");
     }
 
     [MenuItem("BackHome/Nyxara Terrain Study/Rebuild A2 Boundary Overlay")]
     public static void RebuildBoundaryOverlay()
     {
-        if (IsOriginalPlaySceneOpen())
-        {
-            EditorUtility.DisplayDialog(
-                "Nyxara A2 Study",
-                "Open PlanetNyxaraTerrainStudy first. The original play scene is never modified.",
-                "OK");
+        if (!RequirePlanetNyxaraScene())
             return;
-        }
 
         NyxaraTerrainStudySession session = Object.FindAnyObjectByType<NyxaraTerrainStudySession>();
         if (session == null)
@@ -159,7 +139,7 @@ public static class NyxaraTerrainStudyWorkspace
         {
             EditorUtility.DisplayDialog(
                 "Nyxara A2 Study",
-                "Rebuild the overlay in PlanetNyxaraTerrainStudy first.",
+                "Rebuild the overlay in PlanetNyxara first.",
                 "OK");
             return;
         }
@@ -183,14 +163,8 @@ public static class NyxaraTerrainStudyWorkspace
     [MenuItem("BackHome/Nyxara Terrain Study/Bake A2 North Ridge")]
     public static void BakeNorthRidge()
     {
-        if (IsOriginalPlaySceneOpen())
-        {
-            EditorUtility.DisplayDialog(
-                "Nyxara A2 Study",
-                "Open PlanetNyxaraTerrainStudy first. The original play scene is never modified.",
-                "OK");
+        if (!RequirePlanetNyxaraScene())
             return;
-        }
 
         NyxaraTerrainStudySession session = Object.FindAnyObjectByType<NyxaraTerrainStudySession>();
         if (session == null)
@@ -203,8 +177,7 @@ public static class NyxaraTerrainStudyWorkspace
         }
 
         session.BindPlanet();
-        if (session.BoundaryOverlay == null || !session.BoundaryOverlay.HasSamples)
-            session.RebuildBoundaryOverlay();
+        session.RebuildBoundaryOverlay();
 
         NyxaraA2NorthRidge ridge = EnsureNorthRidgeObject(session);
         if (ridge == null || session.Planet == null)
@@ -236,7 +209,9 @@ public static class NyxaraTerrainStudyWorkspace
             Object.DestroyImmediate(mesh);
         }
 
-        Material material = AssetDatabase.LoadAssetAtPath<Material>(NyxaraA2NorthRidge.MaterialAssetPath);
+        Material material = FirstAssignedMaterial(ridge.GetComponent<MeshRenderer>());
+        if (material == null)
+            material = AssetDatabase.LoadAssetAtPath<Material>(NyxaraA2NorthRidge.MaterialAssetPath);
         EditorUtility.SetDirty(saved);
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
@@ -248,87 +223,37 @@ public static class NyxaraTerrainStudyWorkspace
         Debug.Log("[BackHome] " + report);
     }
 
-    [MenuItem("BackHome/Nyxara Terrain Study/Bake A2 South Cliff")]
-    public static void BakeSouthCliff()
+    [MenuItem("BackHome/Nyxara Terrain Study/Rebuild Ridge And Cliff From Borders")]
+    public static void RebuildRidgeAndCliffFromBorders()
     {
-        if (IsOriginalPlaySceneOpen())
-        {
-            EditorUtility.DisplayDialog(
-                "Nyxara A2 Study",
-                "Open PlanetNyxaraTerrainStudy first. The original play scene is never modified.",
-                "OK");
+        if (!RequirePlanetNyxaraScene())
             return;
-        }
 
         NyxaraTerrainStudySession session = Object.FindAnyObjectByType<NyxaraTerrainStudySession>();
         if (session == null)
         {
             EditorUtility.DisplayDialog(
-                "Nyxara A2 Study",
+                "Nyxara Terrain Study",
                 "No NyxaraA2TerrainStudy object in the open scene.",
                 "OK");
             return;
         }
 
-        session.BindPlanet();
-        if (session.BoundaryOverlay == null || !session.BoundaryOverlay.HasSamples)
-            session.RebuildBoundaryOverlay();
-        else
-            session.ApplyPlanToTileMap();
-
-        NyxaraA2SouthCliff cliff = EnsureSouthCliffObject(session);
-        if (cliff == null || session.Planet == null)
-            return;
-
-        PlanetTileMap tileMap = session.TileMap;
-        float walk = tileMap != null
-            ? tileMap.GetWalkSurfaceRadius(PlanetTileMap.StudyLonLatToDirection(35f, -12f))
-            : session.Planet.Radius;
-        var settings = NyxaraA2SouthCliffMeshBuilder.FromPlan(session.Plan, walk);
-        Mesh mesh = NyxaraA2SouthCliffMeshBuilder.Build(settings);
-        string report = NyxaraA2SouthCliffMeshBuilder.Describe(settings, mesh);
-
-        string folder = "Assets/Resources/Galaxy/Nyxara/Terrain/A2";
-        if (!AssetDatabase.IsValidFolder("Assets/Resources/Galaxy/Nyxara/Terrain"))
-            AssetDatabase.CreateFolder("Assets/Resources/Galaxy/Nyxara", "Terrain");
-        if (!AssetDatabase.IsValidFolder(folder))
-            AssetDatabase.CreateFolder("Assets/Resources/Galaxy/Nyxara/Terrain", "A2");
-
-        Mesh saved = AssetDatabase.LoadAssetAtPath<Mesh>(NyxaraA2SouthCliff.MeshAssetPath);
-        if (saved == null)
-        {
-            AssetDatabase.CreateAsset(mesh, NyxaraA2SouthCliff.MeshAssetPath);
-            saved = mesh;
-        }
-        else
-        {
-            EditorUtility.CopySerialized(mesh, saved);
-            Object.DestroyImmediate(mesh);
-        }
-
-        Material material = AssetDatabase.LoadAssetAtPath<Material>(NyxaraA2SouthCliff.MaterialAssetPath);
-        EditorUtility.SetDirty(saved);
-        AssetDatabase.SaveAssets();
-        AssetDatabase.Refresh();
-
-        Undo.RecordObject(cliff, "Bake A2 South Cliff");
-        cliff.SetBaked(saved, material, report);
+        Undo.RecordObject(session, "Rebuild Ridge And Cliff From Borders");
+        if (session.TileMap != null)
+            Undo.RecordObject(session.TileMap, "Rebuild Ridge And Cliff From Borders");
+        session.RebuildTerrainFromBorders();
+        BakeNorthRidge();
         EditorSceneManager.MarkSceneDirty(session.gameObject.scene);
-        Selection.activeGameObject = cliff.gameObject;
-        Debug.Log("[BackHome] " + report);
+        Debug.Log(
+            "[BackHome] Rebuilt ridge from live Borders. Sea transform is left as authored. Do not Apply Prefab onto PlanetNyxara.");
     }
 
     [MenuItem("BackHome/Nyxara Terrain Study/Bake Full Ring Ridge And Cliff")]
     public static void BakeFullRing()
     {
-        if (IsOriginalPlaySceneOpen())
-        {
-            EditorUtility.DisplayDialog(
-                "Nyxara Terrain Study",
-                "Open PlanetNyxaraTerrainStudy first. The original play scene is never modified.",
-                "OK");
+        if (!RequirePlanetNyxaraScene())
             return;
-        }
 
         NyxaraTerrainStudySession session = Object.FindAnyObjectByType<NyxaraTerrainStudySession>();
         if (session == null)
@@ -345,11 +270,10 @@ public static class NyxaraTerrainStudyWorkspace
             Undo.RecordObject(session.TileMap, "Bake Full Ring");
         session.EnableFullRing();
         BakeNorthRidge();
-        BakeSouthCliff();
         session.SetHideCoveredPlaceholderWallRenderers(true);
         EditorSceneManager.MarkSceneDirty(session.gameObject.scene);
         Debug.Log(
-            "[BackHome] Baked full-ring ridge and cliff. Walk band is kinematic. Play Mode, Game View 9:16. Do not Apply Prefab onto PlanetNyxara.");
+            "[BackHome] Baked full-ring ridge. Walk band is kinematic. Sea transform is authored. Do not Apply Prefab onto PlanetNyxara.");
     }
 
     [MenuItem("BackHome/Nyxara Terrain Study/Hide A2 Placeholder Wall Renderers")]
@@ -366,14 +290,8 @@ public static class NyxaraTerrainStudyWorkspace
 
     static void SetA2PlaceholderWallRenderers(bool hide)
     {
-        if (IsOriginalPlaySceneOpen())
-        {
-            EditorUtility.DisplayDialog(
-                "Nyxara A2 Study",
-                "Open PlanetNyxaraTerrainStudy first. The original play scene is never modified.",
-                "OK");
+        if (!RequirePlanetNyxaraScene())
             return;
-        }
 
         NyxaraTerrainStudySession session = Object.FindAnyObjectByType<NyxaraTerrainStudySession>();
         if (session == null)
@@ -399,7 +317,7 @@ public static class NyxaraTerrainStudyWorkspace
         {
             EditorUtility.DisplayDialog(
                 "Nyxara A2 Study",
-                "Need PlanetNyxara and the player in the open scene. Enter Play Mode in PlanetNyxaraTerrainStudy, then run this again.\n\n" +
+                "Need PlanetNyxara and the player in the open scene. Enter Play Mode in PlanetNyxara, then run this again.\n\n" +
                 "Game View follows CameraFollow on the player (height 22 / back 9.5). Rotating the Scene camera does not change Game View.",
                 "OK");
             return;
@@ -437,29 +355,22 @@ public static class NyxaraTerrainStudyWorkspace
     [MenuItem("BackHome/Nyxara Terrain Study/Save A2 Terrain Prefab")]
     public static void SaveA2TerrainPrefab()
     {
-        if (IsOriginalPlaySceneOpen())
-        {
-            EditorUtility.DisplayDialog(
-                "Nyxara A2 Study",
-                "Save the A2 terrain prefab from PlanetNyxaraTerrainStudy only. The play scene is not modified.",
-                "OK");
+        if (!RequirePlanetNyxaraScene())
             return;
-        }
 
         NyxaraTerrainStudySession session = Object.FindAnyObjectByType<NyxaraTerrainStudySession>();
         if (session == null)
         {
             EditorUtility.DisplayDialog(
                 "Nyxara A2 Study",
-                "Open PlanetNyxaraTerrainStudy first.",
+                "Open PlanetNyxara first.",
                 "OK");
             return;
         }
 
         session.BindPlanet();
         NyxaraA2NorthRidge ridge = EnsureNorthRidgeObject(session);
-        NyxaraA2SouthCliff cliff = EnsureSouthCliffObject(session);
-        if (ridge == null || cliff == null)
+        if (ridge == null)
             return;
 
         string folder = "Assets/Resources/Galaxy/Nyxara/Terrain/A2";
@@ -472,7 +383,6 @@ public static class NyxaraTerrainStudyWorkspace
         try
         {
             CloneIdentityChild(ridge.gameObject, root.transform);
-            CloneIdentityChild(cliff.gameObject, root.transform);
             PrefabUtility.SaveAsPrefabAsset(root, TerrainPrefabPath);
         }
         finally
@@ -505,23 +415,19 @@ public static class NyxaraTerrainStudyWorkspace
         {
             EditorUtility.DisplayDialog(
                 "Nyxara A2 Study",
-                "Open PlanetNyxara or PlanetNyxaraTerrainStudy first.",
+                "Open PlanetNyxara first.",
                 "OK");
             return;
         }
 
-        bool playScene = SceneManager.GetActiveScene().path == SourceScenePath;
         var report = new StringBuilder();
-        if (!playScene)
+        int removedCopies = RemoveAddedLayoutCopies(planet);
+        if (removedCopies > 0)
         {
-            int removed = RemoveAddedLayoutCopies(planet);
-            if (removed > 0)
-            {
-                EditorSceneManager.MarkSceneDirty(planet.gameObject.scene);
-                report.AppendLine(
-                    "Removed " + removed +
-                    " scene-added Area/Border copies. Prefab originals (including B at 18.7, 8, -53.5 scale 60) were kept.");
-            }
+            EditorSceneManager.MarkSceneDirty(planet.gameObject.scene);
+            report.AppendLine(
+                "Removed " + removedCopies +
+                " scene-added Area/Border copies. Prefab originals (including B at 18.7, 8, -53.5 scale 60) were kept.");
         }
 
         string json = File.ReadAllText(SnapshotPath);
@@ -530,30 +436,27 @@ public static class NyxaraTerrainStudyWorkspace
         fail += CompareNamedChildren(planet.transform.Find("Borders"), json, false, report);
 
         PlanetTileMap tileMap = planet.GetComponent<PlanetTileMap>();
-        if (playScene && tileMap != null && tileMap.WorkPlan != null && tileMap.WorkPlan.enabled)
-        {
-            fail++;
-            report.AppendLine("FAIL workPlan.enabled is true in the play scene. Production must leave it off.");
-        }
-        else if (!playScene && tileMap != null && tileMap.WorkPlan != null && tileMap.WorkPlan.enabled)
-            report.AppendLine("OK study workPlan.enabled (pit on this instance only).");
-        else if (playScene)
-            report.AppendLine("OK play-scene workPlan is off or unset.");
+        if (tileMap != null && tileMap.WorkPlan != null && tileMap.WorkPlan.enabled)
+            report.AppendLine("OK workPlan.enabled in PlanetNyxara.");
+        else
+            report.AppendLine("OK workPlan is off or unset.");
 
-        bool studyInBuild = false;
+        bool leftoverStudyInBuild = false;
         foreach (EditorBuildSettingsScene scene in EditorBuildSettings.scenes)
         {
-            if (scene != null && scene.path == StudyScenePath && scene.enabled)
-                studyInBuild = true;
+            if (scene != null &&
+                scene.enabled &&
+                scene.path == NyxaraTerrainStudySession.LegacyStudyScenePath)
+                leftoverStudyInBuild = true;
         }
 
-        if (studyInBuild)
+        if (leftoverStudyInBuild)
         {
             fail++;
-            report.AppendLine("FAIL PlanetNyxaraTerrainStudy is in EditorBuildSettings.");
+            report.AppendLine("FAIL leftover PlanetNyxaraTerrainStudy is still in EditorBuildSettings.");
         }
         else
-            report.AppendLine("OK study scene is not in the build list.");
+            report.AppendLine("OK leftover PlanetNyxaraTerrainStudy is not in the build list.");
 
         string summary = fail == 0
             ? "Layout matches the stage-1 snapshot (areas, walls, build list)."
@@ -565,19 +468,13 @@ public static class NyxaraTerrainStudyWorkspace
     [MenuItem("BackHome/Nyxara Terrain Study/Remove Duplicate Area And Wall Copies")]
     public static void RemoveDuplicateLayoutCopiesMenu()
     {
-        if (IsOriginalPlaySceneOpen())
-        {
-            EditorUtility.DisplayDialog(
-                "Nyxara A2 Study",
-                "The play scene is not modified. Open PlanetNyxaraTerrainStudy first.",
-                "OK");
+        if (!RequirePlanetNyxaraScene())
             return;
-        }
 
         SphericalPlanet planet = Object.FindAnyObjectByType<SphericalPlanet>();
         if (planet == null)
         {
-            EditorUtility.DisplayDialog("Nyxara A2 Study", "Open PlanetNyxaraTerrainStudy first.", "OK");
+            EditorUtility.DisplayDialog("Nyxara A2 Study", "Open PlanetNyxara first.", "OK");
             return;
         }
 
@@ -588,7 +485,7 @@ public static class NyxaraTerrainStudyWorkspace
             "Nyxara A2 Study",
             removed == 0
                 ? "No extra Area/Border copies under the planet prefab."
-                : "Removed " + removed + " scene-added copies. Save the study scene.",
+                : "Removed " + removed + " scene-added copies. Save PlanetNyxara.",
             "OK");
     }
 
@@ -609,16 +506,20 @@ public static class NyxaraTerrainStudyWorkspace
         EditorGUIUtility.PingObject(snapshot);
     }
 
-    static bool IsOriginalPlaySceneOpen()
+    static bool RequirePlanetNyxaraScene()
     {
-        return SceneManager.GetActiveScene().path == SourceScenePath;
+        if (SceneManager.GetActiveScene().path == StudyScenePath)
+            return true;
+
+        EditorUtility.DisplayDialog(
+            "Nyxara Terrain Study",
+            "Open PlanetNyxara first.",
+            "OK");
+        return false;
     }
 
     static NyxaraTerrainStudySession EnsureSessionInOpenScene()
     {
-        if (IsOriginalPlaySceneOpen())
-            return null;
-
         NyxaraTerrainStudySession existing = Object.FindAnyObjectByType<NyxaraTerrainStudySession>();
         if (existing != null)
         {
@@ -677,34 +578,20 @@ public static class NyxaraTerrainStudyWorkspace
         return Undo.AddComponent<NyxaraA2NorthRidge>(go);
     }
 
-    static NyxaraA2SouthCliff EnsureSouthCliffObject(NyxaraTerrainStudySession session)
+    static Material FirstAssignedMaterial(MeshRenderer renderer)
     {
-        if (session == null)
+        if (renderer == null)
             return null;
-
-        NyxaraA2SouthCliff existing = session.GetComponentInChildren<NyxaraA2SouthCliff>(true);
-        if (existing != null)
+        Material[] mats = renderer.sharedMaterials;
+        if (mats == null)
+            return null;
+        for (int i = 0; i < mats.Length; i++)
         {
-            existing.transform.SetParent(session.transform, false);
-            existing.transform.localPosition = Vector3.zero;
-            existing.transform.localRotation = Quaternion.identity;
-            existing.transform.localScale = Vector3.one;
-            existing.gameObject.layer = NyxaraTerrainCollision.GroundLayerIndex;
-            return existing;
+            if (mats[i] != null)
+                return mats[i];
         }
 
-        var go = new GameObject(NyxaraA2SouthCliff.RootName);
-        Undo.RegisterCreatedObjectUndo(go, "Create A2 South Cliff");
-        go.transform.SetParent(session.transform, false);
-        go.transform.localPosition = Vector3.zero;
-        go.transform.localRotation = Quaternion.identity;
-        go.transform.localScale = Vector3.one;
-        go.AddComponent<MeshFilter>();
-        MeshRenderer renderer = go.AddComponent<MeshRenderer>();
-        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-        renderer.receiveShadows = true;
-        go.layer = NyxaraTerrainCollision.GroundLayerIndex;
-        return Undo.AddComponent<NyxaraA2SouthCliff>(go);
+        return null;
     }
 
     static void CloneIdentityChild(GameObject source, Transform parent)

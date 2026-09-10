@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 1498191ea505a6b42ba7fdbb535b16e8
+timeCreated: 1465488405
+licenseType: Store
+ShaderImporter:
+  defaultTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 64195
+  packageName: ForestVision Trunk Shader
+  packageVersion: 1.0
+  assetPath: Assets/ForestVision/09 Scripts/TrunkShader.shader
+  uploadId: 122038

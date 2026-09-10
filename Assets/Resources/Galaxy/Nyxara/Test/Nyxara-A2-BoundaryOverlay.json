@@ -1178,5 +1178,5 @@
                     "recommendation":  "Keep the authored south wall (Cube 2 / Cube 7). Do not apply the fit-pack south shift. The A2 trigger is a volume marker, not the floor; it bites through Cube (2) near study lon 45. Optional clearance is visualization only.",
                     "wallVerdict":  "Cube (2) and Cube (7) are Ground-layer non-trigger BoxColliders. PlanetWalker capsule-casts them, so they are the authored gameplay south edge. A2 is a named trigger volume with no gameplay script and is not the walkable floor."
                 },
-    "note":  "Collider TRS sample. Fine-scan overlap at study lon 45.25: 6.302 u on walk r=75.225, 6.493 u on r=75. Fit-pack 7.49 is that r=75 overlap plus ~1 u playable margin. Rebuild in PlanetNyxaraTerrainStudy for MeshCollider + heightmap."
+    "note":  "Collider TRS sample. Fine-scan overlap at study lon 45.25: 6.302 u on walk r=75.225, 6.493 u on r=75. Fit-pack 7.49 is that r=75 overlap plus ~1 u playable margin. Rebuild in PlanetNyxara for MeshCollider + heightmap."
 }

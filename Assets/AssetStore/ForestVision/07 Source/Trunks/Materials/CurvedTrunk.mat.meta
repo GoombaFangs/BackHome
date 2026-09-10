@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: c7e431a48aaebe74b9494770468d86ce
+timeCreated: 1465653172
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 64195
+  packageName: ForestVision Trunk Shader
+  packageVersion: 1.0
+  assetPath: Assets/ForestVision/07 Source/Trunks/Materials/CurvedTrunk.mat
+  uploadId: 122038

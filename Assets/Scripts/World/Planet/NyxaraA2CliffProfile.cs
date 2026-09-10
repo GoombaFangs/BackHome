@@ -17,11 +17,10 @@ public static class NyxaraA2CliffProfile
     public const float MissingLipLatitude = 999f;
 
     /// <summary>
-    /// Fill missing lip samples between two authored walls if the hole is this small.
-    /// Stops Cube (2)/Cube (1)-style joints from becoming walk-through cracks. Does not
-    /// invent a wall across a long stretch with no cubes.
+    /// Fill only tiny authored joints. A few degrees is a cube seam; a larger hole
+    /// with no cube is an opening the player must be able to walk through.
     /// </summary>
-    public const float MaxLipBridgeDegrees = 16f;
+    public const float MaxLipBridgeDegrees = 3.5f;
 
     /// <summary>Authored south-wall inner latitudes, study lon 20 … 50 step 0.5° (stage 3).</summary>
     public static readonly float[] FallbackAuthoredSouthLatitudes =
@@ -75,6 +74,53 @@ public static class NyxaraA2CliffProfile
 
         CaptureSectorLips(plan, overlay, north: false);
         CaptureSectorLips(plan, overlay, north: true);
+        if (plan.cliffSpanDegrees < 8f)
+            plan.cliffSpanDegrees = DefaultSpanDegrees;
+    }
+
+    /// <summary>
+    /// Replace overlay lips with the inner face of each Borders cube at that longitude,
+    /// so the cliff, ridge, tiles, and walk band share the same wall.
+    /// </summary>
+    public static void CaptureLipFromCubes(PlanetTileMap.TerrainWorkPlan plan, SphericalPlanet planet)
+    {
+        if (plan == null || planet == null)
+            return;
+
+        bool wrap = plan.coverFullRing;
+        int n = wrap ? 181 : 61;
+        float lon0 = wrap ? -180f : plan.studyLongitudeMin;
+        float lon1 = wrap ? 180f : plan.studyLongitudeMax;
+        if (!wrap && lon1 - lon0 < 1f)
+        {
+            lon0 = 20f;
+            lon1 = 50f;
+        }
+
+        var lons = new float[n];
+        var north = new float[n];
+        var south = new float[n];
+        for (int i = 0; i < n; i++)
+        {
+            float t = wrap ? i / (float)n : i / (float)(n - 1);
+            float lon = wrap
+                ? -180f + 360f * i / n
+                : Mathf.Lerp(lon0, lon1, t);
+            lons[i] = lon;
+            NyxaraRouteBounds.SampleCubeLips(
+                planet, lon,
+                out bool hasNorth, out float northInner,
+                out bool hasSouth, out float southInner);
+            north[i] = hasNorth ? northInner : MissingLipLatitude;
+            south[i] = hasSouth ? southInner : MissingLipLatitude;
+        }
+
+        plan.northLipStudyLongitudes = lons;
+        plan.northLipLatitudes = north;
+        plan.cliffLipStudyLongitudes = (float[])lons.Clone();
+        plan.cliffLipLatitudes = south;
+        BridgeLipGaps(plan.northLipStudyLongitudes, plan.northLipLatitudes, wrap);
+        BridgeLipGaps(plan.cliffLipStudyLongitudes, plan.cliffLipLatitudes, wrap);
         if (plan.cliffSpanDegrees < 8f)
             plan.cliffSpanDegrees = DefaultSpanDegrees;
     }
@@ -322,6 +368,46 @@ public static class NyxaraA2CliffProfile
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Latitude where the south-cliff face meets the sea. Always south of the rim so
+    /// water sits against the rock wall and cannot run onto the walk tiles. Returns
+    /// false on meridians with no authored south wall.
+    /// </summary>
+    public static bool TryWaterlineLatitude(
+        PlanetTileMap.TerrainWorkPlan plan,
+        float studyLon,
+        bool wrap,
+        float walkRadius,
+        float seaRadius,
+        float extraSouthDegrees,
+        out float latitude)
+    {
+        latitude = 0f;
+        if (plan == null || walkRadius < 1f)
+            return false;
+        if (LipPresence(plan.cliffLipStudyLongitudes, plan.cliffLipLatitudes, studyLon, wrap) < 0.995f)
+            return false;
+        if (!TrySampleLipLatitude(
+                plan.cliffLipStudyLongitudes, plan.cliffLipLatitudes, studyLon, wrap, out float lip))
+            return false;
+
+        float span = Mathf.Max(8f, plan.cliffSpanDegrees);
+        float dry = lip;
+        float wet = lip - span;
+        float target = Mathf.Min(seaRadius, walkRadius - 0.35f);
+        for (int i = 0; i < 16; i++)
+        {
+            float mid = 0.5f * (dry + wet);
+            if (walkRadius + RadialOffset(plan, studyLon, mid) > target)
+                dry = mid;
+            else
+                wet = mid;
+        }
+
+        latitude = wet - Mathf.Max(0.15f, extraSouthDegrees);
+        return latitude < lip - 0.05f;
     }
 
     /// <summary>

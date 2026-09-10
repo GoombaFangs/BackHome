@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: ad7eb097c97057e4d92c3b062b808ba4
+timeCreated: 1465653284
+licenseType: Store
+NativeFormatImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 64195
+  packageName: ForestVision Trunk Shader
+  packageVersion: 1.0
+  assetPath: Assets/ForestVision/07 Source/CurvedTrunk.prefab
+  uploadId: 122038

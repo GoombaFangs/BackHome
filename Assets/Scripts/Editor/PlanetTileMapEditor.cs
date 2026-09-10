@@ -609,7 +609,7 @@ public class PlanetTileMapEditor : Editor
         EditorGUILayout.LabelField("Terrain Work Plan", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
             "Ridge/cliff planning on this PlanetTileMap. Generation still ignores it until a later stage. " +
-            "Enable only in the A2 study scene. Do not Apply Prefab overrides back onto PlanetNyxara.",
+            "Enable on the PlanetNyxara scene instance. Do not Apply Prefab overrides back onto PlanetNyxara.",
             MessageType.Info);
         EditorGUI.BeginChangeCheck();
         EditorGUILayout.PropertyField(plan, includeChildren: true);

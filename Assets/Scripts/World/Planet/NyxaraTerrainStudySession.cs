@@ -13,7 +13,8 @@ public class NyxaraTerrainStudySession : MonoBehaviour
     public const string SnapshotAssetPath =
         "Assets/Resources/Galaxy/Nyxara/Test/Nyxara-A2-LayoutSnapshot.json";
     public const string SourceScenePath = "Assets/Scenes/PlanetNyxara.unity";
-    public const string StudyScenePath = "Assets/Scenes/PlanetNyxaraTerrainStudy.unity";
+    public const string StudyScenePath = "Assets/Scenes/PlanetNyxara.unity";
+    public const string LegacyStudyScenePath = "Assets/Scenes/PlanetNyxaraTerrainStudy.unity";
 
     [SerializeField] SphericalPlanet planet;
     [SerializeField] PlanetTileMap tileMap;
@@ -43,6 +44,9 @@ public class NyxaraTerrainStudySession : MonoBehaviour
     [SerializeField] NyxaraA2BoundaryOverlay boundaryOverlay = new NyxaraA2BoundaryOverlay();
     [SerializeField] bool autoRebuildBoundaryOverlay = true;
     [SerializeField]
+    [Tooltip("Scene View overlay: wall lips, walk band, labels. Leave off while looking at the terrain.")]
+    bool drawBoundaryGizmos;
+    [SerializeField]
     [Tooltip("Hide MeshRenderer on covered Border cubes after the mountain and cliff cover them. GameObjects stay for layout compare. In Play, solid BoxColliders are off (triggers stay). Full ring hides every Borders cube; A2-only hides Cube (2)/(3)/(4)/(7) and leaves Cube (5) for R1.")]
     bool hideCoveredPlaceholderWallRenderers = true;
 
@@ -62,9 +66,6 @@ public class NyxaraTerrainStudySession : MonoBehaviour
 
     void OnEnable()
     {
-        if (IsOriginalPlayScene())
-            return;
-
         BindPlanet();
         SnapToPlanetLocalIdentity();
         if (autoRebuildBoundaryOverlay)
@@ -93,7 +94,7 @@ public class NyxaraTerrainStudySession : MonoBehaviour
         plan.detailLevel = Mathf.Clamp(plan.detailLevel, 1, 4);
         plan.cliffSpanDegrees = Mathf.Max(8f, plan.cliffSpanDegrees);
         SyncSouthBoundaryChoiceToPlan();
-        if (!isActiveAndEnabled || IsOriginalPlayScene())
+        if (!isActiveAndEnabled)
             return;
 
         // Rebuild is deferred: DestroyImmediate on the tile mesh is illegal inside OnValidate.
@@ -115,7 +116,7 @@ public class NyxaraTerrainStudySession : MonoBehaviour
     void ApplyPlanDeferred()
     {
         _applyQueued = false;
-        if (this == null || !isActiveAndEnabled || IsOriginalPlayScene())
+        if (this == null || !isActiveAndEnabled)
             return;
         if (plan != null && plan.coverFullRing &&
             (boundaryOverlay == null || !boundaryOverlay.wrapLongitude || !boundaryOverlay.HasSamples))
@@ -125,14 +126,6 @@ public class NyxaraTerrainStudySession : MonoBehaviour
         ApplyPlaceholderWallRenderers();
     }
 #endif
-
-    bool IsOriginalPlayScene()
-    {
-        if (gameObject.scene.IsValid() && gameObject.scene.path == SourceScenePath)
-            return true;
-        var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
-        return scene.path == SourceScenePath;
-    }
 
     public void BindPlanet()
     {
@@ -166,10 +159,12 @@ public class NyxaraTerrainStudySession : MonoBehaviour
         plan.enabled = true;
         SyncPlanScope();
         NyxaraA2CliffProfile.CaptureLip(plan, boundaryOverlay);
+        if (planet != null)
+            NyxaraA2CliffProfile.CaptureLipFromCubes(plan, planet);
         if (plan.cliffSpanDegrees < 8f)
             plan.cliffSpanDegrees = NyxaraA2CliffProfile.DefaultSpanDegrees;
         tileMap.SetWorkPlan(ClonePlan(plan));
-        RefreshSouthCliffMesh();
+        RefreshNorthRidgeMesh();
         RefreshSea();
         DisableRoutePhysicsColliders();
 
@@ -182,37 +177,38 @@ public class NyxaraTerrainStudySession : MonoBehaviour
 
     public void DisableRoutePhysicsColliders()
     {
-        if (IsOriginalPlayScene())
-            return;
-
         BindPlanet();
         NyxaraA2NorthRidge ridge = GetComponentInChildren<NyxaraA2NorthRidge>(true);
         if (ridge != null)
             NyxaraTerrainCollision.ClearBlockingMesh(ridge.gameObject);
 
-        NyxaraA2SouthCliff cliff = GetComponentInChildren<NyxaraA2SouthCliff>(true);
-        if (cliff != null)
-            NyxaraTerrainCollision.ClearBlockingMesh(cliff.gameObject);
-
-        // Play only — do not persist disabled boxes into the study scene asset.
+        // Play only — do not persist disabled boxes into the PlanetNyxara scene asset.
         if (Application.isPlaying)
             SetBorderSolidCollidersEnabled(false);
     }
 
-    void RefreshSouthCliffMesh()
+    /// <summary>
+    /// Resample live Borders BoxColliders, then rebuild tiles, ridge, and sea
+    /// with the same rules as before (gaps stay open, kinematic walk band).
+    /// </summary>
+    public void RebuildTerrainFromBorders()
     {
-        if (IsOriginalPlayScene())
-            return;
-
         BindPlanet();
-        NyxaraA2SouthCliff cliff = GetComponentInChildren<NyxaraA2SouthCliff>(true);
-        if (cliff == null || plan == null)
+        RebuildBoundaryOverlay();
+        ApplyPlaceholderWallRenderers();
+    }
+
+    void RefreshNorthRidgeMesh()
+    {
+        BindPlanet();
+        NyxaraA2NorthRidge ridge = GetComponentInChildren<NyxaraA2NorthRidge>(true);
+        if (ridge == null || plan == null)
             return;
 
         float walk = tileMap != null
-            ? tileMap.GetWalkSurfaceRadius(PlanetTileMap.StudyLonLatToDirection(35f, -12f))
+            ? tileMap.GetWalkSurfaceRadius(PlanetTileMap.StudyLonLatToDirection(35f, 25f))
             : (planet != null ? planet.Radius : 75f);
-        cliff.RebuildFromPlan(plan, walk);
+        ridge.RebuildFromPlan(plan, boundaryOverlay, walk);
     }
 
     void RefreshSea()
@@ -259,9 +255,14 @@ public class NyxaraTerrainStudySession : MonoBehaviour
         if (boundaryOverlay == null)
             boundaryOverlay = new NyxaraA2BoundaryOverlay();
         SyncSouthBoundaryChoiceToPlan();
+        bool playSolidWallsWereOff = Application.isPlaying;
+        if (playSolidWallsWereOff)
+            SetBorderSolidCollidersEnabled(true);
         boundaryOverlay.Rebuild(planet, tileMap, plan);
         if (applyPlanToTileMap)
             ApplyPlanToTileMap();
+        else if (playSolidWallsWereOff)
+            SetBorderSolidCollidersEnabled(false);
 #if UNITY_EDITOR
         UnityEditor.EditorUtility.SetDirty(this);
 #endif
@@ -337,18 +338,12 @@ public class NyxaraTerrainStudySession : MonoBehaviour
 
     public void ApplyPlaceholderWallRenderers()
     {
-        if (IsOriginalPlayScene())
-            return;
-
         BindPlanet();
         SetCoveredA2WallRenderersEnabled(!hideCoveredPlaceholderWallRenderers);
     }
 
     void RestorePlaceholderWallRenderers()
     {
-        if (IsOriginalPlayScene())
-            return;
-
         BindPlanet();
         SetCoveredA2WallRenderersEnabled(true);
         if (Application.isPlaying)
@@ -454,6 +449,9 @@ public class NyxaraTerrainStudySession : MonoBehaviour
 #if UNITY_EDITOR
     void OnDrawGizmos()
     {
+        if (!drawBoundaryGizmos)
+            return;
+
         BindPlanet();
         if (planet == null || plan == null)
             return;

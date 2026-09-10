@@ -1,9 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Scene visual for the baked north ridge. Walk collision is kinematic
+/// Scene visual for the north ridge. Walk collision is kinematic
 /// (<see cref="NyxaraRouteBounds"/>). This mesh has no collider.
-/// Mesh is assigned by an editor bake, not rebuilt every frame.
 /// </summary>
 [ExecuteAlways]
 [DisallowMultipleComponent]
@@ -25,12 +24,23 @@ public class NyxaraA2NorthRidge : MonoBehaviour
     public Mesh BakedMesh => bakedMesh;
     public string BakeReport => bakeReport;
 
-    public void SetBaked(Mesh mesh, Material material, string report)
+    public void SetBaked(Mesh mesh, Material fallbackMaterial, string report)
     {
         bakedMesh = mesh;
-        ridgeMaterial = material;
         bakeReport = report;
-        Assign(mesh, material);
+        Assign(mesh, fallbackMaterial);
+    }
+
+    public void RebuildFromPlan(
+        PlanetTileMap.TerrainWorkPlan plan,
+        NyxaraA2BoundaryOverlay overlay,
+        float walkRadius)
+    {
+        ReleaseRuntimeMesh();
+        var settings = NyxaraA2NorthRidgeMeshBuilder.FromPlan(plan, overlay, walkRadius);
+        _runtimeMesh = NyxaraA2NorthRidgeMeshBuilder.Build(settings);
+        bakeReport = NyxaraA2NorthRidgeMeshBuilder.Describe(settings, _runtimeMesh);
+        Assign(_runtimeMesh, ridgeMaterial);
     }
 
     void OnEnable()
@@ -78,6 +88,18 @@ public class NyxaraA2NorthRidge : MonoBehaviour
         if (_renderer == null)
             _renderer = GetComponent<MeshRenderer>();
 
+        var session = GetComponentInParent<NyxaraTerrainStudySession>();
+        var planet = GetComponentInParent<SphericalPlanet>();
+        PlanetTileMap tileMap = planet != null ? planet.GetComponent<PlanetTileMap>() : null;
+        if (session != null && NyxaraA2CliffProfile.PlanApplies(session.Plan))
+        {
+            float walk = tileMap != null
+                ? tileMap.GetWalkSurfaceRadius(PlanetTileMap.StudyLonLatToDirection(35f, 25f))
+                : (planet != null ? planet.Radius : 75f);
+            RebuildFromPlan(session.Plan, session.BoundaryOverlay, walk);
+            return;
+        }
+
         if (bakedMesh != null)
         {
             Assign(bakedMesh, ridgeMaterial);
@@ -97,27 +119,17 @@ public class NyxaraA2NorthRidge : MonoBehaviour
             return;
         }
 
-        // First open before a disk bake: build once in memory so the Scene View has geometry.
-        var session = GetComponentInParent<NyxaraTerrainStudySession>();
-        var planet = GetComponentInParent<SphericalPlanet>();
         if (planet == null)
             return;
-        var tileMap = planet.GetComponent<PlanetTileMap>();
-        var plan = session != null ? session.Plan : (tileMap != null ? tileMap.WorkPlan : null);
-        var overlay = session != null ? session.BoundaryOverlay : null;
-        float walk = tileMap != null
+        var plan = tileMap != null ? tileMap.WorkPlan : null;
+        float previewWalk = tileMap != null
             ? tileMap.GetWalkSurfaceRadius(PlanetTileMap.StudyLonLatToDirection(35f, 25f))
             : planet.Radius;
-        var settings = NyxaraA2NorthRidgeMeshBuilder.FromPlan(plan, overlay, walk);
-        ReleaseRuntimeMesh();
-        _runtimeMesh = NyxaraA2NorthRidgeMeshBuilder.Build(settings);
-        bakeReport = NyxaraA2NorthRidgeMeshBuilder.Describe(settings, _runtimeMesh) +
-                     " (in-memory preview — use Bake A2 North Ridge to save the asset).";
-        Assign(_runtimeMesh, mat);
+        RebuildFromPlan(plan, session != null ? session.BoundaryOverlay : null, previewWalk);
 #endif
     }
 
-    void Assign(Mesh mesh, Material material)
+    void Assign(Mesh mesh, Material fallbackMaterial)
     {
         if (_filter == null)
             _filter = GetComponent<MeshFilter>();
@@ -125,9 +137,55 @@ public class NyxaraA2NorthRidge : MonoBehaviour
             _renderer = GetComponent<MeshRenderer>();
         if (_filter != null)
             _filter.sharedMesh = mesh;
-        if (_renderer != null && material != null)
-            _renderer.sharedMaterial = material;
+        KeepOrApplyMaterials(fallbackMaterial);
         NyxaraTerrainCollision.ClearBlockingMesh(gameObject);
+    }
+
+    void KeepOrApplyMaterials(Material fallbackMaterial)
+    {
+        if (_renderer == null)
+            return;
+
+        if (HasAnyMaterial(_renderer))
+        {
+            Material[] current = _renderer.sharedMaterials;
+            for (int i = 0; i < current.Length; i++)
+            {
+                if (current[i] != null)
+                {
+                    ridgeMaterial = current[i];
+                    break;
+                }
+            }
+
+            return;
+        }
+
+        Material mat = ridgeMaterial != null ? ridgeMaterial : fallbackMaterial;
+#if UNITY_EDITOR
+        if (mat == null)
+            mat = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(MaterialAssetPath);
+#endif
+        if (mat == null)
+            return;
+        ridgeMaterial = mat;
+        _renderer.sharedMaterial = mat;
+    }
+
+    static bool HasAnyMaterial(MeshRenderer renderer)
+    {
+        if (renderer == null)
+            return false;
+        Material[] mats = renderer.sharedMaterials;
+        if (mats == null)
+            return false;
+        for (int i = 0; i < mats.Length; i++)
+        {
+            if (mats[i] != null)
+                return true;
+        }
+
+        return false;
     }
 
     void ReleaseRuntimeMesh()

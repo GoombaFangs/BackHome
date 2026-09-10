@@ -15,6 +15,9 @@ public class NyxaraTerrainStudySessionEditor : Editor
             "Walls, triggers, and enemies are not moved. Tick coverFullRing (or Bake Full Ring) to wrap the route.",
             MessageType.Info);
 
+        if (GUILayout.Button("Rebuild Ridge And Cliff From Borders", GUILayout.Height(36)))
+            NyxaraTerrainStudyWorkspace.RebuildRidgeAndCliffFromBorders();
+
         DrawPropertiesExcluding(serializedObject, "m_Script");
         serializedObject.ApplyModifiedProperties();
 
@@ -60,22 +63,16 @@ public class NyxaraTerrainStudySessionEditor : Editor
         if (GUILayout.Button("Bake A2 North Ridge", GUILayout.Height(28)))
             NyxaraTerrainStudyWorkspace.BakeNorthRidge();
 
-        if (GUILayout.Button("Bake A2 South Cliff", GUILayout.Height(28)))
-            NyxaraTerrainStudyWorkspace.BakeSouthCliff();
-
         NyxaraA2NorthRidge ridge = session.GetComponentInChildren<NyxaraA2NorthRidge>(true);
         if (ridge != null && !string.IsNullOrEmpty(ridge.BakeReport))
             EditorGUILayout.HelpBox(ridge.BakeReport, MessageType.None);
 
-        NyxaraA2SouthCliff cliff = session.GetComponentInChildren<NyxaraA2SouthCliff>(true);
-        if (cliff != null && !string.IsNullOrEmpty(cliff.BakeReport))
-            EditorGUILayout.HelpBox(cliff.BakeReport, MessageType.None);
-
         EditorGUILayout.Space(8);
-        EditorGUILayout.LabelField("Mountain / cliff", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("Mountain", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
-            "Bake Full Ring wraps every north wall (mountain) and south wall (cliff). Gaps without a wall stay open. " +
-            "A2-only bakes still work if coverFullRing is off. Game View follows the player camera (22 / 9.5), not Scene View. " +
+            "Rebuild From Borders resamples the live Borders cubes, then rebuilds tiles, mountain, and sea. " +
+            "Bake Full Ring wraps every north wall (mountain). Gaps without a wall stay open. " +
+            "Sea transform is authored — Play does not move it. " +
             "Do not Apply Prefab onto PlanetNyxara.",
             MessageType.Info);
         if (GUILayout.Button("Place Player In A2 (Game Camera)", GUILayout.Height(28)))

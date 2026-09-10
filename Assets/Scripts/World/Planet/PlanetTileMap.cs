@@ -305,7 +305,7 @@ public class PlanetTileMap : MonoBehaviour
             Vector3 normal = hits[i].normal.sqrMagnitude > 0.001f
                 ? hits[i].normal.normalized
                 : radial;
-            if (Vector3.Dot(normal, radial) < 0.35f)
+            if (Vector3.Dot(normal, radial) < 0.55f)
                 continue;
 
             float surfaceRadius = (hits[i].point - planetCenter).magnitude;

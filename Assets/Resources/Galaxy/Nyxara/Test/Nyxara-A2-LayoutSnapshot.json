@@ -1,7 +1,7 @@
 {
   "sourcePrefab": "Assets/Resources/Galaxy/Nyxara/PlanetNyxara.prefab",
   "sourceScene": "Assets/Scenes/PlanetNyxara.unity",
-  "studyScene": "Assets/Scenes/PlanetNyxaraTerrainStudy.unity",
+  "studyScene": "Assets/Scenes/PlanetNyxara.unity",
   "coordinateFrames": {
     "north": "Planet-local +Y (positive latitude)",
     "height": "Radial distance from planet center minus SphericalPlanet.radius",

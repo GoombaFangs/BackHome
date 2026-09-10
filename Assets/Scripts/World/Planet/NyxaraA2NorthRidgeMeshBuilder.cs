@@ -114,7 +114,7 @@ public static class NyxaraA2NorthRidgeMeshBuilder
     {
         int detail = Mathf.Clamp(settings.detailLevel, 1, 4);
         bool wrap = settings.wrapRing;
-        int lonCount = wrap ? 72 + detail * 36 : 19 + detail * 10;
+        int lonCount = wrap ? 181 : 19 + detail * 10;
         int latCount = 11 + detail * 4;
         float radius = Mathf.Max(1f, settings.walkRadius);
         float maxH = Mathf.Max(1f, settings.ridgeHeight);

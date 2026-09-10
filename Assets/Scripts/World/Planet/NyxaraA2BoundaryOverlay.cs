@@ -176,7 +176,7 @@ public class NyxaraA2BoundaryOverlay
             }
         }
 
-        StampWallsOnMeridians(planet, walls, samples, wrapLongitude);
+        StampWallsOnMeridians(planet, walls, samples);
         FillShortLipGaps(samples, wrapLongitude);
         meridians = samples;
         if (wrapLongitude)
@@ -455,123 +455,50 @@ public class NyxaraA2BoundaryOverlay
         return local.normalized.y >= 0f;
     }
 
-    struct WallLonSpan
-    {
-        public bool north;
-        public string name;
-        public float centerLon;
-        public float minDelta;
-        public float maxDelta;
-        public float innerLatitude;
-    }
-
     static void StampWallsOnMeridians(
         SphericalPlanet planet,
         List<BoxCollider> walls,
-        MeridianSample[] samples,
-        bool wrap)
+        MeridianSample[] samples)
     {
         if (planet == null || walls == null || samples == null || samples.Length == 0)
             return;
-
-        var spans = new List<WallLonSpan>(walls.Count);
-        for (int w = 0; w < walls.Count; w++)
-        {
-            if (TryBuildWallLonSpan(walls[w], planet, out WallLonSpan span))
-                spans.Add(span);
-        }
 
         for (int i = 0; i < samples.Length; i++)
         {
             MeridianSample sample = samples[i];
             float lon = sample.studyLongitude;
-            for (int s = 0; s < spans.Count; s++)
+            float northInner = 90f;
+            float southInner = -90f;
+            for (int w = 0; w < walls.Count; w++)
             {
-                WallLonSpan span = spans[s];
-                if (!WallCoversLon(span, lon))
+                BoxCollider box = walls[w];
+                if (box == null)
                     continue;
-                if (span.north)
+                bool north = IsNorthSideWall(box, planet);
+                if (!NyxaraRouteBounds.TryInnerLatitudeAtLon(box, planet, lon, north, out float inner))
+                    continue;
+                if (north)
                 {
-                    if (sample.hasNorthWall)
-                        continue;
-                    sample.hasNorthWall = true;
-                    sample.northWallLatitude = span.innerLatitude;
-                    sample.northWallName = span.name;
+                    if (!sample.hasNorthWall || inner < northInner)
+                    {
+                        sample.hasNorthWall = true;
+                        northInner = inner;
+                        sample.northWallLatitude = inner;
+                        sample.northWallName = box.gameObject.name;
+                    }
                 }
-                else
+                else if (!sample.hasSouthWall || inner > southInner)
                 {
-                    if (sample.hasSouthWall)
-                        continue;
                     sample.hasSouthWall = true;
-                    sample.southWallLatitude = span.innerLatitude;
-                    sample.southWallName = span.name;
-                    sample.optionalSouthLatitude = span.innerLatitude;
+                    southInner = inner;
+                    sample.southWallLatitude = inner;
+                    sample.southWallName = box.gameObject.name;
+                    sample.optionalSouthLatitude = inner;
                 }
             }
 
             samples[i] = sample;
         }
-    }
-
-    static bool TryBuildWallLonSpan(BoxCollider box, SphericalPlanet planet, out WallLonSpan span)
-    {
-        span = default;
-        if (box == null || planet == null)
-            return false;
-
-        Vector3 centerWorld = box.transform.TransformPoint(box.center);
-        Vector3 centerLocal = planet.WorldToPlanetLocal.MultiplyPoint3x4(centerWorld);
-        if (centerLocal.sqrMagnitude < 0.0001f)
-            return false;
-
-        PlanetTileMap.DirectionToStudyLonLat(centerLocal, out float centerLon, out _);
-        bool north = IsNorthSideWall(box, planet);
-        float minDelta = 0f;
-        float maxDelta = 0f;
-        float innerLat = north ? 90f : -90f;
-        Vector3 half = box.size * 0.5f;
-        Vector3 c = box.center;
-        for (int x = -1; x <= 1; x += 2)
-        {
-            for (int y = -1; y <= 1; y += 2)
-            {
-                for (int z = -1; z <= 1; z += 2)
-                {
-                    Vector3 cornerLocal = c + new Vector3(half.x * x, half.y * y, half.z * z);
-                    Vector3 cornerWorld = box.transform.TransformPoint(cornerLocal);
-                    Vector3 planetLocal = planet.WorldToPlanetLocal.MultiplyPoint3x4(cornerWorld);
-                    if (planetLocal.sqrMagnitude < 0.0001f)
-                        continue;
-                    PlanetTileMap.DirectionToStudyLonLat(planetLocal, out float lon, out float lat);
-                    float delta = NyxaraA2CliffProfile.WrapStudyLon(lon - centerLon);
-                    if (delta < minDelta)
-                        minDelta = delta;
-                    if (delta > maxDelta)
-                        maxDelta = delta;
-                    if (north)
-                        innerLat = Mathf.Min(innerLat, lat);
-                    else
-                        innerLat = Mathf.Max(innerLat, lat);
-                }
-            }
-        }
-
-        span = new WallLonSpan
-        {
-            north = north,
-            name = box.gameObject.name,
-            centerLon = centerLon,
-            minDelta = minDelta,
-            maxDelta = maxDelta,
-            innerLatitude = innerLat
-        };
-        return true;
-    }
-
-    static bool WallCoversLon(WallLonSpan span, float studyLon)
-    {
-        float delta = NyxaraA2CliffProfile.WrapStudyLon(studyLon - span.centerLon);
-        return delta >= span.minDelta - 0.25f && delta <= span.maxDelta + 0.25f;
     }
 
     static void FillShortLipGaps(MeridianSample[] samples, bool wrap)
