@@ -3691,6 +3691,9 @@ GameObject:
   - component: {fileID: 6136110133930651344}
   - component: {fileID: 7389073073775162195}
   - component: {fileID: 3329469455309649708}
+  - component: {fileID: 5123948571029384751}
+  - component: {fileID: 5123948571029384752}
+  - component: {fileID: 5123948571029384753}
   m_Layer: 3
   m_Name: Sea
   m_TagString: Untagged
@@ -3746,7 +3749,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 2f8d0c4e6a1b49d3b7c5e9f0a2d4c6b8, type: 2}
+  - {fileID: 2100000, guid: c3e8a1b0472f4d9e8c5a6b7d0e1f2a34, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -3787,10 +3790,50 @@ SphereCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 3
   m_Radius: 0.5
   m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &5123948571029384751
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8462155696913862274}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a4c8e2f1b7d6493a90c5e6f8a1b3d7e9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CasualWaterSphereMesh
+  latitudeSegments: 80
+  longitudeSegments: 144
+--- !u!114 &5123948571029384752
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8462155696913862274}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7c1e4a092d54f6e8a3c5d7f1e2b4a90, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CasualWaterEnvironment
+--- !u!114 &5123948571029384753
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8462155696913862274}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f8a1c6e4b2d47a09e5c7d1f8a0b4c62, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NyxaraSeaFit
+  shoreBelowWalk: 2.1
+  waterAboveFloor: 1.6
 --- !u!1 &8615879868147114100
 GameObject:
   m_ObjectHideFlags: 0

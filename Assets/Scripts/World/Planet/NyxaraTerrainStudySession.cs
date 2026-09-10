@@ -170,6 +170,7 @@ public class NyxaraTerrainStudySession : MonoBehaviour
             plan.cliffSpanDegrees = NyxaraA2CliffProfile.DefaultSpanDegrees;
         tileMap.SetWorkPlan(ClonePlan(plan));
         RefreshSouthCliffMesh();
+        RefreshSea();
         DisableRoutePhysicsColliders();
 
 #if UNITY_EDITOR
@@ -212,6 +213,27 @@ public class NyxaraTerrainStudySession : MonoBehaviour
             ? tileMap.GetWalkSurfaceRadius(PlanetTileMap.StudyLonLatToDirection(35f, -12f))
             : (planet != null ? planet.Radius : 75f);
         cliff.RebuildFromPlan(plan, walk);
+    }
+
+    void RefreshSea()
+    {
+        if (planet == null)
+            return;
+
+        NyxaraSeaFit sea = planet.GetComponentInChildren<NyxaraSeaFit>(true);
+        if (sea == null)
+        {
+            Transform named = planet.transform.Find(NyxaraSeaFit.RootName);
+            if (named != null)
+            {
+                sea = named.GetComponent<NyxaraSeaFit>();
+                if (sea == null)
+                    sea = named.gameObject.AddComponent<NyxaraSeaFit>();
+            }
+        }
+
+        if (sea != null)
+            sea.Fit();
     }
 
     public void ClearPlanFromTileMap()
