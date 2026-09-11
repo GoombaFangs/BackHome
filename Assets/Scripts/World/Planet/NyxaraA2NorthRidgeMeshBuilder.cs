@@ -56,7 +56,7 @@ public static class NyxaraA2NorthRidgeMeshBuilder
             playableMargin = plan != null ? Mathf.Max(0f, plan.playableMargin) : 1f,
             detailLevel = plan != null ? Mathf.Clamp(plan.detailLevel, 1, 4) : 2,
             walkRadius = Mathf.Max(1f, walkRadius),
-            blockedSideInsetDegrees = 0.35f,
+            blockedSideInsetDegrees = 0.04f,
             ridgeSpanDegrees = 30f,
             buryDepth = 0.08f,
             uvMeters = 8f,
@@ -148,12 +148,6 @@ public static class NyxaraA2NorthRidgeMeshBuilder
                 float u = j / (float)(latCount - 1);
                 float tLat = u;
                 float lat = baseLat + tLat * span;
-                if (tLat > 0.78f)
-                {
-                    float skirt = (tLat - 0.78f) / 0.22f;
-                    lat += skirt * 0.55f * Mathf.Sin(studyLon * 0.14f + 0.4f);
-                }
-
                 float height = RidgeHeight(tLat, tLon, studyLon, maxH, presence[i], wrap);
                 if (j == 0)
                     height = -Mathf.Abs(settings.buryDepth) * presence[i];

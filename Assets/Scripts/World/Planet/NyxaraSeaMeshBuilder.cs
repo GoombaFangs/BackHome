@@ -2,8 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Level spherical water in the south basin. The north edge is the waterline on
-/// the cliff face — south of the brown rim — so waves cannot spill onto the walk tiles.
+/// Level spherical water in the south basin. One continuous cap to the south pole;
+/// the north edge follows the waterline south of the rim so waves stay off the walk tiles.
 /// Vertices are in Unity-sphere space (radius 0.5); <see cref="NyxaraSeaFit"/> scales it.
 /// </summary>
 public static class NyxaraSeaMeshBuilder
@@ -47,11 +47,14 @@ public static class NyxaraSeaMeshBuilder
             float studyLon = wrap
                 ? -180f + 360f * i / lonCount
                 : Mathf.Lerp(lon0, lon1, tLon);
-            hasShore[i] = NyxaraA2CliffProfile.TryWaterlineLatitude(
+            hasShore[i] = NyxaraA2CliffProfile.TryBasinWaterlineLatitude(
                 plan, studyLon, wrap, walk, sea, WaveSpillDegrees, out northLat[i]);
             if (!hasShore[i])
                 northLat[i] = -90f;
         }
+
+        if (wrap)
+            FillShoreGaps(northLat, hasShore);
 
         int vertCount = lonCount * latCount;
         var verts = new Vector3[vertCount];
@@ -87,7 +90,7 @@ public static class NyxaraSeaMeshBuilder
             for (int i = 0; i < lonSteps; i++)
             {
                 int i1 = wrap ? (i + 1) % lonCount : i + 1;
-                if (!hasShore[i] || !hasShore[i1])
+                if (northLat[i] <= -89.5f && northLat[i1] <= -89.5f)
                     continue;
 
                 int a = j * lonCount + i;
@@ -120,5 +123,55 @@ public static class NyxaraSeaMeshBuilder
         mesh.RecalculateTangents();
         mesh.RecalculateBounds();
         return mesh;
+    }
+
+    static void FillShoreGaps(float[] northLat, bool[] hasShore)
+    {
+        int n = northLat.Length;
+        if (n < 3)
+            return;
+
+        var filled = (float[])northLat.Clone();
+        var filledShore = (bool[])hasShore.Clone();
+        for (int i = 0; i < n; i++)
+        {
+            if (hasShore[i])
+                continue;
+
+            int left = -1;
+            int right = -1;
+            for (int d = 1; d < n; d++)
+            {
+                int li = (i - d + n) % n;
+                if (left < 0 && hasShore[li])
+                    left = li;
+                int ri = (i + d) % n;
+                if (right < 0 && hasShore[ri])
+                    right = ri;
+                if (left >= 0 && right >= 0)
+                    break;
+            }
+
+            if (left < 0 && right < 0)
+                continue;
+            if (left < 0)
+                filled[i] = northLat[right];
+            else if (right < 0)
+                filled[i] = northLat[left];
+            else
+            {
+                float span = Mathf.Min(n - 1, ((i - left + n) % n) + ((right - i + n) % n));
+                float t = span > 0.0001f ? ((i - left + n) % n) / span : 0f;
+                filled[i] = Mathf.Lerp(northLat[left], northLat[right], t);
+            }
+
+            filledShore[i] = true;
+        }
+
+        for (int i = 0; i < n; i++)
+        {
+            northLat[i] = filled[i];
+            hasShore[i] = filledShore[i];
+        }
     }
 }

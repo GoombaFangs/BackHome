@@ -389,7 +389,27 @@ public static class NyxaraA2CliffProfile
             return false;
         if (LipPresence(plan.cliffLipStudyLongitudes, plan.cliffLipLatitudes, studyLon, wrap) < 0.995f)
             return false;
-        if (!TrySampleLipLatitude(
+        return TryBasinWaterlineLatitude(
+            plan, studyLon, wrap, walkRadius, seaRadius, extraSouthDegrees, out latitude);
+    }
+
+    /// <summary>
+    /// Waterline for the south basin mesh. Uses interpolated south lips so the sea is
+    /// one continuous cap to the pole, including meridians that sit in a wall gap.
+    /// </summary>
+    public static bool TryBasinWaterlineLatitude(
+        PlanetTileMap.TerrainWorkPlan plan,
+        float studyLon,
+        bool wrap,
+        float walkRadius,
+        float seaRadius,
+        float extraSouthDegrees,
+        out float latitude)
+    {
+        latitude = 0f;
+        if (plan == null || walkRadius < 1f)
+            return false;
+        if (!TryInterpolateValidLip(
                 plan.cliffLipStudyLongitudes, plan.cliffLipLatitudes, studyLon, wrap, out float lip))
             return false;
 

@@ -498,32 +498,69 @@ public static class NyxaraRouteBounds
         if (!TryInnerFaceCorners(box, planet, north, out Vector3[] corners, out float surfaceRadius))
             return false;
 
-        float minLat = 90f;
-        float maxLat = -90f;
-        int hits = 0;
         var lons = new float[4];
         var lats = new float[4];
-        var radii = new float[4];
+        var surface = new bool[4];
+        Vector3 surfaceMean = Vector3.zero;
+        int surfaceCount = 0;
         for (int i = 0; i < 4; i++)
         {
             Vector3 p = corners[i];
-            radii[i] = p.magnitude;
             if (p.sqrMagnitude < 0.0001f)
             {
                 lons[i] = 1000f;
-                lats[i] = 0f;
                 continue;
             }
 
             PlanetTileMap.DirectionToStudyLonLat(p, out lons[i], out lats[i]);
-            if (radii[i] < surfaceRadius * 0.88f)
-                continue;
-            if (Mathf.Abs(NyxaraA2CliffProfile.WrapStudyLon(lons[i] - studyLon)) <= 0.35f)
+            surface[i] = p.magnitude >= surfaceRadius * 0.90f;
+            if (surface[i])
             {
-                minLat = Mathf.Min(minLat, lats[i]);
-                maxLat = Mathf.Max(maxLat, lats[i]);
-                hits++;
+                surfaceMean += p;
+                surfaceCount++;
             }
+        }
+
+        if (surfaceCount < 2 || surfaceMean.sqrMagnitude < 0.0001f)
+            return false;
+
+        PlanetTileMap.DirectionToStudyLonLat(surfaceMean, out float centerLon, out float centerLat);
+        if (Mathf.Abs(NyxaraA2CliffProfile.WrapStudyLon(centerLon - studyLon)) > 80f)
+            return false;
+
+        float minDelta = 0f;
+        float maxDelta = 0f;
+        for (int i = 0; i < 4; i++)
+        {
+            if (!surface[i] || lons[i] > 900f)
+                continue;
+            float d = NyxaraA2CliffProfile.WrapStudyLon(lons[i] - centerLon);
+            if (d < minDelta)
+                minDelta = d;
+            if (d > maxDelta)
+                maxDelta = d;
+        }
+
+        float q = NyxaraA2CliffProfile.WrapStudyLon(studyLon - centerLon);
+        if (q < minDelta - 0.45f || q > maxDelta + 0.45f)
+            return false;
+
+        Vector3 queryDir = PlanetTileMap.StudyLonLatToDirection(studyLon, centerLat);
+        float minLat = 90f;
+        float maxLat = -90f;
+        int hits = 0;
+
+        for (int i = 0; i < 4; i++)
+        {
+            if (!surface[i] || lons[i] > 900f)
+                continue;
+            if (Mathf.Abs(NyxaraA2CliffProfile.WrapStudyLon(lons[i] - studyLon)) > 0.4f)
+                continue;
+            if (Vector3.Dot(corners[i].normalized, queryDir) < 0.25f)
+                continue;
+            minLat = Mathf.Min(minLat, lats[i]);
+            maxLat = Mathf.Max(maxLat, lats[i]);
+            hits++;
         }
 
         int[,] edges = { { 0, 1 }, { 0, 2 }, { 1, 3 }, { 2, 3 } };
@@ -531,14 +568,16 @@ public static class NyxaraRouteBounds
         {
             int a = edges[e, 0];
             int b = edges[e, 1];
-            if (lons[a] > 900f || lons[b] > 900f)
+            if (!surface[a] || !surface[b] || lons[a] > 900f || lons[b] > 900f)
                 continue;
             float lonSpan = Mathf.Abs(NyxaraA2CliffProfile.WrapStudyLon(lons[a] - lons[b]));
-            if (lonSpan > 90f)
+            if (lonSpan > 70f)
                 continue;
             float d0 = NyxaraA2CliffProfile.WrapStudyLon(lons[a] - studyLon);
             float d1 = NyxaraA2CliffProfile.WrapStudyLon(lons[b] - studyLon);
             if (d0 * d1 > 0f)
+                continue;
+            if (Mathf.Abs(d0) + Mathf.Abs(d1) > 70f)
                 continue;
             if (Mathf.Abs(d0 - d1) < 0.0001f)
                 continue;
@@ -546,9 +585,15 @@ public static class NyxaraRouteBounds
             if (t < -0.001f || t > 1.001f)
                 continue;
             Vector3 hit = Vector3.Lerp(corners[a], corners[b], Mathf.Clamp01(t));
-            if (hit.magnitude < surfaceRadius * 0.88f)
+            if (hit.sqrMagnitude < 0.0001f)
                 continue;
-            PlanetTileMap.DirectionToStudyLonLat(hit, out _, out float lat);
+            if (hit.magnitude < surfaceRadius * 0.90f)
+                continue;
+            if (Vector3.Dot(hit.normalized, queryDir) < 0.25f)
+                continue;
+            PlanetTileMap.DirectionToStudyLonLat(hit, out float hitLon, out float lat);
+            if (Mathf.Abs(NyxaraA2CliffProfile.WrapStudyLon(hitLon - studyLon)) > 1.2f)
+                continue;
             minLat = Mathf.Min(minLat, lat);
             maxLat = Mathf.Max(maxLat, lat);
             hits++;
@@ -556,9 +601,6 @@ public static class NyxaraRouteBounds
 
         if (hits == 0)
             return false;
-
-        // A standing N/S wall's inner face is nearly constant latitude. A tall meridian
-        // slice here means the cube is a side wall that only grazed this longitude.
         if (maxLat - minLat > 8f)
             return false;
 
