@@ -15,7 +15,7 @@ using UnityEngine.Serialization;
 ///
 /// One reusable prefab: every planet scene drops this in and wires only <see cref="playerCapsule"/>
 /// to its own PlayerDiveDownCapsule instance. Start pose and fall distance are derived from the
-/// planet (via SphericalPlanet.GetUpAt/GetSurfacePoint).
+/// planet (via the walk-surface pose, same stick as gameplay).
 /// </summary>
 [DefaultExecutionOrder(-500)]
 public class PlayerCrashIntro : MonoBehaviour
@@ -58,8 +58,8 @@ public class PlayerCrashIntro : MonoBehaviour
     [Tooltip("Snap the landing spot onto the planet surface instead of trusting wherever the " +
         "capsule was authored in the scene.")]
     [SerializeField] bool snapLandingToGround = true;
-    [Tooltip("Extra world-space clearance above the planet surface at rest.")]
-    [SerializeField] float extraGroundClearance = 0f;
+    [Tooltip("Extra world-space clearance above the planet walk surface at rest.")]
+    [SerializeField] float extraGroundClearance = 0.35f;
 
     [Header("Crash Tremble")]
     [Tooltip("Tremble amplitude applied throughout the fall itself, in world units - sells a rough, out-of-control crash rather than a smooth glide.")]
@@ -171,10 +171,9 @@ public class PlayerCrashIntro : MonoBehaviour
         Vector3 up = planet != null ? planet.GetUpAt(_restPosition) : Vector3.up;
 
         if (snapLandingToGround && planet != null)
-        {
-            float clearance = extraGroundClearance;
-            _restPosition = planet.GetSurfacePoint(up, clearance);
-        }
+            SnapLandingToWalkSurface(planet, extraGroundClearance, ref _restPosition, ref _restRotation, ref up);
+        else if (planet != null && extraGroundClearance != 0f)
+            _restPosition += up * extraGroundClearance;
 
         Vector3 spacePosition = _restPosition + up * startDistance;
         EnsureLandingSite(_restPosition, _restRotation);
@@ -688,6 +687,36 @@ public class PlayerCrashIntro : MonoBehaviour
             main.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
             ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             ps.Play(false);
+        }
+    }
+
+    static void SnapLandingToWalkSurface(
+        SphericalPlanet planet,
+        float hover,
+        ref Vector3 restPosition,
+        ref Quaternion restRotation,
+        ref Vector3 up)
+    {
+        PlanetTileMap tiles = planet.GetComponent<PlanetTileMap>();
+        float yaw = PlanetSurfacePose.ExtractYaw(restRotation, up);
+        if (!PlanetSurfacePose.TryGetPose(
+                planet, tiles, up, yaw, hover,
+                out Vector3 groundPosition, out Quaternion groundRotation, out Vector3 groundUp))
+        {
+            restPosition = planet.GetSurfacePoint(up, hover);
+            return;
+        }
+
+        restPosition = groundPosition;
+        restRotation = groundRotation;
+        up = groundUp;
+
+        if (PlanetSurfacePose.TrySampleGroundBelow(
+                restPosition + up * 2f, up, 12f, hover, out Vector3 rayPosition, out Vector3 rayNormal))
+        {
+            restPosition = rayPosition;
+            up = rayNormal;
+            restRotation = PlanetSurfacePose.RotationFromUp(up, yaw);
         }
     }
 

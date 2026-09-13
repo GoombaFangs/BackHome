@@ -1,7 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// Leftover <c>Borders</c> cubes. Play disables their colliders so they cannot trap the player.
+/// <c>Borders</c> cubes block walking kinematically. Physics colliders stay off
+/// so the boxes cannot trap the player inside their volume.
 /// </summary>
 public static class PlanetBorders
 {
@@ -47,29 +48,7 @@ public static class PlanetBorders
             return _boxCache;
         }
 
-        BoxCollider[] all = borders.GetComponentsInChildren<BoxCollider>(true);
-        int count = 0;
-        for (int i = 0; i < all.Length; i++)
-        {
-            if (all[i] != null && !all[i].isTrigger)
-                count++;
-        }
-
-        if (count == all.Length)
-        {
-            _boxCache = all;
-            return _boxCache;
-        }
-
-        var solid = new BoxCollider[count];
-        int n = 0;
-        for (int i = 0; i < all.Length; i++)
-        {
-            if (all[i] != null && !all[i].isTrigger)
-                solid[n++] = all[i];
-        }
-
-        _boxCache = solid;
+        _boxCache = borders.GetComponentsInChildren<BoxCollider>(true);
         return _boxCache;
     }
 
@@ -200,6 +179,106 @@ public static class PlanetBorders
             if (boxes[i] != null)
                 boxes[i].enabled = enabled;
         }
+    }
+
+    public static void EnsureSolidWalls(SphericalPlanet planet)
+    {
+        BoxCollider[] boxes = SolidBoxes(planet);
+        for (int i = 0; i < boxes.Length; i++)
+        {
+            if (boxes[i] != null)
+                boxes[i].enabled = false;
+        }
+    }
+
+    /// <summary>
+    /// Keeps <paramref name="desired"/> outside every Borders cube, sliding along
+    /// the wall. If the player is already inside a cube, they are pushed out.
+    /// </summary>
+    public static Vector3 ResolveAgainstWalls(
+        SphericalPlanet planet,
+        Vector3 from,
+        Vector3 desired,
+        float radius)
+    {
+        if (planet == null)
+            return desired;
+
+        BoxCollider[] boxes = SolidBoxes(planet);
+        if (boxes == null || boxes.Length == 0)
+            return desired;
+
+        float skin = Mathf.Max(0.08f, radius);
+        Vector3 freed = from;
+        Depenetrate(planet, boxes, ref freed, skin);
+        Vector3 dest = freed + (desired - from);
+        Depenetrate(planet, boxes, ref dest, skin);
+        return dest;
+    }
+
+    static void Depenetrate(
+        SphericalPlanet planet,
+        BoxCollider[] boxes,
+        ref Vector3 worldPos,
+        float radius)
+    {
+        for (int iter = 0; iter < 4; iter++)
+        {
+            bool moved = false;
+            Vector3 radial = worldPos - planet.Center;
+            if (radial.sqrMagnitude < 0.0001f)
+                return;
+            radial.Normalize();
+
+            for (int i = 0; i < boxes.Length; i++)
+            {
+                Vector3 before = worldPos;
+                if (!TryDepenetrateBox(boxes[i], ref worldPos, radius))
+                    continue;
+                worldPos = before + Vector3.ProjectOnPlane(worldPos - before, radial);
+                if ((worldPos - before).sqrMagnitude > 0.0000001f)
+                    moved = true;
+            }
+
+            if (!moved)
+                return;
+        }
+    }
+
+    static bool TryDepenetrateBox(BoxCollider box, ref Vector3 worldPos, float radius)
+    {
+        if (box == null)
+            return false;
+
+        Transform t = box.transform;
+        Vector3 local = t.InverseTransformPoint(worldPos) - box.center;
+        Vector3 half = box.size * 0.5f;
+        Vector3 lossy = t.lossyScale;
+        Vector3 expanded = new Vector3(
+            half.x + radius / Mathf.Max(0.0001f, Mathf.Abs(lossy.x)),
+            half.y + radius / Mathf.Max(0.0001f, Mathf.Abs(lossy.y)),
+            half.z + radius / Mathf.Max(0.0001f, Mathf.Abs(lossy.z)));
+
+        if (Mathf.Abs(local.x) > expanded.x ||
+            Mathf.Abs(local.y) > expanded.y ||
+            Mathf.Abs(local.z) > expanded.z)
+            return false;
+
+        int axis = 0;
+        if (TryThinAxis(box, out Vector3 thinLocal))
+            axis = thinLocal == Vector3.right ? 0 : (thinLocal == Vector3.up ? 1 : 2);
+        else
+        {
+            float dx = expanded.x - Mathf.Abs(local.x);
+            float dy = expanded.y - Mathf.Abs(local.y);
+            float dz = expanded.z - Mathf.Abs(local.z);
+            axis = dx <= dy && dx <= dz ? 0 : (dy <= dz ? 1 : 2);
+        }
+
+        float sign = local[axis];
+        local[axis] = (sign >= 0f ? 1f : -1f) * expanded[axis];
+        worldPos = t.TransformPoint(local + box.center);
+        return true;
     }
 
     public static bool TryInnerLatitudeAtLon(

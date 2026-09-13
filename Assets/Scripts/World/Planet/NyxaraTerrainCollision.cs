@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// Leftover Border cubes are ignored as walls. Walk blocking uses the land tile mesh.
+/// Border cubes are kinematic walls, not physics colliders. The tile mesh is the walk floor.
 /// </summary>
 public static class NyxaraTerrainCollision
 {

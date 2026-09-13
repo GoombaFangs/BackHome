@@ -295,12 +295,15 @@ public class PlanetWalker : MonoBehaviour
             _controller.enabled = false;
         if (_flatMotor != null && _flatMotor.enabled)
             _flatMotor.enabled = false;
-        PlanetWalkBand.EnsureWallsCannotTrap(_planet);
+        PlanetWalkBand.EnsureSolidWalls(_planet);
         if (!_routeIgnoresApplied)
             ApplyRouteCollisionIgnores();
         Vector3 from = transform.position;
+        float wallRadius = GetWallRadius();
         moveDelta = PlanetWalkBand.FilterMove(_planet, _tiles, from, moveDelta, hover);
-        moveDelta = ResolveObstacleMove(moveDelta, up, includeBorderWalls: !PlanetWalkBand.IsActive(_tiles));
+        moveDelta = ResolveObstacleMove(moveDelta, up, includeBorderWalls: false);
+        Vector3 blocked = PlanetBorders.ResolveAgainstWalls(_planet, from, from + moveDelta, wallRadius);
+        moveDelta = blocked - from;
 
         Vector3 probeOrigin = PlanetWalkBand.ClampPosition(
             _planet, _tiles, from + moveDelta, hover);
@@ -343,8 +346,10 @@ public class PlanetWalker : MonoBehaviour
         }
 
         next = PlanetWalkBand.ClampPosition(_planet, _tiles, next, GetPivotClearance((next - _planet.Center).normalized));
+        next = PlanetBorders.ResolveAgainstWalls(_planet, from, next, wallRadius);
         next = RecoverOrRememberRoute(next, up);
         next = UnstickIfImmobile(from, next, inputMagnitude, hover);
+        next = PlanetBorders.ResolveAgainstWalls(_planet, from, next, wallRadius);
         fromCenterFinal = next - _planet.Center;
         if (fromCenterFinal.sqrMagnitude > 0.0001f)
             up = fromCenterFinal.normalized;
@@ -362,7 +367,7 @@ public class PlanetWalker : MonoBehaviour
     static readonly RaycastHit[] ObstacleHits = new RaycastHit[24];
 
     /// <summary>
-    /// Capsule-cast along tangent move. Leftover Border cubes are not walls.
+    /// Capsule-cast along tangent move. Borders cubes are kinematic, not physics walls.
     /// Props still block. Tile mesh is the floor, not a wall.
     /// </summary>
     Vector3 ResolveObstacleMove(Vector3 desiredDelta, Vector3 up, bool includeBorderWalls)
@@ -532,14 +537,13 @@ public class PlanetWalker : MonoBehaviour
     {
         if (_planet == null)
             return;
-        PlanetWalkBand.ApplyIgnoreCollisions(gameObject, _planet, true);
+        PlanetWalkBand.EnsureSolidWalls(_planet);
+        PlanetWalkBand.ApplyIgnoreCollisions(gameObject, _planet);
         _routeIgnoresApplied = true;
     }
 
     void ClearRouteCollisionIgnores()
     {
-        if (_planet != null)
-            PlanetWalkBand.EnsureWallsCannotTrap(_planet);
         _routeIgnoresApplied = false;
     }
 
@@ -626,6 +630,13 @@ public class PlanetWalker : MonoBehaviour
         top = feet + up * (height - radius);
     }
 
+    float GetWallRadius()
+    {
+        float scale = Mathf.Max(transform.lossyScale.x, transform.lossyScale.y, transform.lossyScale.z);
+        float radius = (_controller != null ? Mathf.Max(0.22f, _controller.radius) : 0.3f) * scale;
+        return radius + 0.06f * scale;
+    }
+
     static bool IsWalkableObstacleHit(Collider col, Vector3 normal, Vector3 up, Vector3 radial)
     {
         if (NyxaraTerrainCollision.IsBlockingWall(col))
@@ -656,8 +667,7 @@ public class PlanetWalker : MonoBehaviour
         if (_tiles != null && _tiles.IsWalkSurfaceCollider(col))
             return false;
 
-        if (PlanetWalkBand.IsInvisibleTrap(col, _planet) ||
-            PlanetWalkBand.ShouldIgnorePhysicsWall(col, _planet))
+        if (PlanetWalkBand.ShouldIgnorePhysicsWall(col, _planet))
             return false;
 
         return !IsNonBlockingPropCollider(col);

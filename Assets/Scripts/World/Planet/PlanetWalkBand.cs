@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// Leftover Borders cubes are disabled in Play so they cannot trap the player.
+/// Borders cubes block with kinematic push-out, not physics colliders.
 /// The tile mesh owns the walk surface; latitude is not clamped to Borders.
 /// </summary>
 public static class PlanetWalkBand
@@ -29,36 +29,29 @@ public static class PlanetWalkBand
 
     public static bool IsInvisibleTrap(Collider col, SphericalPlanet planet)
     {
-        if (col == null || col.isTrigger)
-            return false;
-        if (ShouldIgnorePhysicsWall(col, planet))
-            return true;
-        if (!PlanetBorders.IsBorderCollider(col))
-            return false;
-        var renderer = col.GetComponent<MeshRenderer>();
-        return renderer != null && !renderer.enabled;
+        return false;
     }
 
-    public static void EnsureWallsCannotTrap(SphericalPlanet planet)
+    public static void EnsureSolidWalls(SphericalPlanet planet)
     {
         if (!Application.isPlaying || planet == null)
             return;
-        PlanetBorders.SetSolidCollidersEnabled(planet, false);
+        PlanetBorders.EnsureSolidWalls(planet);
     }
 
-    public static void ApplyIgnoreCollisions(GameObject player, SphericalPlanet planet, bool ignore)
+    public static void ApplyIgnoreCollisions(GameObject player, SphericalPlanet planet)
     {
         if (player == null || planet == null)
             return;
 
-        EnsureWallsCannotTrap(planet);
+        EnsureSolidWalls(planet);
 
         Collider[] playerCols = player.GetComponents<Collider>();
         for (int p = 0; p < playerCols.Length; p++)
-            ApplyIgnoreCollisions(playerCols[p], planet, ignore);
+            ApplyIgnoreCollisions(playerCols[p], planet);
     }
 
-    public static void ApplyIgnoreCollisions(Collider player, SphericalPlanet planet, bool ignore)
+    public static void ApplyIgnoreCollisions(Collider player, SphericalPlanet planet)
     {
         if (player == null || planet == null)
             return;
@@ -67,9 +60,9 @@ public static class PlanetWalkBand
         for (int i = 0; i < boxes.Length; i++)
         {
             Collider col = boxes[i];
-            if (col == null || col == player || col.isTrigger)
+            if (col == null || col == player || !col.enabled)
                 continue;
-            Physics.IgnoreCollision(player, col, ignore);
+            Physics.IgnoreCollision(player, col, true);
         }
     }
 
