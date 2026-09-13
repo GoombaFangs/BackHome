@@ -71,6 +71,62 @@ public static class PlanetBlobAutotile
         return idx >= 0 ? idx : fallback;
     }
 
+    public static void FloodFillHeight(PlanetTileMap map, int startLat, int startLon, float newHeight)
+    {
+        if (map == null || !map.HasValidMap())
+            return;
+
+        float target = map.GetHeight(startLat, startLon);
+        newHeight = Mathf.Clamp(newHeight, PlanetTileMap.MinHeight, PlanetTileMap.MaxHeight);
+        if (Mathf.Abs(target - newHeight) <= 0.001f)
+            return;
+
+        int cells = map.CellCount;
+        var visited = new bool[cells];
+        var stackLat = new int[cells];
+        var stackLon = new int[cells];
+        int sp = 0;
+        stackLat[sp] = startLat;
+        stackLon[sp] = startLon;
+        sp++;
+        int painted = 0;
+
+        while (sp > 0)
+        {
+            sp--;
+            int lat = stackLat[sp];
+            int lon = stackLon[sp];
+            if (lat < 0 || lat >= map.LatitudeBands)
+                continue;
+            lon = Mod(lon, map.LongitudeBands);
+            int cell = lat * map.LongitudeBands + lon;
+            if (visited[cell])
+                continue;
+            visited[cell] = true;
+            if (Mathf.Abs(map.GetHeight(lat, lon) - target) > 0.001f)
+                continue;
+
+            map.SetHeightSilent(lat, lon, newHeight);
+            painted++;
+            Push(lat + 1, lon);
+            Push(lat - 1, lon);
+            Push(lat, lon + 1);
+            Push(lat, lon - 1);
+        }
+
+        if (painted > 0)
+            map.RebuildVisuals();
+
+        void Push(int la, int lo)
+        {
+            if (sp >= cells)
+                return;
+            stackLat[sp] = la;
+            stackLon[sp] = lo;
+            sp++;
+        }
+    }
+
     public static void PaintTerrain(
         PlanetTileMap map,
         int centerLat,
@@ -164,8 +220,13 @@ public static class PlanetBlobAutotile
 
     public static void GenerateContinents(PlanetTileMap map, int seed = 11)
     {
-        if (map == null || map.Tileset == null || map.Tileset.TerrainCount < 2)
+        if (map == null || map.Tileset == null || map.Tileset.TerrainCount < 1)
             return;
+
+        if (!map.HasValidMap())
+            map.FillTerrain(map.Tileset.BaseTerrainIndex);
+
+        map.FillHeight(PlanetTileMap.DefaultGroundHeight, rebuild: false);
 
         int grass = map.Tileset.BaseTerrainIndex;
         int overlay = Mathf.Min(1, map.Tileset.TerrainCount - 1);
@@ -183,14 +244,15 @@ public static class PlanetBlobAutotile
                 float n2 = ValueNoise(lon01 * 7.3f - seed * 0.11f, lat01 * 5.1f);
                 float n = n1 * 0.65f + n2 * 0.35f;
                 float band = 1f - Mathf.Abs(lat01 - 0.5f) * 1.5f;
-                int t = grass;
-                if (band > 0.12f && n > 0.48f)
-                    t = overlay;
-                else if (n2 > 0.78f && band > 0.05f)
-                    t = overlay;
-                else if (rng.NextDouble() > 0.97 && band > 0.2f)
-                    t = overlay;
+                bool patch = (band > 0.18f && n > 0.50f)
+                    || (n2 > 0.80f && band > 0.08f)
+                    || (rng.NextDouble() > 0.97 && band > 0.25f);
+                if (!patch)
+                    continue;
+                int t = n > 0.62f ? overlay : grass;
                 map.SetTerrainSilent(lat, lon, t);
+                float hill = n > 0.70f ? 2f : PlanetTileMap.DefaultGroundHeight;
+                map.SetHeightSilent(lat, lon, hill);
             }
         }
 

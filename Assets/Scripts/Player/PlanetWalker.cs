@@ -295,14 +295,14 @@ public class PlanetWalker : MonoBehaviour
             _controller.enabled = false;
         if (_flatMotor != null && _flatMotor.enabled)
             _flatMotor.enabled = false;
-        NyxaraRouteBounds.EnsureRouteWallsCannotTrap(_planet, _tiles);
+        PlanetWalkBand.EnsureWallsCannotTrap(_planet);
         if (!_routeIgnoresApplied)
             ApplyRouteCollisionIgnores();
         Vector3 from = transform.position;
-        moveDelta = NyxaraRouteBounds.FilterMove(_planet, _tiles, from, moveDelta, hover);
-        moveDelta = ResolveObstacleMove(moveDelta, up, includeBorderWalls: !NyxaraRouteBounds.IsActive(_tiles));
+        moveDelta = PlanetWalkBand.FilterMove(_planet, _tiles, from, moveDelta, hover);
+        moveDelta = ResolveObstacleMove(moveDelta, up, includeBorderWalls: !PlanetWalkBand.IsActive(_tiles));
 
-        Vector3 probeOrigin = NyxaraRouteBounds.ClampPosition(
+        Vector3 probeOrigin = PlanetWalkBand.ClampPosition(
             _planet, _tiles, from + moveDelta, hover);
         Vector3 radial = (probeOrigin - _planet.Center).normalized;
         if (radial.sqrMagnitude < 0.0001f)
@@ -311,7 +311,7 @@ public class PlanetWalker : MonoBehaviour
         Vector3 next;
         Vector3 surfaceNormal = radial;
         if (TryStickToCollider(radial, out next, out surfaceNormal) &&
-            !NyxaraRouteBounds.IsOffRoute(_planet, _tiles, next))
+            !PlanetWalkBand.IsOffRoute(_planet, next))
         {
             _grounded = true;
             _fallVelocity = Vector3.zero;
@@ -342,7 +342,7 @@ public class PlanetWalker : MonoBehaviour
             _fallVelocity = Vector3.zero;
         }
 
-        next = NyxaraRouteBounds.ClampPosition(_planet, _tiles, next, GetPivotClearance((next - _planet.Center).normalized));
+        next = PlanetWalkBand.ClampPosition(_planet, _tiles, next, GetPivotClearance((next - _planet.Center).normalized));
         next = RecoverOrRememberRoute(next, up);
         next = UnstickIfImmobile(from, next, inputMagnitude, hover);
         fromCenterFinal = next - _planet.Center;
@@ -362,8 +362,8 @@ public class PlanetWalker : MonoBehaviour
     static readonly RaycastHit[] ObstacleHits = new RaycastHit[24];
 
     /// <summary>
-    /// Capsule-cast along tangent move. Border cubes block only when the Nyxara route band
-    /// is off. Props still block in both modes. Tile mesh is the floor, not a wall.
+    /// Capsule-cast along tangent move. Leftover Border cubes are not walls.
+    /// Props still block. Tile mesh is the floor, not a wall.
     /// </summary>
     Vector3 ResolveObstacleMove(Vector3 desiredDelta, Vector3 up, bool includeBorderWalls)
     {
@@ -420,7 +420,7 @@ public class PlanetWalker : MonoBehaviour
             RaycastHit hit = ObstacleHits[i];
             if (hit.collider == null || !NyxaraTerrainCollision.IsBlockingWall(hit.collider))
                 continue;
-            if (NyxaraRouteBounds.ShouldIgnorePhysicsWall(hit.collider, _tiles))
+            if (PlanetWalkBand.ShouldIgnorePhysicsWall(hit.collider, _planet))
                 continue;
             if (!IsPlanetObstacle(hit.collider))
                 continue;
@@ -532,14 +532,14 @@ public class PlanetWalker : MonoBehaviour
     {
         if (_planet == null)
             return;
-        NyxaraRouteBounds.ApplyIgnoreCollisions(gameObject, _planet, _tiles);
+        PlanetWalkBand.ApplyIgnoreCollisions(gameObject, _planet, true);
         _routeIgnoresApplied = true;
     }
 
     void ClearRouteCollisionIgnores()
     {
         if (_planet != null)
-            NyxaraRouteBounds.ApplyIgnoreCollisions(gameObject, _planet, null);
+            PlanetWalkBand.EnsureWallsCannotTrap(_planet);
         _routeIgnoresApplied = false;
     }
 
@@ -549,7 +549,7 @@ public class PlanetWalker : MonoBehaviour
             return next;
 
         float hover = GetPivotClearance((next - _planet.Center).normalized);
-        if (NyxaraRouteBounds.TryRecover(
+        if (PlanetWalkBand.TryRecover(
                 _planet, _tiles, next, hover, _hasRouteAnchor, _routeAnchor, out Vector3 recovered))
         {
             _grounded = true;
@@ -558,7 +558,7 @@ public class PlanetWalker : MonoBehaviour
         }
 
         GetCapsuleEnds(next, up, out Vector3 bottom, out Vector3 top, out float radius);
-        if (NyxaraRouteBounds.TryUnstickFromInvisibleWall(
+        if (PlanetWalkBand.TryUnstickFromInvisibleWall(
                 _planet, _tiles, next, bottom, top, radius, hover,
                 _hasRouteAnchor, _routeAnchor, out recovered))
         {
@@ -567,7 +567,7 @@ public class PlanetWalker : MonoBehaviour
             return recovered;
         }
 
-        if (NyxaraRouteBounds.IsComfortable(_planet, _tiles, next))
+        if (PlanetWalkBand.IsComfortable(_planet, next))
         {
             _routeAnchor = next;
             _hasRouteAnchor = true;
@@ -600,14 +600,14 @@ public class PlanetWalker : MonoBehaviour
             return next;
 
         _stuckSeconds = 0f;
-        if (NyxaraRouteBounds.TrySnapToCenter(_planet, _tiles, next, hover, out Vector3 center))
+        if (PlanetWalkBand.TrySnapToCenter(_planet, _tiles, next, hover, out Vector3 center))
         {
             _grounded = true;
             _fallVelocity = Vector3.zero;
             return center;
         }
 
-        if (_hasRouteAnchor && NyxaraRouteBounds.IsComfortable(_planet, _tiles, _routeAnchor))
+        if (_hasRouteAnchor && PlanetWalkBand.IsComfortable(_planet, _routeAnchor))
         {
             _grounded = true;
             _fallVelocity = Vector3.zero;
@@ -656,8 +656,8 @@ public class PlanetWalker : MonoBehaviour
         if (_tiles != null && _tiles.IsWalkSurfaceCollider(col))
             return false;
 
-        if (NyxaraRouteBounds.IsInvisibleTrap(col, _tiles) ||
-            NyxaraRouteBounds.ShouldIgnorePhysicsWall(col, _tiles))
+        if (PlanetWalkBand.IsInvisibleTrap(col, _planet) ||
+            PlanetWalkBand.ShouldIgnorePhysicsWall(col, _planet))
             return false;
 
         return !IsNonBlockingPropCollider(col);
@@ -919,7 +919,7 @@ public class PlanetWalker : MonoBehaviour
             normal = radialUp;
         }
 
-        point = NyxaraRouteBounds.ClampPosition(_planet, _tiles, point, GetPivotClearance(radialUp));
+        point = PlanetWalkBand.ClampPosition(_planet, _tiles, point, GetPivotClearance(radialUp));
         point = RecoverOrRememberRoute(point, radialUp);
         fromCenter = point - _planet.Center;
         if (fromCenter.sqrMagnitude > 0.0001f)

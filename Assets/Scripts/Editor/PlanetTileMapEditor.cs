@@ -4,8 +4,24 @@ using UnityEngine;
 [CustomEditor(typeof(PlanetTileMap))]
 public class PlanetTileMapEditor : Editor
 {
+    enum PaintLayer
+    {
+        Terrain,
+        Ground
+    }
+
+    enum GroundTool
+    {
+        Raise,
+        Lower,
+        Set
+    }
+
     static bool _paintMode;
+    static PaintLayer _layer = PaintLayer.Terrain;
     static int _terrainBrush;
+    static GroundTool _groundTool = GroundTool.Raise;
+    static float _setHeight = PlanetTileMap.DefaultGroundHeight;
     static int _brushRadius = 1;
     static bool _showGrid = true;
     static bool _eraseMode;
@@ -53,19 +69,18 @@ public class PlanetTileMapEditor : Editor
         }
 
         EditorGUILayout.Space(8);
-        DrawWorkPlanInspector();
-        EditorGUILayout.Space(8);
         DrawPropertiesExcluding(
             serializedObject,
             "m_Script",
             "tilesAroundEquator",
+            "heightStep",
             "tileIndices",
             "terrainIds",
-            "workPlan");
+            "waterMask",
+            "integerHeights",
+            "groundHeights",
+            "heights");
         serializedObject.ApplyModifiedProperties();
-
-        EditorGUILayout.Space(10);
-        EditorGUILayout.LabelField("Terrain Painting", EditorStyles.boldLabel);
 
         if (map.Tileset == null || map.Tileset.TerrainCount == 0)
         {
@@ -102,21 +117,127 @@ public class PlanetTileMapEditor : Editor
             }
         }
 
+        EditorGUILayout.Space(10);
+        EditorGUI.BeginChangeCheck();
+        int layer = GUILayout.Toolbar(
+            (int)_layer,
+            new[] { "Terrain Painting", "Ground Level" });
+        if (EditorGUI.EndChangeCheck())
+            _layer = (PaintLayer)layer;
+
+        if (_layer == PaintLayer.Terrain)
+            DrawTerrainPainting(map);
+        else
+            DrawGroundLevel(map);
+
+        DrawPaintControls(map);
+        DrawTestMeshes(map);
+    }
+
+    void DrawTerrainPainting(PlanetTileMap map)
+    {
+        EditorGUILayout.Space(10);
+        EditorGUILayout.LabelField("Terrain Painting", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+            "Paint tileset terrains. Autotile blends neighbors of the same type.",
+            MessageType.Info);
+
         string[] names = new string[map.Tileset.TerrainCount];
-        for (int i = 0; i < map.Tileset.TerrainCount; i++)
+        for (int i = 0; i < names.Length; i++)
         {
             var t = map.Tileset.GetTerrain(i);
             names[i] = t != null ? t.displayName : $"Terrain {i}";
         }
 
-        _terrainBrush = Mathf.Clamp(_terrainBrush, 0, map.Tileset.TerrainCount - 1);
-        _terrainBrush = GUILayout.Toolbar(_terrainBrush, names);
+        EditorGUI.BeginChangeCheck();
+        int picked = GUILayout.Toolbar(Mathf.Clamp(_terrainBrush, 0, names.Length - 1), names);
+        if (EditorGUI.EndChangeCheck())
+        {
+            _terrainBrush = picked;
+            _layer = PaintLayer.Terrain;
+        }
+
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button("Fill This Terrain"))
+        {
+            Undo.RecordObject(map, "Fill Terrain");
+            map.FillTerrain(_terrainBrush);
+            MarkDirty(map);
+        }
+        if (GUILayout.Button("Generate Continents"))
+        {
+            Undo.RecordObject(map, "Generate Continents");
+            PlanetBlobAutotile.GenerateContinents(map, seed: 11);
+            MarkDirty(map);
+        }
+        if (GUILayout.Button("Resolve Autotile"))
+        {
+            Undo.RecordObject(map, "Resolve Autotile");
+            PlanetBlobAutotile.ResolveAll(map);
+            MarkDirty(map);
+        }
+        EditorGUILayout.EndHorizontal();
+    }
+
+    void DrawGroundLevel(PlanetTileMap map)
+    {
+        EditorGUILayout.Space(10);
+        EditorGUILayout.LabelField("Ground Level", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+            "Sculpt hills and pits. Neighbors blend so the surface stays connected.",
+            MessageType.Info);
+
+        SerializedProperty heightStepProp = serializedObject.FindProperty("heightStep");
+        if (heightStepProp != null)
+        {
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.PropertyField(
+                heightStepProp,
+                new GUIContent("Height Step", "World units per raise / lower."));
+            if (EditorGUI.EndChangeCheck())
+                serializedObject.ApplyModifiedProperties();
+        }
+
+        string[] tools = { "Raise", "Lower", "Set Height" };
+        EditorGUI.BeginChangeCheck();
+        int picked = GUILayout.Toolbar((int)_groundTool, tools);
+        if (EditorGUI.EndChangeCheck())
+        {
+            _groundTool = (GroundTool)picked;
+            _layer = PaintLayer.Ground;
+        }
+
+        _setHeight = EditorGUILayout.Slider(
+            "Set Height",
+            _setHeight,
+            PlanetTileMap.MinHeight,
+            PlanetTileMap.MaxHeight);
+
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button("Flatten (height " + PlanetTileMap.DefaultGroundHeight.ToString("0.#") + ")"))
+        {
+            Undo.RecordObject(map, "Flatten Ground");
+            map.FillHeight(PlanetTileMap.DefaultGroundHeight);
+            MarkDirty(map);
+        }
+        if (GUILayout.Button("Fill Set Height"))
+        {
+            Undo.RecordObject(map, "Fill Ground Height");
+            map.FillHeight(_setHeight);
+            MarkDirty(map);
+        }
+        EditorGUILayout.EndHorizontal();
+    }
+
+    void DrawPaintControls(PlanetTileMap map)
+    {
+        EditorGUILayout.Space(8);
         _brushRadius = EditorGUILayout.IntSlider("Brush Radius", _brushRadius, 0, 10);
         _showGrid = EditorGUILayout.Toggle("Show Cell Grid", _showGrid);
 
         EditorGUILayout.BeginHorizontal();
-        _eraseMode = GUILayout.Toggle(_eraseMode, new GUIContent("Erase", "Paint base terrain (RMB also erases)"), "Button");
-        _eyedropper = GUILayout.Toggle(_eyedropper, new GUIContent("Eyedropper (I)", "Click to pick terrain"), "Button");
+        _eraseMode = GUILayout.Toggle(_eraseMode, new GUIContent("Erase", "Paint base terrain / opposite height (RMB also erases)"), "Button");
+        _eyedropper = GUILayout.Toggle(_eyedropper, new GUIContent("Eyedropper (I)", "Click to pick terrain or height"), "Button");
         EditorGUILayout.EndHorizontal();
 
         if (!map.ShowTileVisuals)
@@ -137,38 +258,43 @@ public class PlanetTileMapEditor : Editor
         if (_paintMode)
         {
             EditorGUILayout.HelpBox(
-                "LMB paint · RMB erase · [ ] brush size · 1-9 terrain · I eyedropper · F flood · Esc exit · Alt+LMB orbit",
+                "LMB paint · RMB opposite · Tab layer · [ ] size · 1-9 terrain · R Raise · L Lower · I eyedropper · F flood · Esc exit · Alt+LMB orbit",
                 MessageType.Info);
         }
 
-        EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("Fill With Terrain"))
-        {
-            Undo.RecordObject(map, "Fill Terrain");
-            map.FillTerrain(_terrainBrush);
-            MarkDirty(map);
-        }
-        if (GUILayout.Button("Resolve Autotile"))
-        {
-            Undo.RecordObject(map, "Resolve Autotile");
-            PlanetBlobAutotile.ResolveAll(map);
-            MarkDirty(map);
-        }
-        EditorGUILayout.EndHorizontal();
-
-        EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("Generate Continents"))
-        {
-            Undo.RecordObject(map, "Generate Continents");
-            map.FillTerrain(map.Tileset.BaseTerrainIndex);
-            PlanetBlobAutotile.GenerateContinents(map, seed: 11);
-            MarkDirty(map);
-        }
         if (GUILayout.Button("Bake / Refresh Mesh"))
         {
             Undo.RecordObject(map, "Bake Tile Mesh");
             map.RebuildVisuals();
             MarkDirty(map);
+        }
+    }
+
+    void DrawTestMeshes(PlanetTileMap map)
+    {
+        EditorGUILayout.Space(8);
+        EditorGUILayout.LabelField("Test Meshes", EditorStyles.boldLabel);
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button("Attach Test Ridge / Cliff"))
+        {
+            SphericalPlanet planet = map.GetComponent<SphericalPlanet>();
+            if (planet != null)
+            {
+                Undo.RegisterFullObjectHierarchyUndo(planet.gameObject, "Attach Test Terrain Meshes");
+                int added = PlanetTestTerrain.Attach(planet);
+                Debug.Log("[BackHome] Attached " + added + " Test terrain mesh(es).");
+                UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(planet.gameObject.scene);
+            }
+        }
+        if (GUILayout.Button("Remove Test Meshes"))
+        {
+            SphericalPlanet planet = map.GetComponent<SphericalPlanet>();
+            if (planet != null)
+            {
+                Undo.RegisterFullObjectHierarchyUndo(planet.gameObject, "Remove Test Terrain Meshes");
+                PlanetTestTerrain.Remove(planet);
+                UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(planet.gameObject.scene);
+            }
         }
         EditorGUILayout.EndHorizontal();
     }
@@ -218,7 +344,6 @@ public class PlanetTileMapEditor : Editor
 
         try
         {
-            // Overlay uses GUILayout inside Handles.BeginGUI — must run on Layout and Repaint.
             DrawSceneOverlay(map);
 
             if (e.type == EventType.Repaint)
@@ -252,7 +377,7 @@ public class PlanetTileMapEditor : Editor
                     {
                         GUIUtility.hotControl = controlId;
                         _strokeActive = true;
-                        Undo.RecordObject(map, "Paint Planet Terrain");
+                        Undo.RecordObject(map, _layer == PaintLayer.Ground ? "Sculpt Planet Ground" : "Paint Planet Terrain");
                         TryPaint(map, e.mousePosition, force: true, erase: e.button == 1 || _eraseMode);
                         e.Use();
                     }
@@ -297,6 +422,14 @@ public class PlanetTileMapEditor : Editor
             return;
         }
 
+        if (e.keyCode == KeyCode.Tab)
+        {
+            _layer = _layer == PaintLayer.Terrain ? PaintLayer.Ground : PaintLayer.Terrain;
+            e.Use();
+            SceneView.RepaintAll();
+            return;
+        }
+
         if (e.keyCode == KeyCode.LeftBracket)
         {
             _brushRadius = Mathf.Max(0, _brushRadius - 1);
@@ -332,14 +465,56 @@ public class PlanetTileMapEditor : Editor
             _floodPending = true;
             if (map.Tileset != null && TryPickCell(map, e.mousePosition, out int lat, out int lon))
             {
-                Undo.RecordObject(map, "Flood Fill Terrain");
-                int terrain = _eraseMode ? map.Tileset.BaseTerrainIndex : _terrainBrush;
-                PlanetBlobAutotile.FloodFill(map, lat, lon, terrain);
+                Undo.RecordObject(map, "Flood Fill");
+                if (_layer == PaintLayer.Ground)
+                {
+                    if (_groundTool == GroundTool.Set)
+                        PlanetBlobAutotile.FloodFillHeight(map, lat, lon, _eraseMode ? PlanetTileMap.DefaultGroundHeight : _setHeight);
+                    else if (_groundTool == GroundTool.Raise)
+                        map.PaintHeightDeltaBrush(lat, lon, _eraseMode ? -1 : 1, 0, rebuild: true);
+                    else
+                        map.PaintHeightDeltaBrush(lat, lon, _eraseMode ? 1 : -1, 0, rebuild: true);
+                }
+                else
+                    PlanetBlobAutotile.FloodFill(map, lat, lon, _terrainBrush);
                 MarkDirty(map);
             }
             _floodPending = false;
             e.Use();
             return;
+        }
+
+        if (e.keyCode == KeyCode.R || e.keyCode == KeyCode.Equals || e.keyCode == KeyCode.Plus)
+        {
+            _layer = PaintLayer.Ground;
+            _groundTool = GroundTool.Raise;
+            _eraseMode = false;
+            e.Use();
+            return;
+        }
+
+        if (e.keyCode == KeyCode.L || e.keyCode == KeyCode.Minus)
+        {
+            _layer = PaintLayer.Ground;
+            _groundTool = GroundTool.Lower;
+            _eraseMode = false;
+            e.Use();
+            return;
+        }
+
+        if (_layer == PaintLayer.Ground
+            && e.keyCode >= KeyCode.Alpha0
+            && e.keyCode <= KeyCode.Alpha4)
+        {
+            int value = e.keyCode - KeyCode.Alpha0;
+            if (value >= PlanetTileMap.MinHeight)
+            {
+                _setHeight = value;
+                _groundTool = GroundTool.Set;
+                _eraseMode = false;
+                e.Use();
+                return;
+            }
         }
 
         if (map.Tileset != null && e.keyCode >= KeyCode.Alpha1 && e.keyCode <= KeyCode.Alpha9)
@@ -348,6 +523,7 @@ public class PlanetTileMapEditor : Editor
             if (idx < map.Tileset.TerrainCount)
             {
                 _terrainBrush = idx;
+                _layer = PaintLayer.Terrain;
                 _eraseMode = false;
                 e.Use();
             }
@@ -384,7 +560,15 @@ public class PlanetTileMapEditor : Editor
 
         if (_eyedropper)
         {
-            _terrainBrush = map.GetTerrain(lat, lon);
+            if (_layer == PaintLayer.Ground)
+            {
+                _setHeight = map.GetHeight(lat, lon);
+                _groundTool = GroundTool.Set;
+            }
+            else
+            {
+                _terrainBrush = map.GetTerrain(lat, lon);
+            }
             _eyedropper = false;
             _eraseMode = false;
             return;
@@ -396,11 +580,21 @@ public class PlanetTileMapEditor : Editor
         if (!force && lat == _lastLat && lon == _lastLon)
             return;
 
-        int terrain = erase
-            ? (map.Tileset != null ? map.Tileset.BaseTerrainIndex : 0)
-            : _terrainBrush;
+        if (_layer == PaintLayer.Ground)
+        {
+            if (_groundTool == GroundTool.Raise)
+                map.PaintHeightDeltaBrush(lat, lon, erase ? -1 : 1, _brushRadius, rebuild: true);
+            else if (_groundTool == GroundTool.Lower)
+                map.PaintHeightDeltaBrush(lat, lon, erase ? 1 : -1, _brushRadius, rebuild: true);
+            else
+            {
+                float height = erase ? PlanetTileMap.DefaultGroundHeight : _setHeight;
+                map.PaintHeightBrush(lat, lon, height, _brushRadius, rebuild: true);
+            }
+        }
+        else
+            PlanetBlobAutotile.PaintTerrain(map, lat, lon, _terrainBrush, _brushRadius, rebuild: true);
 
-        PlanetBlobAutotile.PaintTerrain(map, lat, lon, terrain, _brushRadius, rebuild: true);
         _lastLat = lat;
         _lastLon = lon;
     }
@@ -419,9 +613,22 @@ public class PlanetTileMapEditor : Editor
         if (_hoverLat == int.MinValue || map.Tileset == null || map.LongitudeBands <= 0)
             return;
 
-        var t = map.Tileset.GetTerrain(_eraseMode ? map.Tileset.BaseTerrainIndex : _terrainBrush);
-        Color c = t != null ? t.previewColor : Color.white;
-        c.a = 0.35f;
+        Color c;
+        if (_layer == PaintLayer.Ground)
+        {
+            bool lifting = (_groundTool == GroundTool.Raise && !_eraseMode)
+                || (_groundTool == GroundTool.Lower && _eraseMode)
+                || (_groundTool == GroundTool.Set && !_eraseMode && _setHeight > PlanetTileMap.DefaultGroundHeight);
+            c = lifting
+                ? new Color(0.85f, 0.45f, 0.2f, 0.4f)
+                : new Color(0.35f, 0.7f, 0.35f, 0.4f);
+        }
+        else
+        {
+            var t = map.Tileset.GetTerrain(_terrainBrush);
+            c = t != null ? t.previewColor : Color.white;
+            c.a = 0.35f;
+        }
         Handles.color = c;
 
         for (int dLat = -_brushRadius; dLat <= _brushRadius; dLat++)
@@ -448,25 +655,38 @@ public class PlanetTileMapEditor : Editor
     static void DrawSceneOverlay(PlanetTileMap map)
     {
         Handles.BeginGUI();
-        float h = _paintMode ? 96f : 52f;
+        float h = _paintMode ? 120f : 52f;
         Rect rect = new Rect(12f, 12f, 360f, h);
         GUI.Box(rect, GUIContent.none, EditorStyles.helpBox);
         GUILayout.BeginArea(new Rect(rect.x + 8f, rect.y + 6f, rect.width - 16f, rect.height - 10f));
 
         if (_paintMode)
         {
-            string terrainName = "?";
-            if (map.Tileset != null)
+            string brushName;
+            string mode;
+            if (_layer == PaintLayer.Ground)
             {
-                int ti = _eraseMode ? map.Tileset.BaseTerrainIndex : _terrainBrush;
-                var t = map.Tileset.GetTerrain(ti);
-                terrainName = t != null ? t.displayName : ti.ToString();
+                mode = "GROUND";
+                if (_groundTool == GroundTool.Raise)
+                    brushName = _eraseMode ? "Lower" : "Raise";
+                else if (_groundTool == GroundTool.Lower)
+                    brushName = _eraseMode ? "Raise" : "Lower";
+                else
+                    brushName = _eraseMode ? "Flatten" : "Set " + _setHeight.ToString("0.##");
+            }
+            else
+            {
+                var t = map.Tileset != null ? map.Tileset.GetTerrain(_terrainBrush) : null;
+                brushName = t != null ? t.displayName : _terrainBrush.ToString();
+                mode = "TERRAIN";
             }
 
-            string mode = _eyedropper ? "EYEDROPPER" : _eraseMode ? "ERASE" : "PAINT";
-            GUILayout.Label($"{mode} — {terrainName}  r:{_brushRadius}", EditorStyles.boldLabel);
-            GUILayout.Label("LMB paint · RMB erase · [ ] size · 1-9 terrain");
-            GUILayout.Label("I pick · F flood · Esc stop · Alt orbit");
+            if (_eyedropper)
+                mode = "EYEDROPPER";
+            float hoverH = _hoverLat != int.MinValue ? map.GetHeight(_hoverLat, _hoverLon) : 0f;
+            GUILayout.Label($"{mode} — {brushName}  r:{_brushRadius}  h:{hoverH:0.##}", EditorStyles.boldLabel);
+            GUILayout.Label("LMB paint · RMB opposite · Tab layer · [ ] size");
+            GUILayout.Label("R raise · L lower · I pick · F flood · Esc stop");
         }
         else
         {
@@ -598,22 +818,5 @@ public class PlanetTileMapEditor : Editor
         EditorUtility.SetDirty(map);
         if (PrefabUtility.IsPartOfPrefabInstance(map))
             PrefabUtility.RecordPrefabInstancePropertyModifications(map);
-    }
-
-    void DrawWorkPlanInspector()
-    {
-        SerializedProperty plan = serializedObject.FindProperty("workPlan");
-        if (plan == null)
-            return;
-
-        EditorGUILayout.LabelField("Terrain Work Plan", EditorStyles.boldLabel);
-        EditorGUILayout.HelpBox(
-            "Ridge/cliff planning on this PlanetTileMap. Generation still ignores it until a later stage. " +
-            "Enable on the PlanetNyxara scene instance. Do not Apply Prefab overrides back onto PlanetNyxara.",
-            MessageType.Info);
-        EditorGUI.BeginChangeCheck();
-        EditorGUILayout.PropertyField(plan, includeChildren: true);
-        if (EditorGUI.EndChangeCheck())
-            serializedObject.ApplyModifiedProperties();
     }
 }

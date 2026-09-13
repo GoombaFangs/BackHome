@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// <summary>
 /// Replaces the built-in low-poly sphere so cartoon water waves have enough verts to read.
-/// Radius stays 0.5 to match Unity's sphere, so the Sea scale is unchanged.
+/// Radius stays 0.5 to match Unity's sphere; <see cref="NyxaraSeaFit"/> scales it to sea level.
 /// </summary>
 [ExecuteAlways]
 [DisallowMultipleComponent]
@@ -10,6 +10,7 @@ using UnityEngine;
 [DefaultExecutionOrder(10)]
 public sealed class CasualWaterSphereMesh : MonoBehaviour
 {
+    public const float UnitySphereRadius = 0.5f;
     const int DefaultLat = 80;
     const int DefaultLon = 144;
 
@@ -53,10 +54,6 @@ public sealed class CasualWaterSphereMesh : MonoBehaviour
 
     void ApplyMesh()
     {
-        var seaFit = GetComponent<NyxaraSeaFit>();
-        if (seaFit != null)
-            return;
-
         _filter = GetComponent<MeshFilter>();
         if (_filter == null)
             return;
@@ -73,7 +70,7 @@ public sealed class CasualWaterSphereMesh : MonoBehaviour
         }
 
         ReleaseMesh();
-        _mesh = BuildSphere(0.5f, lat, lon, worldScale);
+        _mesh = BuildSphere(UnitySphereRadius, lat, lon, worldScale);
         _mesh.hideFlags = HideFlags.DontSave;
         _builtScale = worldScale;
         _filter.sharedMesh = _mesh;

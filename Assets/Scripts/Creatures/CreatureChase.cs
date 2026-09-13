@@ -377,7 +377,7 @@ public class CreatureChase : MonoBehaviour
         if (TryStickToCollider(radial, out next, out Vector3 surfaceUp))
         {
             up = surfaceUp;
-            ClampToNyxaraRoute(ref next, ref up);
+            ClampToWalkBand(ref next, ref up);
             return;
         }
 
@@ -387,16 +387,16 @@ public class CreatureChase : MonoBehaviour
         if (fromCenter.magnitude < minDist)
             next = _planet.Center + fromCenter.normalized * minDist;
         up = _planet.GetUpAt(next);
-        ClampToNyxaraRoute(ref next, ref up);
+        ClampToWalkBand(ref next, ref up);
     }
 
-    void ClampToNyxaraRoute(ref Vector3 next, ref Vector3 up)
+    void ClampToWalkBand(ref Vector3 next, ref Vector3 up)
     {
         if (_tiles == null || _planet == null)
             return;
-        next = NyxaraRouteBounds.ClampPosition(_planet, _tiles, next, footOffset);
-        if (NyxaraRouteBounds.IsOffRoute(_planet, _tiles, next) &&
-            NyxaraRouteBounds.TrySnapToCenter(_planet, _tiles, next, footOffset, out Vector3 kept))
+        next = PlanetWalkBand.ClampPosition(_planet, _tiles, next, footOffset);
+        if (PlanetWalkBand.IsOffRoute(_planet, next) &&
+            PlanetWalkBand.TrySnapToCenter(_planet, _tiles, next, footOffset, out Vector3 kept))
             next = kept;
         up = _planet.GetUpAt(next);
     }

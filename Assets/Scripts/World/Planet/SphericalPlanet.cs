@@ -66,7 +66,7 @@ public class SphericalPlanet : MonoBehaviour
     public float Radius => radius;
 
     /// <summary>
-    /// Planet-local +Y. Agreed north for Nyxara layout: positive latitude, away from the south cliff.
+    /// Planet-local +Y. Agreed north for Nyxara layout (positive latitude).
     /// </summary>
     public Vector3 LocalNorth => transform.up;
 
@@ -78,7 +78,7 @@ public class SphericalPlanet : MonoBehaviour
 
     /// <summary>
     /// Signed radial offset from the gameplay radius, in planet-local units.
-    /// Positive is a ridge (away from center); negative is a cliff (toward center).
+    /// Positive is away from center; negative is toward center.
     /// </summary>
     public float GetRadialHeight(Vector3 worldPosition)
     {

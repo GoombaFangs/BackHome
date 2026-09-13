@@ -1,8 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// Ground-layer helpers. Study walking uses <see cref="NyxaraRouteBounds"/> (kinematic band).
-/// Ridge/cliff stay visual-only. Border boxes stay in the prefab for layout compare.
+/// Leftover Border cubes are ignored as walls. Walk blocking uses the land tile mesh.
 /// </summary>
 public static class NyxaraTerrainCollision
 {
@@ -29,22 +28,8 @@ public static class NyxaraTerrainCollision
         }
     }
 
-    /// <summary>Authored Border cubes. Not tile mesh, ridge, or cliff.</summary>
     public static bool IsBlockingWall(Collider col)
     {
-        if (col == null)
-            return false;
-
-        Transform t = col.transform;
-        while (t != null)
-        {
-            if (t.name == "Borders")
-                return true;
-            if (t.GetComponent<SphericalPlanet>() != null)
-                break;
-            t = t.parent;
-        }
-
         return false;
     }
 }

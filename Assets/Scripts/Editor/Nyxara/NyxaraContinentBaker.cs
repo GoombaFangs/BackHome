@@ -33,7 +33,6 @@ public static class NyxaraContinentBaker
         if (!map.HasValidMap())
             map.SetTilesAroundEquator(map.TilesAroundEquator, refillWithBase: true);
 
-        map.FillTerrain(map.Tileset.BaseTerrainIndex);
         PlanetBlobAutotile.GenerateContinents(map, seed: 11);
         EditorUtility.SetDirty(map);
         PrefabUtility.RecordPrefabInstancePropertyModifications(map);
