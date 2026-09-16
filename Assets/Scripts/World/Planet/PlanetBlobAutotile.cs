@@ -12,7 +12,7 @@ public static class PlanetBlobAutotile
 
         int cells = map.CellCount;
         var visuals = new int[cells];
-        int fallback = map.Tileset != null ? Mathf.Max(0, map.Tileset.IndexOfId("Fill_Grass")) : 0;
+        int fallback = map.Tileset != null ? map.Tileset.DefaultVisualIndex() : 0;
 
         for (int lat = 0; lat < map.LatitudeBands; lat++)
         {
@@ -30,7 +30,7 @@ public static class PlanetBlobAutotile
         if (map == null || !map.HasValidMap())
             return;
 
-        int fallback = map.Tileset != null ? Mathf.Max(0, map.Tileset.IndexOfId("Fill_Grass")) : 0;
+        int fallback = map.Tileset != null ? map.Tileset.DefaultVisualIndex() : 0;
         radius = Mathf.Max(0, radius);
         bool any = false;
 
@@ -59,16 +59,36 @@ public static class PlanetBlobAutotile
         if (tileset == null)
             return fallback;
 
-        int self = map.GetTerrain(lat, lon);
-        int mask = 0;
-        if (IsSame(map, lat + 1, lon, self)) mask |= PlanetTileset.BitN;
-        if (IsSame(map, lat, lon + 1, self)) mask |= PlanetTileset.BitE;
-        if (IsSame(map, lat - 1, lon, self)) mask |= PlanetTileset.BitS;
-        if (IsSame(map, lat, lon - 1, self)) mask |= PlanetTileset.BitW;
+        int self = NormalizeTerrain(map, map.GetTerrain(lat, lon));
+        int sw = self;
+        int se = TerrainAt(map, lat, lon + 1, self);
+        int nw = TerrainAt(map, lat + 1, lon, self);
+        int ne = TerrainAt(map, lat + 1, lon + 1, self);
+        int visual = tileset.ResolveVisual(nw, ne, sw, se, lat, lon);
+        return tileset.IsValidVisual(visual) ? visual : fallback;
+    }
 
-        string atlasId = tileset.ResolveAtlasId(self, mask);
-        int idx = tileset.IndexOfId(atlasId);
-        return idx >= 0 ? idx : fallback;
+    static int TerrainAt(PlanetTileMap map, int lat, int lon, int fallback)
+    {
+        if (lat < 0 || lat >= map.LatitudeBands)
+            return fallback;
+        lon = Mod(lon, map.LongitudeBands);
+        return NormalizeTerrain(map, map.GetTerrain(lat, lon));
+    }
+
+    static int NormalizeTerrain(PlanetTileMap map, int terrain)
+    {
+        PlanetTileset tileset = map != null ? map.Tileset : null;
+        if (tileset == null || tileset.GetTerrain(terrain) != null)
+            return terrain;
+        if (terrain == 3)
+        {
+            int dirt = tileset.IndexOfTerrainId("Dirt");
+            if (dirt >= 0)
+                return dirt;
+        }
+
+        return tileset.BaseTerrainIndex;
     }
 
     public static void FloodFillHeight(PlanetTileMap map, int startLat, int startLon, float newHeight)
@@ -196,7 +216,7 @@ public static class PlanetBlobAutotile
         if (painted == 0)
             return;
 
-        int fallback = map.Tileset != null ? Mathf.Max(0, map.Tileset.IndexOfId("Fill_Grass")) : 0;
+        int fallback = map.Tileset != null ? map.Tileset.DefaultVisualIndex() : 0;
         for (int lat = Mathf.Max(0, minLat - 1); lat <= Mathf.Min(map.LatitudeBands - 1, maxLat + 1); lat++)
         {
             for (int lon = 0; lon < map.LongitudeBands; lon++)
@@ -229,7 +249,9 @@ public static class PlanetBlobAutotile
         map.FillHeight(PlanetTileMap.DefaultGroundHeight, rebuild: false);
 
         int grass = map.Tileset.BaseTerrainIndex;
-        int overlay = Mathf.Min(1, map.Tileset.TerrainCount - 1);
+        int dirt = Mathf.Min(PlanetTileset.TerrainDirt, map.Tileset.TerrainCount - 1);
+        int clay = Mathf.Min(PlanetTileset.TerrainClay, map.Tileset.TerrainCount - 1);
+        int dark = Mathf.Min(PlanetTileset.TerrainDarkGrass, map.Tileset.TerrainCount - 1);
         int latBands = map.LatitudeBands;
         int lonBands = map.LongitudeBands;
         var rng = new System.Random(seed);
@@ -244,12 +266,25 @@ public static class PlanetBlobAutotile
                 float n2 = ValueNoise(lon01 * 7.3f - seed * 0.11f, lat01 * 5.1f);
                 float n = n1 * 0.65f + n2 * 0.35f;
                 float band = 1f - Mathf.Abs(lat01 - 0.5f) * 1.5f;
-                bool patch = (band > 0.18f && n > 0.50f)
+                bool patch = (band > 0.18f && n > 0.48f)
                     || (n2 > 0.80f && band > 0.08f)
                     || (rng.NextDouble() > 0.97 && band > 0.25f);
-                if (!patch)
-                    continue;
-                int t = n > 0.62f ? overlay : grass;
+
+                int t = grass;
+                if (patch)
+                {
+                    if (n > 0.74f)
+                        t = clay;
+                    else if (n > 0.58f)
+                        t = dirt;
+                    else if (n2 > 0.62f)
+                        t = dark;
+                }
+                else if (n2 > 0.78f && band > 0.22f)
+                {
+                    t = dark;
+                }
+
                 map.SetTerrainSilent(lat, lon, t);
                 float hill = n > 0.70f ? 2f : PlanetTileMap.DefaultGroundHeight;
                 map.SetHeightSilent(lat, lon, hill);
@@ -257,14 +292,6 @@ public static class PlanetBlobAutotile
         }
 
         ResolveAll(map);
-    }
-
-    static bool IsSame(PlanetTileMap map, int lat, int lon, int self)
-    {
-        if (lat < 0 || lat >= map.LatitudeBands)
-            return false;
-        lon = Mod(lon, map.LongitudeBands);
-        return map.GetTerrain(lat, lon) == self;
     }
 
     static int Mod(int value, int modulus)

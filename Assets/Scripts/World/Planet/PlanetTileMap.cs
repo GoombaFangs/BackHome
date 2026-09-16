@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.Serialization;
 
 /// <summary>
-/// Spherical terrain tilemap: paint terrains, sculpt ground height, autotile to tileset UVs.
+/// Spherical terrain tilemap: paint terrains, sculpt ground height, splat-blend or autotile visuals.
 /// </summary>
 [ExecuteAlways]
 [DefaultExecutionOrder(-50)]
@@ -33,7 +33,7 @@ public class PlanetTileMap : MonoBehaviour
     [SerializeField] float overlap = 1f;
     [Tooltip("How far neighboring shell tiles overlap, as a fraction of cell size. Closes cracks on the sphere.")]
     [SerializeField, Range(0f, 0.05f)] float seamOverlap = 0.012f;
-    [Tooltip("Split each cell so the ground follows the planet curve, like the Test meshes.")]
+    [Tooltip("Split each cell so the ground follows the planet curve, like the authored terrain meshes.")]
     [SerializeField, Range(2, 4)] int cellSubdivisions = 3;
     [Tooltip("Lift the tile mesh above the planet surface.")]
     [SerializeField] float surfaceLift = 0.08f;
@@ -686,7 +686,10 @@ public class PlanetTileMap : MonoBehaviour
         sample.tileIndex = visual;
 
         var t = tileset != null ? tileset.GetTerrain(terrain) : null;
-        var a = tileset != null ? tileset.GetEntry(visual) : null;
+        int entryIndex = visual;
+        if (tileset != null)
+            PlanetTileset.UnpackVisual(visual, out entryIndex, out _);
+        var a = tileset != null ? tileset.GetEntry(entryIndex) : null;
         sample.tileId = a != null ? a.id : (t != null ? t.id : string.Empty);
         sample.walkable = t == null || t.walkable;
         sample.zoneId = t != null ? t.zoneId : (a != null ? a.zoneId : string.Empty);
@@ -776,7 +779,7 @@ public class PlanetTileMap : MonoBehaviour
 
     void BuildCombinedMesh()
     {
-        if (!HasValidMap() || tileset == null || tileset.Texture == null || tileset.Count == 0)
+        if (!HasValidMap() || tileset == null || !tileset.HasVisualSource)
         {
             if (_tilesFilter != null)
                 _tilesFilter.sharedMesh = null;
@@ -795,7 +798,9 @@ public class PlanetTileMap : MonoBehaviour
         float latStep = 180f / latitudeBands;
         float lonStep = 360f / longitudeBands;
         int subdiv = Mathf.Max(2, cellSubdivisions);
-        int fallback = Mathf.Max(0, tileset.IndexOfId("Fill_Grass"));
+        int fallback = tileset.DefaultVisualIndex();
+        bool splat = tileset.UsesSplatBlending;
+        float tiling = tileset.SplatTiling;
 
         for (int lat = 0; lat < latitudeBands; lat++)
         {
@@ -806,15 +811,45 @@ public class PlanetTileMap : MonoBehaviour
 
             for (int lon = 0; lon < longitudeBands; lon++)
             {
-                int tileIndex = GetTileIndex(lat, lon);
-                if (tileIndex < 0 || tileIndex >= tileset.Count)
-                    tileIndex = fallback;
-                if (!tileset.TryGetCornerUvs(tileIndex, out Vector2 uvSW, out Vector2 uvSE, out Vector2 uvNE, out Vector2 uvNW))
+                Vector2 uvSW;
+                Vector2 uvSE;
+                Vector2 uvNE;
+                Vector2 uvNW;
+                Color cSW;
+                Color cSE;
+                Color cNE;
+                Color cNW;
+
+                if (splat)
                 {
-                    uvSW = new Vector2(0f, 0f);
-                    uvSE = new Vector2(1f, 0f);
-                    uvNE = new Vector2(1f, 1f);
-                    uvNW = new Vector2(0f, 1f);
+                    uvSW = new Vector2(lon * tiling, lat * tiling);
+                    uvSE = new Vector2((lon + 1) * tiling, lat * tiling);
+                    uvNE = new Vector2((lon + 1) * tiling, (lat + 1) * tiling);
+                    uvNW = new Vector2(lon * tiling, (lat + 1) * tiling);
+                    cSW = tileset.SplatWeight(TerrainAtClamped(lat, lon));
+                    cSE = tileset.SplatWeight(TerrainAtClamped(lat, lon + 1));
+                    cNW = tileset.SplatWeight(TerrainAtClamped(lat + 1, lon));
+                    cNE = tileset.SplatWeight(TerrainAtClamped(lat + 1, lon + 1));
+                }
+                else
+                {
+                    int tileIndex = GetTileIndex(lat, lon);
+                    if (!tileset.IsValidVisual(tileIndex))
+                        tileIndex = fallback;
+                    if (!tileset.TryGetCornerUvs(tileIndex, out uvSW, out uvSE, out uvNE, out uvNW))
+                    {
+                        uvSW = new Vector2(0f, 0f);
+                        uvSE = new Vector2(1f, 0f);
+                        uvNE = new Vector2(1f, 1f);
+                        uvNW = new Vector2(0f, 1f);
+                    }
+
+                    Color topTint = Color.white;
+                    if (alternateTint && ((lat + lon) & 1) == 1)
+                        topTint = tintOdd;
+                    else if (alternateTint)
+                        topTint = tintEven;
+                    cSW = cSE = cNE = cNW = topTint;
                 }
 
                 float lon0 = lon * lonStep;
@@ -824,18 +859,13 @@ public class PlanetTileMap : MonoBehaviour
                 float liftNW = CornerLift(lat + 1, lon);
                 float liftNE = CornerLift(lat + 1, lon + 1);
 
-                Color topTint = Color.white;
-                if (alternateTint && ((lat + lon) & 1) == 1)
-                    topTint = tintOdd;
-                else if (alternateTint)
-                    topTint = tintEven;
-
                 if (southPole)
                 {
                     AddPolarHeightfield(
                         false, lat1, lon0, lon1,
                         liftNW, liftNE, 0.5f * (liftSW + liftSE),
-                        uvSW, uvSE, uvNE, uvNW, topTint,
+                        uvSW, uvSE, uvNE, uvNW,
+                        cSW, cSE, cNE, cNW,
                         vertices, normals, uvs, colors, triangles);
                     continue;
                 }
@@ -845,7 +875,8 @@ public class PlanetTileMap : MonoBehaviour
                     AddPolarHeightfield(
                         true, lat0, lon0, lon1,
                         liftSW, liftSE, 0.5f * (liftNW + liftNE),
-                        uvSW, uvSE, uvNE, uvNW, topTint,
+                        uvSW, uvSE, uvNE, uvNW,
+                        cSW, cSE, cNE, cNW,
                         vertices, normals, uvs, colors, triangles);
                     continue;
                 }
@@ -854,7 +885,7 @@ public class PlanetTileMap : MonoBehaviour
                     lat0, lat1, lon0, lon1,
                     liftSW, liftSE, liftNE, liftNW,
                     uvSW, uvSE, uvNE, uvNW,
-                    topTint, subdiv,
+                    cSW, cSE, cNE, cNW, subdiv,
                     vertices, normals, uvs, colors, triangles);
             }
         }
@@ -875,7 +906,7 @@ public class PlanetTileMap : MonoBehaviour
         _runtimeMesh.RecalculateNormals();
 
         _tilesFilter.sharedMesh = _runtimeMesh;
-        _runtimeMaterial = BuildAtlasMaterial();
+        _runtimeMaterial = BuildTileMaterial();
         _tilesRenderer.sharedMaterials = new[] { _runtimeMaterial };
 
         if (_tilesCollider != null)
@@ -887,6 +918,15 @@ public class PlanetTileMap : MonoBehaviour
         }
 
         EnsureWalkColliders();
+    }
+
+    int TerrainAtClamped(int lat, int lon)
+    {
+        if (lat < 0)
+            lat = 0;
+        else if (lat >= latitudeBands)
+            lat = latitudeBands - 1;
+        return GetTerrain(lat, lon);
     }
 
     void AddHeightfieldCell(
@@ -902,7 +942,10 @@ public class PlanetTileMap : MonoBehaviour
         Vector2 uvSE,
         Vector2 uvNE,
         Vector2 uvNW,
-        Color tint,
+        Color cSW,
+        Color cSE,
+        Color cNE,
+        Color cNW,
         int subdiv,
         List<Vector3> vertices,
         List<Vector3> normals,
@@ -921,6 +964,10 @@ public class PlanetTileMap : MonoBehaviour
             Vector2 uvE0 = Vector2.Lerp(uvSE, uvNE, ty0);
             Vector2 uvW1 = Vector2.Lerp(uvSW, uvNW, ty1);
             Vector2 uvE1 = Vector2.Lerp(uvSE, uvNE, ty1);
+            Color colW0 = Color.Lerp(cSW, cNW, ty0);
+            Color colE0 = Color.Lerp(cSE, cNE, ty0);
+            Color colW1 = Color.Lerp(cSW, cNW, ty1);
+            Color colE1 = Color.Lerp(cSE, cNE, ty1);
 
             for (int x = 0; x < subdiv; x++)
             {
@@ -943,7 +990,10 @@ public class PlanetTileMap : MonoBehaviour
                     Vector2.Lerp(uvW0, uvE0, tx1),
                     Vector2.Lerp(uvW1, uvE1, tx1),
                     Vector2.Lerp(uvW1, uvE1, tx0),
-                    tint,
+                    Color.Lerp(colW0, colE0, tx0),
+                    Color.Lerp(colW0, colE0, tx1),
+                    Color.Lerp(colW1, colE1, tx1),
+                    Color.Lerp(colW1, colE1, tx0),
                     true,
                     vertices, normals, uvs, colors, triangles);
             }
@@ -962,7 +1012,10 @@ public class PlanetTileMap : MonoBehaviour
         Vector2 uvSE,
         Vector2 uvNE,
         Vector2 uvNW,
-        Color topTint,
+        Color cSW,
+        Color cSE,
+        Color cNE,
+        Color cNW,
         List<Vector3> vertices,
         List<Vector3> normals,
         List<Vector2> uvs,
@@ -974,6 +1027,9 @@ public class PlanetTileMap : MonoBehaviour
         Vector2 uvPole = (uvSW + uvSE + uvNE + uvNW) * 0.25f;
         Vector2 uvRing0 = northPole ? uvSW : uvNW;
         Vector2 uvRing1 = northPole ? uvSE : uvNE;
+        Color cRing0 = northPole ? cSW : cNW;
+        Color cRing1 = northPole ? cSE : cNE;
+        Color cPole = Color.Lerp(cRing0, cRing1, 0.5f);
         Vector3 pole = LocalSurfacePoint(poleLat, lonMid, poleLift);
         Vector3 r0 = LocalSurfacePoint(ringLat, lon0, lift0);
         Vector3 r1 = LocalSurfacePoint(ringLat, lon1, lift1);
@@ -981,9 +1037,9 @@ public class PlanetTileMap : MonoBehaviour
             return;
 
         if (northPole)
-            AddTri(pole, r0, r1, uvPole, uvRing0, uvRing1, topTint, true, vertices, normals, uvs, colors, triangles);
+            AddTri(pole, r0, r1, uvPole, uvRing0, uvRing1, cPole, cRing0, cRing1, true, vertices, normals, uvs, colors, triangles);
         else
-            AddTri(pole, r1, r0, uvPole, uvRing1, uvRing0, topTint, true, vertices, normals, uvs, colors, triangles);
+            AddTri(pole, r1, r0, uvPole, uvRing1, uvRing0, cPole, cRing1, cRing0, true, vertices, normals, uvs, colors, triangles);
     }
 
     static bool IsUsableFace(Vector3 a, Vector3 b, Vector3 c, Vector3 d)
@@ -1006,7 +1062,9 @@ public class PlanetTileMap : MonoBehaviour
         Vector2 uvA,
         Vector2 uvB,
         Vector2 uvC,
-        Color color,
+        Color colorA,
+        Color colorB,
+        Color colorC,
         bool sphericalNormals,
         List<Vector3> vertices,
         List<Vector3> normals,
@@ -1028,6 +1086,9 @@ public class PlanetTileMap : MonoBehaviour
             Vector2 tmpUv = uvB;
             uvB = uvC;
             uvC = tmpUv;
+            Color tmpC = colorB;
+            colorB = colorC;
+            colorC = tmpC;
             n = -n;
         }
 
@@ -1050,9 +1111,9 @@ public class PlanetTileMap : MonoBehaviour
         uvs.Add(uvA);
         uvs.Add(uvB);
         uvs.Add(uvC);
-        colors.Add(color);
-        colors.Add(color);
-        colors.Add(color);
+        colors.Add(colorA);
+        colors.Add(colorB);
+        colors.Add(colorC);
         triangles.Add(start + 0);
         triangles.Add(start + 1);
         triangles.Add(start + 2);
@@ -1067,7 +1128,10 @@ public class PlanetTileMap : MonoBehaviour
         Vector2 uvB,
         Vector2 uvC,
         Vector2 uvD,
-        Color color,
+        Color colorA,
+        Color colorB,
+        Color colorC,
+        Color colorD,
         bool sphericalNormals,
         List<Vector3> vertices,
         List<Vector3> normals,
@@ -1093,6 +1157,9 @@ public class PlanetTileMap : MonoBehaviour
             Vector2 tmpUv = uvB;
             uvB = uvD;
             uvD = tmpUv;
+            Color tmpC = colorB;
+            colorB = colorD;
+            colorD = tmpC;
             n = -n;
         }
 
@@ -1119,10 +1186,10 @@ public class PlanetTileMap : MonoBehaviour
         uvs.Add(uvB);
         uvs.Add(uvC);
         uvs.Add(uvD);
-        colors.Add(color);
-        colors.Add(color);
-        colors.Add(color);
-        colors.Add(color);
+        colors.Add(colorA);
+        colors.Add(colorB);
+        colors.Add(colorC);
+        colors.Add(colorD);
         triangles.Add(start + 0);
         triangles.Add(start + 1);
         triangles.Add(start + 2);
@@ -1131,9 +1198,12 @@ public class PlanetTileMap : MonoBehaviour
         triangles.Add(start + 3);
     }
 
-    Material BuildAtlasMaterial()
+    Material BuildTileMaterial()
     {
-        Shader shader = Shader.Find("BackHome/PlanetTilesCube");
+        bool splat = tileset != null && tileset.UsesSplatBlending;
+        Shader shader = splat
+            ? Shader.Find("BackHome/PlanetTilesSplat")
+            : Shader.Find("BackHome/PlanetTilesCube");
         if (shader == null)
             shader = Shader.Find("Universal Render Pipeline/Unlit");
         if (shader == null)
@@ -1154,19 +1224,47 @@ public class PlanetTileMap : MonoBehaviour
             mat.SetColor("_BaseColor", Color.white);
         else
             mat.color = Color.white;
-        if (mat.HasProperty("_ShadeFloor"))
-            mat.SetFloat("_ShadeFloor", 0.82f);
-        if (mat.HasProperty("_ShadeCeil"))
-            mat.SetFloat("_ShadeCeil", 1.02f);
 
-        Texture2D tex = tileset.Texture;
-        if (tex != null)
+        if (splat)
         {
-            mat.mainTexture = tex;
-            if (mat.HasProperty("_BaseMap"))
-                mat.SetTexture("_BaseMap", tex);
-            if (mat.HasProperty("_MainTex"))
-                mat.SetTexture("_MainTex", tex);
+            if (mat.HasProperty("_ShadeFloor"))
+                mat.SetFloat("_ShadeFloor", 0.88f);
+            if (mat.HasProperty("_ShadeCeil"))
+                mat.SetFloat("_ShadeCeil", 1.06f);
+            if (mat.HasProperty("_BlendSharpness"))
+                mat.SetFloat("_BlendSharpness", tileset.SplatBlendSharpness);
+
+            Texture2D s0 = tileset.GetSplatAlbedo(0);
+            Texture2D s1 = tileset.GetSplatAlbedo(1);
+            Texture2D s2 = tileset.GetSplatAlbedo(2);
+            Texture2D s3 = tileset.GetSplatAlbedo(3);
+            if (mat.HasProperty("_Splat0"))
+                mat.SetTexture("_Splat0", s0);
+            if (mat.HasProperty("_Splat1"))
+                mat.SetTexture("_Splat1", s1);
+            if (mat.HasProperty("_Splat2"))
+                mat.SetTexture("_Splat2", s2);
+            if (mat.HasProperty("_Splat3"))
+                mat.SetTexture("_Splat3", s3);
+            if (s0 != null)
+                mat.mainTexture = s0;
+        }
+        else
+        {
+            if (mat.HasProperty("_ShadeFloor"))
+                mat.SetFloat("_ShadeFloor", 0.82f);
+            if (mat.HasProperty("_ShadeCeil"))
+                mat.SetFloat("_ShadeCeil", 1.02f);
+
+            Texture2D tex = tileset.Texture;
+            if (tex != null)
+            {
+                mat.mainTexture = tex;
+                if (mat.HasProperty("_BaseMap"))
+                    mat.SetTexture("_BaseMap", tex);
+                if (mat.HasProperty("_MainTex"))
+                    mat.SetTexture("_MainTex", tex);
+            }
         }
 
         return mat;

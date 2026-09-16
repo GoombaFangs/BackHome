@@ -34,7 +34,7 @@ public static class PlanetLayoutEditor
             (stripped > 0 ? " Removed " + stripped + " leftover ridge/cliff object(s)." : string.Empty));
     }
 
-    [MenuItem("BackHome/Planet Layout/Attach Test Terrain Meshes")]
+    [MenuItem("BackHome/Planet Layout/Attach Terrain Meshes")]
     public static void AttachTestTerrainMeshes()
     {
         SphericalPlanet planet = Object.FindAnyObjectByType<SphericalPlanet>();
@@ -47,13 +47,13 @@ public static class PlanetLayoutEditor
             return;
         }
 
-        Undo.RegisterFullObjectHierarchyUndo(planet.gameObject, "Attach Test Terrain Meshes");
+        Undo.RegisterFullObjectHierarchyUndo(planet.gameObject, "Attach Terrain Meshes");
         int added = PlanetTestTerrain.Attach(planet);
         EditorSceneManager.MarkSceneDirty(planet.gameObject.scene);
-        Debug.Log("[BackHome] Attached " + added + " Test terrain mesh(es) from Galaxy/Nyxara/Test.");
+        Debug.Log("[BackHome] Attached " + added + " terrain mesh(es) from Galaxy/Nyxara/Terrain.");
     }
 
-    [MenuItem("BackHome/Planet Layout/Remove Test Terrain Meshes")]
+    [MenuItem("BackHome/Planet Layout/Remove Terrain Meshes")]
     public static void RemoveTestTerrainMeshes()
     {
         SphericalPlanet planet = Object.FindAnyObjectByType<SphericalPlanet>();
@@ -61,12 +61,12 @@ public static class PlanetLayoutEditor
         {
             EditorUtility.DisplayDialog(
                 "Planet Layout",
-                "No Test terrain meshes in the open scene.",
+                "No terrain meshes in the open scene.",
                 "OK");
             return;
         }
 
-        Undo.RegisterFullObjectHierarchyUndo(planet.gameObject, "Remove Test Terrain Meshes");
+        Undo.RegisterFullObjectHierarchyUndo(planet.gameObject, "Remove Terrain Meshes");
         PlanetTestTerrain.Remove(planet);
         EditorSceneManager.MarkSceneDirty(planet.gameObject.scene);
     }

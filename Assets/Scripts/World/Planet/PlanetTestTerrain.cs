@@ -1,15 +1,15 @@
 using UnityEngine;
 
 /// <summary>
-/// Places the authored Nyxara Test meshes (ridge + cliff) on the planet.
+/// Places the authored Nyxara terrain meshes (ridge + cliff) on the planet.
 /// Those OBJs are already in PlanetNyxara parent-local space at radius 75.
 /// </summary>
 public static class PlanetTestTerrain
 {
     public const string RootName = "TestTerrainMeshes";
 
-    const string NorthRidgeResource = "Galaxy/Nyxara/Test/North_Ridge";
-    const string SouthCliffResource = "Galaxy/Nyxara/Test/South_Cliff";
+    const string NorthRidgeResource = "Galaxy/Nyxara/Terrain/North_Ridge";
+    const string SouthCliffResource = "Galaxy/Nyxara/Terrain/South_Cliff";
 
     public static Transform FindRoot(SphericalPlanet planet)
     {
@@ -64,7 +64,7 @@ public static class PlanetTestTerrain
         Mesh mesh = LoadMesh(resourcePath);
         if (mesh == null)
         {
-            Debug.LogWarning("[BackHome] Missing Test mesh: Resources/" + resourcePath + ".obj");
+            Debug.LogWarning("[BackHome] Missing terrain mesh: Resources/" + resourcePath + ".obj");
             return false;
         }
 

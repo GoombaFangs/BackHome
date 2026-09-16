@@ -93,10 +93,10 @@ public class PlanetTileMapEditor : Editor
             return;
         }
 
-        if (map.Tileset.Texture == null || map.Tileset.Count == 0)
+        if (!map.Tileset.HasVisualSource)
         {
             EditorGUILayout.HelpBox(
-                "Tileset is empty (no texture / entries).\n" +
+                "Tileset has no splat textures or atlas.\n" +
                 "Re-run: BackHome → Import Nyxara Tileset",
                 MessageType.Error);
             if (GUILayout.Button("Reimport Tileset Now", GUILayout.Height(32)))
@@ -112,7 +112,10 @@ public class PlanetTileMapEditor : Editor
             if (GUILayout.Button("Fill Grass + Bake Mesh", GUILayout.Height(32)))
             {
                 Undo.RecordObject(map, "Fill Grass Tiles");
-                map.FillTerrain(map.Tileset.BaseTerrainIndex);
+                int grass = map.Tileset.IndexOfTerrainId("Grass");
+                if (grass < 0)
+                    grass = map.Tileset.IndexOfTerrainId("LightGrass");
+                map.FillTerrain(grass >= 0 ? grass : map.Tileset.BaseTerrainIndex);
                 MarkDirty(map);
             }
         }
@@ -131,7 +134,7 @@ public class PlanetTileMapEditor : Editor
             DrawGroundLevel(map);
 
         DrawPaintControls(map);
-        DrawTestMeshes(map);
+        DrawTerrainMeshes(map);
     }
 
     void DrawTerrainPainting(PlanetTileMap map)
@@ -139,23 +142,40 @@ public class PlanetTileMapEditor : Editor
         EditorGUILayout.Space(10);
         EditorGUILayout.LabelField("Terrain Painting", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
-            "Paint tileset terrains. Autotile blends neighbors of the same type.",
+            "Handpainted splat blend. Keys 1–4 pick Grass, Dirt, Clay, Dark Grass.\n" +
+            "Neighbors mix smoothly. Use Generate Continents for a first pass, then paint.",
             MessageType.Info);
 
-        string[] names = new string[map.Tileset.TerrainCount];
-        for (int i = 0; i < names.Length; i++)
+        int count = map.Tileset.TerrainCount;
+        _terrainBrush = Mathf.Clamp(_terrainBrush, 0, Mathf.Max(0, count - 1));
+        int columns = Mathf.Min(4, Mathf.Max(1, count));
+        EditorGUILayout.BeginVertical();
+        Color prevBg = GUI.backgroundColor;
+        for (int i = 0; i < count; i++)
         {
-            var t = map.Tileset.GetTerrain(i);
-            names[i] = t != null ? t.displayName : $"Terrain {i}";
-        }
+            if (i % columns == 0)
+            {
+                if (i > 0)
+                    EditorGUILayout.EndHorizontal();
+                EditorGUILayout.BeginHorizontal();
+            }
 
-        EditorGUI.BeginChangeCheck();
-        int picked = GUILayout.Toolbar(Mathf.Clamp(_terrainBrush, 0, names.Length - 1), names);
-        if (EditorGUI.EndChangeCheck())
-        {
-            _terrainBrush = picked;
-            _layer = PaintLayer.Terrain;
+            var t = map.Tileset.GetTerrain(i);
+            string label = t != null ? t.displayName : $"Terrain {i}";
+            Color preview = t != null ? t.previewColor : Color.gray;
+            GUI.backgroundColor = i == _terrainBrush
+                ? preview
+                : Color.Lerp(preview, Color.gray, 0.45f);
+            if (GUILayout.Toggle(i == _terrainBrush, label, "Button", GUILayout.Height(28)))
+            {
+                _terrainBrush = i;
+                _layer = PaintLayer.Terrain;
+            }
         }
+        GUI.backgroundColor = prevBg;
+        if (count > 0)
+            EditorGUILayout.EndHorizontal();
+        EditorGUILayout.EndVertical();
 
         EditorGUILayout.BeginHorizontal();
         if (GUILayout.Button("Fill This Terrain"))
@@ -270,28 +290,28 @@ public class PlanetTileMapEditor : Editor
         }
     }
 
-    void DrawTestMeshes(PlanetTileMap map)
+    void DrawTerrainMeshes(PlanetTileMap map)
     {
         EditorGUILayout.Space(8);
-        EditorGUILayout.LabelField("Test Meshes", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField("Terrain Meshes", EditorStyles.boldLabel);
         EditorGUILayout.BeginHorizontal();
-        if (GUILayout.Button("Attach Test Ridge / Cliff"))
+        if (GUILayout.Button("Attach Ridge / Cliff"))
         {
             SphericalPlanet planet = map.GetComponent<SphericalPlanet>();
             if (planet != null)
             {
-                Undo.RegisterFullObjectHierarchyUndo(planet.gameObject, "Attach Test Terrain Meshes");
+                Undo.RegisterFullObjectHierarchyUndo(planet.gameObject, "Attach Terrain Meshes");
                 int added = PlanetTestTerrain.Attach(planet);
-                Debug.Log("[BackHome] Attached " + added + " Test terrain mesh(es).");
+                Debug.Log("[BackHome] Attached " + added + " terrain mesh(es).");
                 UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(planet.gameObject.scene);
             }
         }
-        if (GUILayout.Button("Remove Test Meshes"))
+        if (GUILayout.Button("Remove Terrain Meshes"))
         {
             SphericalPlanet planet = map.GetComponent<SphericalPlanet>();
             if (planet != null)
             {
-                Undo.RegisterFullObjectHierarchyUndo(planet.gameObject, "Remove Test Terrain Meshes");
+                Undo.RegisterFullObjectHierarchyUndo(planet.gameObject, "Remove Terrain Meshes");
                 PlanetTestTerrain.Remove(planet);
                 UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(planet.gameObject.scene);
             }
@@ -593,7 +613,12 @@ public class PlanetTileMapEditor : Editor
             }
         }
         else
-            PlanetBlobAutotile.PaintTerrain(map, lat, lon, _terrainBrush, _brushRadius, rebuild: true);
+        {
+            int terrain = erase && map.Tileset != null
+                ? map.Tileset.BaseTerrainIndex
+                : _terrainBrush;
+            PlanetBlobAutotile.PaintTerrain(map, lat, lon, terrain, _brushRadius, rebuild: true);
+        }
 
         _lastLat = lat;
         _lastLon = lon;
