@@ -2968,6 +2968,7 @@ MonoBehaviour:
   - 4
   - 4
   - 4
+  lastLoadedPreset: {fileID: 0}
 --- !u!33 &7592257923392860369
 MeshFilter:
   m_ObjectHideFlags: 0

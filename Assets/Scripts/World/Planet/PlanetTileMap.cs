@@ -85,6 +85,7 @@ public class PlanetTileMap : MonoBehaviour
     [SerializeField] int[] integerHeights = Array.Empty<int>();
     [Tooltip("Ground height in steps. Fractional values like 0.5 are allowed.")]
     [SerializeField] float[] groundHeights = Array.Empty<float>();
+    [SerializeField, HideInInspector] PlanetTileMapPreset lastLoadedPreset;
 
     public const float DefaultGroundHeight = 1f;
     public const float MinHeight = -2f;
@@ -104,6 +105,7 @@ public class PlanetTileMap : MonoBehaviour
     public int LatitudeBands => latitudeBands;
     public int LongitudeBands => longitudeBands;
     public int CellCount => latitudeBands * longitudeBands;
+    public PlanetTileMapPreset LastLoadedPreset => lastLoadedPreset;
     public bool ShowTileVisuals => showTileVisuals;
     public bool ProvidesWalkSurface => showTileVisuals;
     public MeshCollider WalkMeshCollider => _tilesCollider;
@@ -668,6 +670,93 @@ public class PlanetTileMap : MonoBehaviour
         tileIndices = (int[])visuals.Clone();
         if (rebuild)
             RebuildVisuals();
+    }
+
+    public bool ApplyPreset(PlanetTileMapPreset preset, bool rebuild = true)
+    {
+        if (preset == null
+            || !preset.TryCopyData(
+                out int around,
+                out int lat,
+                out int lon,
+                out int[] terrains,
+                out float[] heights,
+                out int[] visuals))
+            return false;
+
+        tilesAroundEquator = Mathf.Clamp(around, 16, 256);
+        latitudeBands = Mathf.Max(1, lat);
+        longitudeBands = Mathf.Max(1, lon);
+        terrainIds = terrains;
+        groundHeights = heights;
+        tileIndices = visuals;
+        integerHeights = Array.Empty<int>();
+        lastLoadedPreset = preset;
+
+        if (rebuild)
+        {
+            if (tileset != null && !tileset.UsesSplatBlending)
+                PlanetBlobAutotile.ResolveAll(this);
+            else
+                RebuildVisuals();
+        }
+
+        return true;
+    }
+
+    public void CaptureToPreset(PlanetTileMapPreset preset)
+    {
+        if (preset == null)
+            return;
+        EnsureMapArrays();
+        preset.SetData(
+            tilesAroundEquator,
+            latitudeBands,
+            longitudeBands,
+            terrainIds,
+            groundHeights,
+            tileIndices,
+            tileset);
+        lastLoadedPreset = preset;
+    }
+
+    public int ComputeContentHash()
+    {
+        EnsureMapArrays();
+        return ComputeMapContentHash(
+            tilesAroundEquator,
+            latitudeBands,
+            longitudeBands,
+            terrainIds,
+            groundHeights);
+    }
+
+    public static int ComputeMapContentHash(
+        int aroundEquator,
+        int latBands,
+        int lonBands,
+        int[] terrains,
+        float[] heights)
+    {
+        unchecked
+        {
+            int hash = 17;
+            hash = hash * 31 + aroundEquator;
+            hash = hash * 31 + latBands;
+            hash = hash * 31 + lonBands;
+            if (terrains != null)
+            {
+                for (int i = 0; i < terrains.Length; i++)
+                    hash = hash * 31 + terrains[i];
+            }
+            if (heights != null)
+            {
+                for (int i = 0; i < heights.Length; i++)
+                    hash = hash * 31 + heights[i].GetHashCode();
+            }
+
+            return hash;
+        }
     }
 
     public bool TryGetTile(Vector3 worldPosition, out TileSample sample)
