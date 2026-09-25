@@ -1,5 +1,36 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &343880613096257460
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 347215893188384980}
+  m_Layer: 0
+  m_Name: Rocks
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &347215893188384980
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 343880613096257460}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8023435295592196779}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &650865866705049090
 GameObject:
   m_ObjectHideFlags: 0
@@ -3056,6 +3087,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 8023435295592196779}
+  - component: {fileID: 7344556677889900112}
+  - component: {fileID: 8455667788990011223}
   m_Layer: 3
   m_Name: Environment
   m_TagString: Untagged
@@ -3075,9 +3108,82 @@ Transform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 8615914680192914087}
+  - {fileID: 347215893188384980}
+  - {fileID: 5743324844509022494}
   m_Father: {fileID: 2360042101202772783}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &7344556677889900112
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1650240586130180506}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b7e4c1a09f2d4e6a8c3b5d7e1f0a2b4c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlanetEnvironmentBrush
+  categories:
+  - displayName: Grass
+    previewColor: {r: 0.45, g: 0.78, b: 0.32, a: 1}
+    brushRadius: 4
+    spacing: 1.2
+    amount: 4
+    scaleMin: 0.8
+    scaleMax: 1.2
+    prefabs:
+    - {fileID: 6586595388452404679, guid: 53ac6e18221123c4ba320a04966bc7fa, type: 3}
+    - {fileID: 8801834588742413860, guid: 8e3f6b1d7a4c9500f2d3e5b6c7a8f90a, type: 3}
+    - {fileID: 6586595388452404679, guid: c3801e8c7acdd7c47bc2a99a6d21ad9a, type: 3}
+    - {fileID: 5275194215813165404, guid: 17502c779e1d97e4d9daec1535eb602f, type: 3}
+    - {fileID: 6685107302268268320, guid: 6c1d4f9b5e2a7388d0b1c3f4a5e6d708, type: 3}
+  - displayName: Rocks
+    previewColor: {r: 0.62, g: 0.58, b: 0.52, a: 1}
+    brushRadius: 5
+    spacing: 2.8
+    amount: 1
+    scaleMin: 0.85
+    scaleMax: 1.25
+    prefabs:
+    - {fileID: 315047371028311681, guid: 541a6dab2ced86a40898cddecc823e29, type: 3}
+    - {fileID: 3099762285173911039, guid: 8d455d2a1ab89944898b82e2afdf1a15, type: 3}
+    - {fileID: 2229266666281105650, guid: 6d39e132f666e5a4d83d29acda0de4cb, type: 3}
+    - {fileID: 8260635690674299407, guid: ca4265244da0c7d459f66473349c54a8, type: 3}
+    - {fileID: 5422034461940545826, guid: f2423159a32fb944cac5eb1e20b64480, type: 3}
+  - displayName: Trees
+    previewColor: {r: 0.22, g: 0.55, b: 0.28, a: 1}
+    brushRadius: 7
+    spacing: 5.5
+    amount: 1
+    scaleMin: 0.9
+    scaleMax: 1.15
+    prefabs:
+    - {fileID: 710038117826507282, guid: c2576a08844b4f33a3413419e7852ee7, type: 3}
+    - {fileID: 8396167407362669768, guid: c8ce36c3c84c7fb4e9432e31efc49ba1, type: 3}
+    - {fileID: 6529401389816808732, guid: 44685c5272c7458fbb703abab2c1507a, type: 3}
+    - {fileID: 4027186653557920374, guid: 7d2e5a0c6f3b8499e1c2d4a5b6f7e809, type: 3}
+    - {fileID: 7579689327346344112, guid: 10f1bde7a897b4b478b2a443fbb1c6ed, type: 3}
+    - {fileID: 5289619493705675949, guid: e9a13b61d60b41a589ba1a9c51badf9f, type: 3}
+  hover: 0.05
+  randomYaw: 1
+  yaw: 0
+--- !u!114 &8455667788990011223
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1650240586130180506}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c4d8e2a17b9f4c0e8a6d5f3b1c0e9a72, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlanetEnvironmentStreamer
+  showRadius: 42
+  hideRadius: 52
 --- !u!1 &1692879288673288521
 GameObject:
   m_ObjectHideFlags: 0
@@ -3190,6 +3296,37 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: -4.3368087e-19, y: -0.000000007450581, z: 9.632882e-19}
+--- !u!1 &2285441764758972917
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 8615914680192914087}
+  m_Layer: 0
+  m_Name: Grass
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &8615914680192914087
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2285441764758972917}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8023435295592196779}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2301176981024433255
 GameObject:
   m_ObjectHideFlags: 0
@@ -5655,6 +5792,37 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: -4.3368087e-19, y: -0.000000007450581, z: 9.632882e-19}
+--- !u!1 &5520595666043491826
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5743324844509022494}
+  m_Layer: 0
+  m_Name: Trees
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5743324844509022494
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5520595666043491826}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8023435295592196779}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &5668994093232553414
 GameObject:
   m_ObjectHideFlags: 0
