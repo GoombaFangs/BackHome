@@ -2,7 +2,7 @@ using System;
 using UnityEngine;
 
 /// <summary>
-/// Lives on the planet Environment object. Holds Grass / Rocks / Trees prefab
+/// Lives on the planet Environment object. Holds Grass / Rocks / Trees / Camp prefab
 /// palettes that the editor brush paints onto the sphere. Painted instances
 /// are parented under a child folder named after the category.
 /// </summary>
@@ -127,6 +127,16 @@ public class PlanetEnvironmentBrush : MonoBehaviour
                 previewColor = new Color(0.22f, 0.55f, 0.28f, 1f),
                 brushRadius = 7f,
                 spacing = 5.5f,
+                amount = 1,
+                scaleMin = 0.9f,
+                scaleMax = 1.15f
+            },
+            new Category
+            {
+                displayName = "Camp",
+                previewColor = new Color(0.72f, 0.58f, 0.42f, 1f),
+                brushRadius = 5f,
+                spacing = 3.2f,
                 amount = 1,
                 scaleMin = 0.9f,
                 scaleMax = 1.15f

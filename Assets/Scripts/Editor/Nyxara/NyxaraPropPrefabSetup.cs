@@ -58,6 +58,34 @@ public static class NyxaraPropPrefabSetup
     [MenuItem("BackHome/Setup Missing Nyxara Prop Prefabs")]
     public static void BuildMissingMenu() => BuildMissing(silent: false);
 
+    [MenuItem("BackHome/Setup Camp Prop Prefabs")]
+    public static void BuildCampMenu() => BuildCamp(silent: false);
+
+    /// <summary>Unity batchmode: -executeMethod NyxaraPropPrefabSetup.BuildCampBatch</summary>
+    public static void BuildCampBatch()
+    {
+        try
+        {
+            BuildCamp(silent: true);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogException(ex);
+            EditorApplication.Exit(1);
+            return;
+        }
+
+        EditorApplication.Exit(0);
+    }
+
+    public static void BuildCamp(bool silent)
+    {
+        var jobs = DiscoverModels()
+            .Where(j => j.PrefabFolder.EndsWith("/Camp", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        BuildJobs(jobs, silent);
+    }
+
     public static void BuildNames(bool silent, params string[] prefabNames)
     {
         if (prefabNames == null || prefabNames.Length == 0)
@@ -190,6 +218,20 @@ public static class NyxaraPropPrefabSetup
                     ClassifyTextures(allPng.ToList(), out albedo, out normal, out metallic, out roughness, out emission);
                 }
 
+                // Shared pack textures (Camp) live beside Models, not next to each FBX.
+                if (string.IsNullOrEmpty(albedo))
+                {
+                    string texFolder = category + "/Textures&Materials";
+                    if (AssetDatabase.IsValidFolder(texFolder) && Directory.Exists(ToAbsolute(texFolder)))
+                    {
+                        var sharedPng = Directory.GetFiles(ToAbsolute(texFolder), "*.png")
+                            .Select(p => texFolder + "/" + Path.GetFileName(p).Replace('\\', '/'))
+                            .Where(p => TextureBelongsToModel(Path.GetFileName(p), modelName))
+                            .ToList();
+                        ClassifyTextures(sharedPng, out albedo, out normal, out metallic, out roughness, out emission);
+                    }
+                }
+
                 jobs.Add(new ModelJob
                 {
                     ModelName = modelName,
@@ -248,7 +290,7 @@ public static class NyxaraPropPrefabSetup
                 metallic = path;
             else if (n.Contains("roughness") || n.Contains("rough"))
                 roughness = path;
-            else if (n.Contains("texture") || n.Contains("albedo") || n.Contains("basecolor") || n.Contains("diffuse"))
+            else if (n.Contains("texture") || n.Contains("albedo") || n.Contains("basecolor") || n.Contains("diffuse") || n.Contains("color"))
             {
                 if (albedo == null)
                     albedo = path;
@@ -265,9 +307,14 @@ public static class NyxaraPropPrefabSetup
             return false;
         }
 
-        ConfigureTextureImports(job);
-        Texture2D mask = BuildMaskIfNeeded(job);
-        Material mat = BuildMaterial(job, mask);
+        Material mat = TrySharedToonMaterial(job);
+        if (mat == null)
+        {
+            ConfigureTextureImports(job);
+            Texture2D mask = BuildMaskIfNeeded(job);
+            mat = BuildMaterial(job, mask);
+        }
+
         return BuildPrefab(job, mat) != null;
     }
 
@@ -387,6 +434,57 @@ public static class NyxaraPropPrefabSetup
         return result;
     }
 
+    static Material TrySharedToonMaterial(ModelJob job)
+    {
+        // Only the shared sci-fi trim set uses one material. Per-model textures (Flag, Mast, …)
+        // get their own CasualToon material from BuildMaterial.
+        if (string.IsNullOrEmpty(job.AlbedoPath)
+            || job.AlbedoPath.IndexOf("/Textures&Materials/", StringComparison.OrdinalIgnoreCase) < 0
+            || !Path.GetFileName(job.AlbedoPath).StartsWith("T_Trim", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        string matPath = job.PrefabFolder + "/Textures&Materials/M_Trim_Walls.mat";
+        Shader shader = Shader.Find("BackHome/CasualToon");
+        if (shader == null)
+            shader = Shader.Find("Universal Render Pipeline/Lit");
+        if (shader == null)
+            return null;
+
+        SetTextureImport(job.AlbedoPath, TextureImporterType.Default, sRGB: true, readable: false);
+        SetTextureImport(job.NormalPath, TextureImporterType.NormalMap, sRGB: false, readable: false);
+
+        Material mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
+        if (mat == null)
+        {
+            mat = new Material(shader);
+            AssetDatabase.CreateAsset(mat, matPath);
+        }
+        else
+        {
+            mat.shader = shader;
+        }
+
+        Texture2D albedo = LoadTex(job.AlbedoPath);
+        Texture2D normal = LoadTex(job.NormalPath);
+        if (mat.HasProperty("_BaseMap"))
+            mat.SetTexture("_BaseMap", albedo);
+        if (mat.HasProperty("_MainTex"))
+            mat.SetTexture("_MainTex", albedo);
+        if (mat.HasProperty("_BaseColor"))
+            mat.SetColor("_BaseColor", Color.white);
+        if (mat.HasProperty("_BumpMap"))
+            mat.SetTexture("_BumpMap", normal);
+        if (mat.HasProperty("_Cull"))
+            mat.SetFloat("_Cull", 2f);
+        if (mat.HasProperty("_ShadeSteps"))
+            mat.SetFloat("_ShadeSteps", 3f);
+        if (mat.HasProperty("_EmissionColor"))
+            mat.SetColor("_EmissionColor", Color.black);
+
+        EditorUtility.SetDirty(mat);
+        return mat;
+    }
+
     static Material BuildMaterial(ModelJob job, Texture2D mask)
     {
         string matPath = $"{job.PrefabFolder}/{job.PrefabName}.mat";
@@ -503,9 +601,19 @@ public static class NyxaraPropPrefabSetup
         instance.transform.SetParent(root.transform, false);
         instance.name = "Model";
         instance.transform.localPosition = Vector3.zero;
-        // Match existing Nyxara prop prefabs (FBX cm → Unity units + Blender-style axis).
-        instance.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
-        instance.transform.localScale = Vector3.one * 100f;
+        bool authoredScale = job.AlbedoPath != null
+            && Path.GetFileName(job.AlbedoPath).StartsWith("T_Trim", StringComparison.OrdinalIgnoreCase);
+        if (authoredScale)
+        {
+            instance.transform.localRotation = Quaternion.identity;
+            instance.transform.localScale = Vector3.one;
+        }
+        else
+        {
+            // Match existing Nyxara prop prefabs (FBX cm → Unity units + Blender-style axis).
+            instance.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+            instance.transform.localScale = Vector3.one * 100f;
+        }
 
         if (root.GetComponent<PlanetSurfaceAlign>() == null)
             root.AddComponent<PlanetSurfaceAlign>();
@@ -555,6 +663,9 @@ public static class NyxaraPropPrefabSetup
                 localBounds.Encapsulate(new Bounds(c, s));
             }
         }
+
+        if (hasBounds)
+            Debug.Log($"[BackHome] {job.PrefabName} local bounds {localBounds.size}");
 
         if (hasBounds && localBounds.size.sqrMagnitude > 0.0001f)
         {

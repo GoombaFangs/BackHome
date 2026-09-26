@@ -49,10 +49,8 @@ public class CreatureSpawner : MonoBehaviour
     [Serializable]
     public struct SpawnPoint
     {
-        [Tooltip("Marker Transform placed on the planet surface (e.g. an empty named 'A1'). " +
-            "Creatures below spawn/respawn clustered tightly around it and are parented under this " +
-            "Transform in the hierarchy for easy tracking. Keep this at scale 1 — never parent " +
-            "creatures under the Areas cubes (those are scaled).")]
+        [Tooltip("Optional marker on the planet surface. Used only when areaId is empty. " +
+            "When areaId is set, creatures parent under that Areas child instead.")]
         public Transform anchor;
 
         [Tooltip("Max distance (world units) from the origin creatures can land. Small = a tight, dense cluster.")]
@@ -62,9 +60,8 @@ public class CreatureSpawner : MonoBehaviour
         [Tooltip("Creatures confined to this spawn point, additive to spawnEntries.")]
         public SpawnEntry[] creatures;
 
-        [Tooltip("Optional planet Areas child name (A1–A5). When set, this den clusters around that " +
-            "encounter volume's world position instead of the hand-placed marker. The area cube is " +
-            "never used as a parent.")]
+        [Tooltip("Planet Areas child name (A1–A5). Creatures of this den spawn around that " +
+            "volume and are parented under it.")]
         public string areaId;
     }
 
@@ -95,11 +92,11 @@ public class CreatureSpawner : MonoBehaviour
     [Header("Presentation")]
     [Tooltip("Optional Animator state to force on spawn (e.g. idle). Leave empty to leave Animator alone.")]
     [SerializeField] string initialAnimatorState = "idle";
-    [Tooltip("Parent for spawned instances. Leave empty to create a child named Creatures.")]
+    [Tooltip("Parent for creatures that are not tied to an Areas child. Leave empty to create a child named Creatures.")]
     [SerializeField] Transform spawnRoot;
 
     [Header("Loot")]
-    [Tooltip("Pooled world drops on creature death. Defaults to LootDropPool on spawnRoot (Creatures).")]
+    [Tooltip("Pooled world drops on creature death. Defaults to LootDropPool on the planet Areas object.")]
     [SerializeField] LootDropPool lootPool;
 
     // Internal placement defaults — not exposed in the Inspector.
@@ -374,7 +371,10 @@ public class CreatureSpawner : MonoBehaviour
             return false;
 
         Transform parent = ResolveSpawnParent(resolved);
+        Vector3 prefabScale = entry.prefab.transform.localScale;
         GameObject creature = Instantiate(entry.prefab, position, rotation, parent);
+        // Area volumes are scaled (about 25). Cancel that so the creature keeps the prefab's world size.
+        CancelParentScale(creature.transform, prefabScale);
         int localIndex = parent != null ? parent.childCount - 1 : _tracked.Count;
         creature.name = $"{entry.prefab.name}_{localIndex:00}";
         ApplyInitialAnimatorState(creature);
@@ -472,12 +472,21 @@ public class CreatureSpawner : MonoBehaviour
             return;
         }
 
-        EnsureSpawnRoot();
         if (spawnRoot != null)
         {
             _lootPool = spawnRoot.GetComponent<LootDropPool>();
             if (_lootPool == null)
                 _lootPool = spawnRoot.gameObject.AddComponent<LootDropPool>();
+            lootPool = _lootPool;
+            return;
+        }
+
+        Transform areas = FindAreasRoot();
+        if (areas != null)
+        {
+            _lootPool = areas.GetComponent<LootDropPool>();
+            if (_lootPool == null)
+                _lootPool = areas.gameObject.AddComponent<LootDropPool>();
             lootPool = _lootPool;
             return;
         }
@@ -558,20 +567,51 @@ public class CreatureSpawner : MonoBehaviour
         spawnRoot = root.transform;
     }
 
-    /// <summary>Spawn-point creatures parent under their anchor; everything else uses <see cref="spawnRoot"/>.</summary>
+    /// <summary>
+    /// Area dens parent under the matching Areas child (A1–A5). A hand-placed anchor is only
+    /// used when that den has no areaId. Everything else uses <see cref="spawnRoot"/>.
+    /// </summary>
     Transform ResolveSpawnParent(ResolvedEntry resolved)
     {
         if (resolved.spawnPointIndex >= 0
             && spawnPoints != null
-            && resolved.spawnPointIndex < spawnPoints.Length
-            && spawnPoints[resolved.spawnPointIndex].anchor != null)
+            && resolved.spawnPointIndex < spawnPoints.Length)
         {
-            return spawnPoints[resolved.spawnPointIndex].anchor;
+            SpawnPoint point = spawnPoints[resolved.spawnPointIndex];
+            Transform area = FindPlanetArea(point.areaId);
+            if (area != null)
+                return area;
+
+            if (point.anchor != null)
+                return point.anchor;
         }
 
         EnsureSpawnRoot();
         return spawnRoot;
     }
+
+    /// <summary>
+    /// Instantiate copies the prefab local scale onto a child of a scaled area cube, which
+    /// multiplies the creature by that cube's lossy scale. Divide it back out so world scale
+    /// matches the prefab.
+    /// </summary>
+    static void CancelParentScale(Transform instance, Vector3 prefabScale)
+    {
+        Transform parent = instance.parent;
+        if (parent == null)
+        {
+            instance.localScale = prefabScale;
+            return;
+        }
+
+        Vector3 lossy = parent.lossyScale;
+        instance.localScale = new Vector3(
+            prefabScale.x / NonZero(lossy.x),
+            prefabScale.y / NonZero(lossy.y),
+            prefabScale.z / NonZero(lossy.z));
+    }
+
+    static float NonZero(float value) => Mathf.Abs(value) < 0.0001f ? 1f : value;
 
     /// <summary>Picks a spawn direction satisfying spacing/walkability, optionally confined to a
     /// hand-placed spawn point. <paramref name="spawnPointIndex"/> &gt;= 0 samples only within that
@@ -665,12 +705,20 @@ public class CreatureSpawner : MonoBehaviour
         return spawnPoint.anchor != null ? spawnPoint.anchor.position : Vector3.zero;
     }
 
-    Transform FindPlanetArea(string areaId)
+    Transform FindAreasRoot()
     {
-        if (string.IsNullOrWhiteSpace(areaId) || planet == null)
+        if (!TryResolvePlanet() || planet == null)
             return null;
 
-        Transform areas = planet.transform.Find("Areas");
+        return planet.transform.Find("Areas");
+    }
+
+    Transform FindPlanetArea(string areaId)
+    {
+        if (string.IsNullOrWhiteSpace(areaId))
+            return null;
+
+        Transform areas = FindAreasRoot();
         if (areas == null)
             return null;
 

@@ -24,6 +24,7 @@ public class PlayerVitals : MonoBehaviour, IVitalsReadable
     float _currentHealth;
     float _currentOxygen;
     bool _invulnerable;
+    int _recoveryZones;
 
     public PlayerStats Stats => stats;
     public string DisplayName => stats != null ? stats.DisplayName : name;
@@ -48,6 +49,7 @@ public class PlayerVitals : MonoBehaviour, IVitalsReadable
     public bool HasOxygen => MaxOxygen > 0f;
     public bool IsOnSpaceship => SceneRoles.IsSpaceshipScene();
     public bool IsInvulnerable => _invulnerable;
+    public bool IsRecovering => _recoveryZones > 0;
 
     IReadOnlyList<WeaponDefinition> ActiveWeapons
     {
@@ -96,7 +98,7 @@ public class PlayerVitals : MonoBehaviour, IVitalsReadable
 
     void Update()
     {
-        if (_invulnerable || SceneRoles.IsSpaceshipScene())
+        if (_invulnerable || SceneRoles.IsSpaceshipScene() || _recoveryZones > 0)
             return;
 
         if (_currentOxygen > 0f)
@@ -214,6 +216,47 @@ public class PlayerVitals : MonoBehaviour, IVitalsReadable
 
         _currentOxygen = Mathf.Min(MaxOxygen, _currentOxygen + amount);
         RaiseChanged();
+    }
+
+    /// <summary>Called by a recovery trigger. Overlapping zones stack; drain stays off until the last one is left.</summary>
+    public void SetInRecoveryZone(bool inside)
+    {
+        if (inside)
+            _recoveryZones++;
+        else
+            _recoveryZones = Mathf.Max(0, _recoveryZones - 1);
+    }
+
+    /// <summary>Adds health and oxygen together, and notifies listeners only when something actually changed.</summary>
+    public void Recover(float healthAmount, float oxygenAmount)
+    {
+        if (!IsAlive)
+            return;
+
+        bool changed = false;
+
+        if (healthAmount > 0f && MaxHealth > 0f && _currentHealth < MaxHealth)
+        {
+            float next = Mathf.Min(MaxHealth, _currentHealth + healthAmount);
+            if (!Mathf.Approximately(next, _currentHealth))
+            {
+                _currentHealth = next;
+                changed = true;
+            }
+        }
+
+        if (oxygenAmount > 0f && MaxOxygen > 0f && _currentOxygen < MaxOxygen)
+        {
+            float next = Mathf.Min(MaxOxygen, _currentOxygen + oxygenAmount);
+            if (!Mathf.Approximately(next, _currentOxygen))
+            {
+                _currentOxygen = next;
+                changed = true;
+            }
+        }
+
+        if (changed)
+            RaiseChanged();
     }
 
     void EnsureLoadout()
