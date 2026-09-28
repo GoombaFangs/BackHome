@@ -26,8 +26,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6529401389816808732}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalRotation: {x: -0.036009748, y: -0.10716707, z: 0.9892489, w: 0.092764504}
+  m_LocalPosition: {x: -7.6276536, y: -73.03356, z: 2.074346}
   m_LocalScale: {x: 2.83, y: 2.83, z: 2.83}
   m_ConstrainProportionsScale: 1
   m_Children:
@@ -47,8 +47,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlanetSurfaceAlign
   planet: {fileID: 0}
-  hover: 0.05
-  yaw: 0
+  hover: 0.22633362
+  yaw: 3.0172691
   alignEveryFrame: 0
 --- !u!65 &1003558148810056603
 BoxCollider:

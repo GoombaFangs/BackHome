@@ -253,6 +253,130 @@ Shader "BackHome/CasualToon"
             }
             ENDHLSL
         }
+
+        // Deferred copies depth before UniversalForwardOnly runs. Without this pass the
+        // player never lands in _CameraDepthTexture, so the outline only sees Lit creatures.
+        Pass
+        {
+            Name "DepthOnly"
+            Tags { "LightMode" = "DepthOnly" }
+
+            ZWrite On
+            ColorMask R
+            Cull [_Cull]
+
+            HLSLPROGRAM
+            #pragma target 3.5
+            #pragma vertex CasualDepthVert
+            #pragma fragment CasualDepthFrag
+            #pragma multi_compile_instancing
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+            struct CasualDepthAttributes
+            {
+                float4 positionOS : POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            struct CasualDepthVaryings
+            {
+                float4 positionCS : SV_POSITION;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
+            };
+
+            CasualDepthVaryings CasualDepthVert(CasualDepthAttributes input)
+            {
+                CasualDepthVaryings output = (CasualDepthVaryings)0;
+                UNITY_SETUP_INSTANCE_ID(input);
+                UNITY_TRANSFER_INSTANCE_ID(input, output);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
+                output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                return output;
+            }
+
+            half CasualDepthFrag(CasualDepthVaryings input) : SV_Target
+            {
+                UNITY_SETUP_INSTANCE_ID(input);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+                return input.positionCS.z;
+            }
+            ENDHLSL
+        }
+
+        Pass
+        {
+            Name "DepthNormalsOnly"
+            Tags { "LightMode" = "DepthNormalsOnly" }
+
+            ZWrite On
+            Cull [_Cull]
+
+            HLSLPROGRAM
+            #pragma target 3.5
+            #pragma vertex CasualDepthNormalsVert
+            #pragma fragment CasualDepthNormalsFrag
+            #pragma multi_compile_instancing
+            #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
+            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/RenderingLayers.hlsl"
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+            struct CasualDepthNormalAttributes
+            {
+                float4 positionOS : POSITION;
+                float3 normalOS : NORMAL;
+                float4 tangentOS : TANGENT;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            struct CasualDepthNormalVaryings
+            {
+                float4 positionCS : SV_POSITION;
+                float3 normalWS : TEXCOORD0;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
+            };
+
+            CasualDepthNormalVaryings CasualDepthNormalsVert(CasualDepthNormalAttributes input)
+            {
+                CasualDepthNormalVaryings output = (CasualDepthNormalVaryings)0;
+                UNITY_SETUP_INSTANCE_ID(input);
+                UNITY_TRANSFER_INSTANCE_ID(input, output);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
+                output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                VertexNormalInputs normalInput = GetVertexNormalInputs(input.normalOS, input.tangentOS);
+                output.normalWS = normalInput.normalWS;
+                return output;
+            }
+
+            void CasualDepthNormalsFrag(
+                CasualDepthNormalVaryings input
+                , out half4 outNormalWS : SV_Target0
+            #ifdef _WRITE_RENDERING_LAYERS
+                , out uint outRenderingLayers : SV_Target1
+            #endif
+            )
+            {
+                UNITY_SETUP_INSTANCE_ID(input);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
+
+                float3 normalWS = normalize(input.normalWS);
+                #if defined(_GBUFFER_NORMALS_OCT)
+                    float2 octNormalWS = PackNormalOctQuadEncode(normalWS);
+                    float2 remappedOctNormalWS = saturate(octNormalWS * 0.5 + 0.5);
+                    outNormalWS = half4(PackFloat2To888(remappedOctNormalWS), 0.0);
+                #else
+                    outNormalWS = half4(normalWS, 0.0);
+                #endif
+
+                #ifdef _WRITE_RENDERING_LAYERS
+                    outRenderingLayers = EncodeMeshRenderingLayer();
+                #endif
+            }
+            ENDHLSL
+        }
     }
 
     FallBack Off

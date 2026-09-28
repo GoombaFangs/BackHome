@@ -81,6 +81,73 @@ Shader "BackHome/PlanetTilesCube"
             }
             ENDHLSL
         }
+
+        Pass
+        {
+            Name "DepthOnly"
+            Tags { "LightMode" = "DepthOnly" }
+
+            ZWrite On
+            ColorMask R
+            Cull Back
+
+            HLSLPROGRAM
+            #pragma target 3.5
+            #pragma vertex PlanetDepthVert
+            #pragma fragment PlanetDepthFrag
+            #pragma multi_compile_instancing
+            #include "PlanetDepth.hlsl"
+            ENDHLSL
+        }
+
+        Pass
+        {
+            Name "DepthNormalsOnly"
+            Tags { "LightMode" = "DepthNormalsOnly" }
+
+            ZWrite On
+            Cull Back
+
+            HLSLPROGRAM
+            #pragma target 3.5
+            #pragma vertex PlanetDepthVert
+            #pragma fragment PlanetDepthNormalsFrag
+            #pragma multi_compile_instancing
+            #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
+            #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/RenderingLayers.hlsl"
+            #include "PlanetDepth.hlsl"
+            ENDHLSL
+        }
+
+        Pass
+        {
+            Name "PlanetStencil"
+            Tags { "LightMode" = "PlanetStencil" }
+
+            ColorMask 0
+            ZWrite Off
+            ZTest Equal
+            Cull Back
+
+            Stencil
+            {
+                Ref 1
+                ReadMask 1
+                WriteMask 1
+                Comp Always
+                Pass Replace
+                Fail Keep
+                ZFail Keep
+            }
+
+            HLSLPROGRAM
+            #pragma target 3.5
+            #pragma vertex PlanetDepthVert
+            #pragma fragment PlanetStencilFrag
+            #pragma multi_compile_instancing
+            #include "PlanetDepth.hlsl"
+            ENDHLSL
+        }
     }
 
     FallBack Off
