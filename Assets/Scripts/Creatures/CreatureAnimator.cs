@@ -10,6 +10,8 @@ public class CreatureAnimator : MonoBehaviour
     static readonly int IsMovingHash = Animator.StringToHash("IsMoving");
     static readonly int IsAttackingHash = Animator.StringToHash("IsAttacking");
     static readonly int AttackAnimSpeedHash = Animator.StringToHash("AttackAnimSpeed");
+    static readonly int Idle1Hash = Animator.StringToHash("Idle1");
+    static readonly int Idle2Hash = Animator.StringToHash("Idle2");
 
     [SerializeField] string attackClipName = "Attack";
 
@@ -25,8 +27,16 @@ public class CreatureAnimator : MonoBehaviour
             _animator = GetComponentInChildren<Animator>();
 
         CacheAttackClipLength();
-        if (_animator != null)
+        if (_animator != null && HasParameter(AttackAnimSpeedHash))
             _animator.SetFloat(AttackAnimSpeedHash, 1f);
+
+        // Controllers with both idle takes (Snarlfang) start on one of them at random,
+        // then the controller alternates every loop so each pose gets half the time.
+        if (_animator != null && _animator.HasState(0, Idle1Hash) && _animator.HasState(0, Idle2Hash))
+        {
+            bool idle2 = Random.value < 0.5f;
+            _animator.Play(idle2 ? Idle2Hash : Idle1Hash, 0, Random.value);
+        }
     }
 
     public void SetMoving(bool moving)
@@ -35,7 +45,7 @@ public class CreatureAnimator : MonoBehaviour
             return;
 
         _moving = moving;
-        if (_animator != null)
+        if (_animator != null && HasParameter(IsMovingHash))
             _animator.SetBool(IsMovingHash, moving);
     }
 
@@ -45,7 +55,7 @@ public class CreatureAnimator : MonoBehaviour
             return;
 
         _attacking = attacking;
-        if (_animator != null)
+        if (_animator != null && HasParameter(IsAttackingHash))
             _animator.SetBool(IsAttackingHash, attacking);
     }
 
@@ -54,7 +64,7 @@ public class CreatureAnimator : MonoBehaviour
     /// </summary>
     public void SetAttackRate(float attacksPerSecond)
     {
-        if (_animator == null)
+        if (_animator == null || !HasParameter(AttackAnimSpeedHash))
             return;
 
         CacheAttackClipLength();
@@ -72,6 +82,21 @@ public class CreatureAnimator : MonoBehaviour
     {
         SetMoving(false);
         SetAttacking(false);
+    }
+
+    bool HasParameter(int hash)
+    {
+        if (_animator == null)
+            return false;
+
+        AnimatorControllerParameter[] parameters = _animator.parameters;
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            if (parameters[i].nameHash == hash)
+                return true;
+        }
+
+        return false;
     }
 
     void CacheAttackClipLength()

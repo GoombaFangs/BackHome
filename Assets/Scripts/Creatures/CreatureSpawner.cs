@@ -827,6 +827,11 @@ public class CreatureSpawner : MonoBehaviour
         if (animator == null || animator.runtimeAnimatorController == null)
             return;
 
+        // Grimling starts in "idle". Creatures whose controller uses other state names
+        // (Snarlfang's Idle1/Idle2) keep the state their own Animator picked.
+        if (!animator.HasState(0, Animator.StringToHash(initialAnimatorState)))
+            return;
+
         animator.Play(initialAnimatorState, 0, 0f);
         animator.Update(0f);
     }
