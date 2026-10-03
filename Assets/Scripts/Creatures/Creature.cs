@@ -8,20 +8,41 @@ using UnityEngine;
 public class Creature : MonoBehaviour, IVitalsReadable
 {
     [SerializeField] CreatureStats stats;
-    [SerializeField, Min(0f)] float destroyDelay = 0.1f;
+    [SerializeField, Min(0f), Tooltip("How long the body stays when this creature has no death animation. A death clip keeps it until that clip has finished.")]
+    float destroyDelay = 0.1f;
 
     float _currentHealth;
     bool _dying;
     Action _diedNoArg;
     CreatureChase _chase;
+    CreatureAbility _ability;
+    CreatureAnimator _anim;
 
     public CreatureStats Stats => stats;
     public string DisplayName => stats != null ? stats.DisplayName : name;
     public float MaxHealth => stats != null ? stats.MaxHealth : 0f;
     public float VisionRange => stats != null ? stats.VisionRange : 0f;
+    public float MovementSpeed => stats != null ? stats.MovementSpeed : 0f;
     public float AttackDamage => stats != null ? stats.AttackDamage : 0f;
     public float AttackSpeed => stats != null ? stats.AttackSpeed : 0f;
     public float AttackRange => stats != null ? stats.AttackRange : 0f;
+
+    public void GetActiveAttack(out CreatureAttackKind kind, out float damage, out float speed, out float range)
+    {
+        kind = _ability != null && _ability.IsHeavyAttack
+            ? CreatureAttackKind.Heavy
+            : CreatureAttackKind.Light;
+
+        if (stats == null)
+        {
+            damage = 0f;
+            speed = 0f;
+            range = 0f;
+            return;
+        }
+
+        stats.GetAttack(kind, out damage, out speed, out range);
+    }
     public float CurrentHealth => _currentHealth;
     public float CurrentOxygen => 0f;
     public float MaxOxygen => 0f;
@@ -29,6 +50,9 @@ public class Creature : MonoBehaviour, IVitalsReadable
     public float HealthNormalized => MaxHealth > 0f ? _currentHealth / MaxHealth : 0f;
     public bool IsAlive => _currentHealth > 0f && !_dying;
     public bool HasStats => stats != null;
+
+    /// <summary>False while stealthed. Weapons skip this creature until stealth ends.</summary>
+    public bool IsTargetable => _ability == null || _ability.IsTargetable;
 
     /// <summary>True while frozen - e.g. the instant the player dies, so every creature stops dead
     /// in place and can't keep chasing/attacking during the short beat where the player's own
@@ -52,7 +76,22 @@ public class Creature : MonoBehaviour, IVitalsReadable
     void Awake()
     {
         _chase = GetComponent<CreatureChase>();
+        _anim = GetComponent<CreatureAnimator>();
+        if (_anim == null)
+            _anim = GetComponentInChildren<CreatureAnimator>();
+        EnsureSpecialAbility();
         ResetHealth();
+    }
+
+    void EnsureSpecialAbility()
+    {
+        if (stats == null || stats.SpecialAbility == CreatureSpecialAbility.None)
+            return;
+
+        if (GetComponent<CreatureAbility>() == null)
+            gameObject.AddComponent<CreatureAbility>();
+
+        _ability = GetComponent<CreatureAbility>();
     }
 
     void OnValidate()
@@ -91,12 +130,15 @@ public class Creature : MonoBehaviour, IVitalsReadable
         if (!ApplyDamage(amount))
             return;
 
+        if (!IsAlive)
+            return;
+
         _chase?.ApplyKnockback(sourcePosition);
     }
 
     bool ApplyDamage(float amount)
     {
-        if (!IsAlive || amount <= 0f)
+        if (!IsAlive || !IsTargetable || amount <= 0f)
             return false;
 
         _currentHealth = Mathf.Max(0f, _currentHealth - amount);
@@ -137,10 +179,12 @@ public class Creature : MonoBehaviour, IVitalsReadable
         _diedNoArg?.Invoke();
         Died?.Invoke(this);
 
-        if (destroyDelay <= 0f)
+        float clipLength = _anim != null ? _anim.PlayDeath() : 0f;
+        float delay = clipLength > 0.05f ? clipLength : destroyDelay;
+        if (delay <= 0f)
             Destroy(gameObject);
         else
-            Destroy(gameObject, destroyDelay);
+            Destroy(gameObject, delay);
     }
 
     void RaiseVitalsChanged()

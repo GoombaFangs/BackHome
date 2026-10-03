@@ -65,7 +65,7 @@ public static class AreaBlastEffect
         for (int i = 0; i < creatures.Length; i++)
         {
             Creature candidate = creatures[i];
-            if (candidate == null || !candidate.IsAlive || candidate == primaryTarget)
+            if (candidate == null || !candidate.IsAlive || !candidate.IsTargetable || candidate == primaryTarget)
                 continue;
 
             float distance = planetCenter.HasValue
@@ -95,7 +95,7 @@ public static class AreaBlastEffect
         for (int i = 0; i < hits.Count; i++)
         {
             BlastHit hit = hits[i];
-            if (hit.Creature == null || !hit.Creature.IsAlive)
+            if (hit.Creature == null || !hit.Creature.IsAlive || !hit.Creature.IsTargetable)
                 continue;
 
             if (hit.PlayHitVfx)

@@ -45,7 +45,7 @@ public class RangedWeapon : EquippedWeapon
 
     public override void Fire(Creature target, float damage, Vector3 muzzle, Transform muzzleParent, Vector3 knockFrom)
     {
-        if (target == null || !target.IsAlive || damage <= 0f)
+        if (target == null || !target.IsAlive || !target.IsTargetable || damage <= 0f)
             return;
         if (_busy)
             return;
@@ -79,7 +79,7 @@ public class RangedWeapon : EquippedWeapon
         if (chargeFx != null)
             Destroy(chargeFx);
 
-        if (target != null && target.IsAlive)
+        if (target != null && target.IsAlive && target.IsTargetable)
             FireNow(target, damage, ResolveMuzzle(muzzle), muzzleParent, knockFrom);
 
         float remainingRecovery = charge.RecoverTime;
@@ -99,7 +99,7 @@ public class RangedWeapon : EquippedWeapon
 
     void FireNow(Creature target, float damage, Vector3 muzzle, Transform muzzleParent, Vector3 knockFrom)
     {
-        if (target == null || !target.IsAlive || damage <= 0f)
+        if (target == null || !target.IsAlive || !target.IsTargetable || damage <= 0f)
             return;
 
         bool isProjectile = delivery == WeaponDeliveryKind.Projectile && projectile.BulletPrefab != null;
@@ -154,7 +154,7 @@ public class RangedWeapon : EquippedWeapon
 
     internal void ResolveBulletHit(Creature target, float damage, Vector3 knockFrom, Vector3 hitPoint, Vector3 dir)
     {
-        if (target == null || !target.IsAlive)
+        if (target == null || !target.IsAlive || !target.IsTargetable)
             return;
 
         PlayHit(target, hitPoint, dir);

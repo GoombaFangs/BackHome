@@ -1,19 +1,24 @@
 using UnityEngine;
 
 /// <summary>
-/// Damages the player when they are inside this creature's attack range.
-/// Instant hit on enter, then ticks every 1 / AttackSpeed seconds while the player stays inside.
+/// Damages the player when they are inside this creature's active attack range.
+/// The strike that ends Stealth uses the heavy profile; later hits use light.
+/// Instant hit on enter, then ticks every 1 / attack speed seconds while the player stays inside.
 /// </summary>
+[DefaultExecutionOrder(40)]
 [RequireComponent(typeof(Creature))]
 public class CreatureRangeCombat : MonoBehaviour
 {
     Creature _creature;
     CreatureAnimator _anim;
     CreatureChase _chase;
+    CreatureAbility _ability;
     PlayerVitals _player;
     float _tickCooldown;
     bool _playerInside;
     bool _hitPlayerThisFrame;
+    CreatureAttackKind _strikeKind;
+    int _heavyHitSerial = -1;
 
     void Awake()
     {
@@ -22,6 +27,11 @@ public class CreatureRangeCombat : MonoBehaviour
         if (_anim == null)
             _anim = GetComponentInChildren<CreatureAnimator>();
         _chase = GetComponent<CreatureChase>();
+    }
+
+    void Start()
+    {
+        _ability = GetComponent<CreatureAbility>();
     }
 
     void Update()
@@ -43,6 +53,14 @@ public class CreatureRangeCombat : MonoBehaviour
             return;
         }
 
+        // Stealth approaches without striking. Clearing occupancy makes the first hit land as soon as it ends.
+        if (_ability != null && _ability.BlocksAttack)
+        {
+            _playerInside = false;
+            _anim?.SetAttacking(false);
+            return;
+        }
+
         // Brief flinch: keep occupancy so we don't re-trigger an enter hit after the shove.
         if (_chase != null && _chase.IsKnockedBack)
         {
@@ -50,9 +68,7 @@ public class CreatureRangeCombat : MonoBehaviour
             return;
         }
 
-        float attackSpeed = _creature.AttackSpeed;
-        float damage = _creature.AttackDamage;
-        float radius = _creature.AttackRange;
+        _creature.GetActiveAttack(out CreatureAttackKind kind, out float damage, out float attackSpeed, out float radius);
         if (attackSpeed <= 0f || damage <= 0f || radius <= 0f)
         {
             _anim?.SetAttacking(false);
@@ -66,7 +82,27 @@ public class CreatureRangeCombat : MonoBehaviour
             return;
         }
 
+        bool kindChanged = kind != _strikeKind;
+        _strikeKind = kind;
+
         bool inside = IsTargetInRange(player.transform.position, radius);
+
+        // The Stealth exit is one strike: one Heavy damage application, then Light takes over.
+        if (kind == CreatureAttackKind.Heavy)
+        {
+            if (inside && _ability != null && _heavyHitSerial != _ability.HeavySwingSerial)
+            {
+                _heavyHitSerial = _ability.HeavySwingSerial;
+                player.TakeDamage(damage);
+            }
+
+            _playerInside = inside;
+            _anim?.SetAttacking(inside, kind);
+            if (inside)
+                _anim?.SetAttackRate(attackSpeed, kind);
+            return;
+        }
+
         if (inside)
         {
             if (!_playerInside)
@@ -82,9 +118,12 @@ public class CreatureRangeCombat : MonoBehaviour
             _playerInside = false;
         }
 
-        _anim?.SetAttacking(_playerInside);
+        _anim?.SetAttacking(_playerInside, kind);
         if (_playerInside)
-            _anim?.SetAttackRate(attackSpeed);
+            _anim?.SetAttackRate(attackSpeed, kind);
+
+        if (kindChanged)
+            _tickCooldown = 1f / attackSpeed;
 
         float interval = 1f / attackSpeed;
         _tickCooldown -= Time.deltaTime;

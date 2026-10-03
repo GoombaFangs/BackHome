@@ -17,7 +17,6 @@ public class CreatureChase : MonoBehaviour
     }
 
     [Header("Movement")]
-    [SerializeField, Min(0.1f)] float moveSpeed = 4f;
     [SerializeField, Min(0.1f)] float alignSpeed = 10f;
     [SerializeField, Min(0.001f)] float footOffset = 0.05f;
     [SerializeField, Min(1f)] float groundProbeDistance = 12f;
@@ -60,6 +59,11 @@ public class CreatureChase : MonoBehaviour
     /// <summary>True while actively chasing / fighting the player.</summary>
     public bool IsAggroed => _state == State.Aggroed;
 
+    /// <summary>Fired once when this creature spots the player and enters the chase. Not fired for damage aggro.</summary>
+    public event System.Action PlayerSpotted;
+
+    CreatureAbility _ability;
+
     /// <summary>True during the short hit-shove after taking damage.</summary>
     public bool IsKnockedBack => _knockActive;
 
@@ -79,6 +83,7 @@ public class CreatureChase : MonoBehaviour
 
     void Start()
     {
+        _ability = GetComponent<CreatureAbility>();
         CaptureHome();
     }
 
@@ -91,7 +96,13 @@ public class CreatureChase : MonoBehaviour
             return;
         }
 
-        if (!_creature.IsAlive || _creature.IsFrozen)
+        if (!_creature.IsAlive)
+        {
+            _velocity = Vector3.zero;
+            return;
+        }
+
+        if (_creature.IsFrozen)
         {
             _velocity = Vector3.zero;
             _anim?.ResetToIdle();
@@ -134,6 +145,12 @@ public class CreatureChase : MonoBehaviour
 
     void LateUpdate()
     {
+        if (_creature != null && !_creature.IsAlive)
+        {
+            _knockActive = false;
+            return;
+        }
+
         if (_knockActive)
             TickKnockback();
     }
@@ -184,13 +201,12 @@ public class CreatureChase : MonoBehaviour
             return;
 
         if (GetSurfaceDistanceTo(player.transform.position) <= vision)
-            EnterAggro();
+            SpotPlayer();
     }
 
     void TickAggroed()
     {
         float vision = _creature.VisionRange;
-        float attack = _creature.AttackRange;
 
         bool playerVisible = false;
         PlayerVitals player = null;
@@ -221,7 +237,10 @@ public class CreatureChase : MonoBehaviour
 
         float distToPlayer = GetSurfaceDistanceTo(player.transform.position);
 
-        if (attack > 0f && distToPlayer <= attack)
+        // Stealth keeps closing until heavy-attack range. The stop uses whichever strike is active.
+        _creature.GetActiveAttack(out _, out _, out _, out float attack);
+        bool holdForAttack = _ability == null || !_ability.BlocksAttack;
+        if (holdForAttack && attack > 0f && distToPlayer <= attack)
         {
             FaceToward(player.transform.position);
             _anim?.SetMoving(false);
@@ -240,7 +259,7 @@ public class CreatureChase : MonoBehaviour
             float vision = _creature.VisionRange;
             if (vision > 0f && GetSurfaceDistanceTo(player.transform.position) <= vision)
             {
-                EnterAggro();
+                SpotPlayer();
                 return;
             }
         }
@@ -260,6 +279,14 @@ public class CreatureChase : MonoBehaviour
     {
         _state = State.Aggroed;
         _outOfVisionTime = 0f;
+    }
+
+    void SpotPlayer()
+    {
+        bool fresh = _state != State.Aggroed;
+        EnterAggro();
+        if (fresh)
+            PlayerSpotted?.Invoke();
     }
 
     void BeginReturnHome()
@@ -305,6 +332,15 @@ public class CreatureChase : MonoBehaviour
         }
 
         return true;
+    }
+
+    /// <summary>Surface distance from this creature to the living player is within <paramref name="range"/>.</summary>
+    public bool IsPlayerWithin(float range)
+    {
+        if (range <= 0f || !TryGetLivingPlayer(out PlayerVitals player))
+            return false;
+
+        return GetSurfaceDistanceTo(player.transform.position) <= range;
     }
 
     void TickKnockback()
@@ -357,8 +393,9 @@ public class CreatureChase : MonoBehaviour
             return;
 
         Vector3 moveDir = toTarget.normalized;
-        _velocity = moveDir * moveSpeed;
-        StepOnSurface(moveDir, moveSpeed * Time.deltaTime, out Vector3 next, out up);
+        float speed = _creature != null && _creature.HasStats ? _creature.MovementSpeed : 4f;
+        _velocity = moveDir * speed;
+        StepOnSurface(moveDir, speed * Time.deltaTime, out Vector3 next, out up);
 
         Vector3 faceDir = Vector3.ProjectOnPlane(moveDir, up);
         if (faceDir.sqrMagnitude < 0.001f)

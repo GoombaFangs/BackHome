@@ -129,7 +129,7 @@ public class PlayerRangeCombat : MonoBehaviour
         for (int i = 0; i < creatures.Length; i++)
         {
             Creature creature = creatures[i];
-            if (creature == null || !creature.IsAlive)
+            if (!CanTarget(creature))
                 continue;
 
             if (!IsInsideRange(creature.transform.position, origin, planetCenter, transform.up, radius))
@@ -144,7 +144,7 @@ public class PlayerRangeCombat : MonoBehaviour
         for (int i = 0; i < _queue.Count; i++)
         {
             Creature tracked = _queue[i];
-            if (tracked == null || !tracked.IsAlive || !_currentlyInside.Contains(tracked))
+            if (!CanTarget(tracked) || !_currentlyInside.Contains(tracked))
                 _removeBuffer.Add(tracked);
         }
 
@@ -166,7 +166,7 @@ public class PlayerRangeCombat : MonoBehaviour
 
     void Strike(int slot, Creature target, float damage, float range)
     {
-        if (target == null || !target.IsAlive)
+        if (!CanTarget(target))
             return;
 
         int hitIndex = _queue.IndexOf(target);
@@ -194,7 +194,7 @@ public class PlayerRangeCombat : MonoBehaviour
             return null;
 
         Creature current = _aimTarget[slot];
-        if (current != null && current.IsAlive)
+        if (CanTarget(current))
             return current;
 
         return PeekTarget(slot, SlotRange(slot));
@@ -226,7 +226,7 @@ public class PlayerRangeCombat : MonoBehaviour
         {
             int index = (start + n) % _queue.Count;
             Creature current = _queue[index];
-            if (current == null || !current.IsAlive)
+            if (!CanTarget(current))
                 continue;
             if (!IsInsideRange(current.transform.position, origin, planetCenter, transform.up, range))
                 continue;
@@ -303,5 +303,10 @@ public class PlayerRangeCombat : MonoBehaviour
 
         Vector3 planar = Vector3.ProjectOnPlane(target - origin, fallbackUp);
         return planar.sqrMagnitude <= radius * radius;
+    }
+
+    static bool CanTarget(Creature creature)
+    {
+        return creature != null && creature.IsAlive && creature.IsTargetable;
     }
 }

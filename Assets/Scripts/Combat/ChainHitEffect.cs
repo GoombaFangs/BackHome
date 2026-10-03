@@ -56,7 +56,7 @@ public static class ChainHitEffect
         for (int i = 0; i < creatures.Length; i++)
         {
             Creature candidate = creatures[i];
-            if (candidate == null || !candidate.IsAlive || excluded.Contains(candidate))
+            if (candidate == null || !candidate.IsAlive || !candidate.IsTargetable || excluded.Contains(candidate))
                 continue;
 
             float distance = planetCenter.HasValue

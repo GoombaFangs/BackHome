@@ -8,14 +8,22 @@ using UnityEngine;
 
 /// <summary>
 /// Builds Snarlfang: CasualToon material, creature components, A1 spawn,
-/// and a 50/50 Idle1/Idle2 animator.
+/// a 50/50 Idle1/Idle2 animator, and a Run state driven by IsMoving.
 /// </summary>
 public static class SnarlfangSetup
 {
     const string ModelPath = "Assets/Resources/Galaxy/Nyxara/Creatures/Snarlfang/Models/Snarlfang_Animation_Idel1.fbx";
     const string Idle2ModelPath = "Assets/Resources/Galaxy/Nyxara/Creatures/Snarlfang/Models/Snarlfang_Animation_Idel2.fbx";
+    const string RunningModelPath = "Assets/Resources/Galaxy/Nyxara/Creatures/Snarlfang/Models/Snarlfang_Animation_Running.fbx";
     const string Idle1ClipPath = "Assets/Resources/Galaxy/Nyxara/Creatures/Snarlfang/Animations/Idle1.anim";
     const string Idle2ClipPath = "Assets/Resources/Galaxy/Nyxara/Creatures/Snarlfang/Animations/Idle2.anim";
+    const string RunningClipPath = "Assets/Resources/Galaxy/Nyxara/Creatures/Snarlfang/Animations/Running.anim";
+    const string LightModelPath = "Assets/Resources/Galaxy/Nyxara/Creatures/Snarlfang/Models/Snarlfang_Animation_Light_Attack.fbx";
+    const string HeavyModelPath = "Assets/Resources/Galaxy/Nyxara/Creatures/Snarlfang/Models/Snarlfang_Animation_Heavy_Attack.fbx";
+    const string LightClipPath = "Assets/Resources/Galaxy/Nyxara/Creatures/Snarlfang/Animations/LightAttack.anim";
+    const string HeavyClipPath = "Assets/Resources/Galaxy/Nyxara/Creatures/Snarlfang/Animations/HeavyAttack.anim";
+    const string DeathModelPath = "Assets/Resources/Galaxy/Nyxara/Creatures/Snarlfang/Models/Snarlfang_Animation_Death.fbx";
+    const string DeathClipPath = "Assets/Resources/Galaxy/Nyxara/Creatures/Snarlfang/Animations/Death.anim";
     const string ControllerPath = "Assets/Resources/Galaxy/Nyxara/Creatures/Snarlfang/Animations/Snarlfang.controller";
     const string AlbedoPath = "Assets/Resources/Galaxy/Nyxara/Creatures/Snarlfang/Textures&Materials/Meshy_AI_Verdant_Crystal_Eleme_biped_texture_0.png";
     const string NormalPath = "Assets/Resources/Galaxy/Nyxara/Creatures/Snarlfang/Textures&Materials/Meshy_AI_Verdant_Crystal_Eleme_biped_texture_0_normal.png";
@@ -35,6 +43,8 @@ public static class SnarlfangSetup
     static readonly string TriggerPath = Path.Combine(Application.dataPath, "..", "Temp", "BackHomeSetupSnarlfang.trigger");
     static readonly string IdleTriggerPath = Path.Combine(Application.dataPath, "..", "Temp", "BackHomeSetupSnarlfangIdle.trigger");
     static readonly string ResultPath = Path.Combine(Application.dataPath, "..", "Temp", "SnarlfangSetup.result.txt");
+    static readonly string DiagTriggerPath = Path.Combine(Application.dataPath, "..", "Temp", "BackHomeSnarlfangDiag.trigger");
+    static readonly string DiagPath = Path.Combine(Application.dataPath, "..", "Temp", "SnarlfangDiag.txt");
 
     static bool _autoStarted;
 
@@ -44,6 +54,29 @@ public static class SnarlfangSetup
         EditorApplication.update += WatchTrigger;
         EditorApplication.update += WatchIdleTrigger;
         EditorApplication.delayCall += AutoSetup;
+        // A refresh/reload may be the only editor tick we get. Run a pending setup
+        // immediately instead of waiting for a later update that never arrives.
+        if (!EditorApplication.isCompiling && !EditorApplication.isUpdating && !EditorApplication.isPlayingOrWillChangePlaymode)
+            TryRunPendingSetup();
+    }
+
+    public static void TryRunPendingSetup()
+    {
+        if (File.Exists(IdleTriggerPath))
+        {
+            try
+            {
+                File.Delete(IdleTriggerPath);
+                SetupIdles(force: true);
+            }
+            catch { /* ignore */ }
+        }
+
+        if (File.Exists(DiagTriggerPath))
+        {
+            try { File.Delete(DiagTriggerPath); } catch { /* ignore */ }
+            Diagnose();
+        }
     }
 
     static void WatchTrigger()
@@ -57,11 +90,10 @@ public static class SnarlfangSetup
 
     static void WatchIdleTrigger()
     {
-        if (!File.Exists(IdleTriggerPath))
+        if (EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode)
             return;
 
-        try { File.Delete(IdleTriggerPath); } catch { /* ignore */ }
-        SetupIdles(force: true);
+        TryRunPendingSetup();
     }
 
     static void AutoSetup()
@@ -78,6 +110,64 @@ public static class SnarlfangSetup
         _autoStarted = true;
         Setup(force: false);
         SetupIdles(force: false);
+        EnsureAttacks();
+        EnsureDeath();
+    }
+
+    static void Diagnose()
+    {
+        var sb = new System.Text.StringBuilder();
+        try
+        {
+            var direct = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
+            Object mainAsset = AssetDatabase.LoadMainAssetAtPath(ControllerPath);
+            sb.AppendLine($"direct={(direct != null ? direct.name : "null")} main={(mainAsset != null ? mainAsset.GetType().Name : "null")} guid={AssetDatabase.AssetPathToGUID(ControllerPath)} subs={AssetDatabase.LoadAllAssetsAtPath(ControllerPath).Length}");
+
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+            Animator pa = prefab != null ? prefab.GetComponent<Animator>() : null;
+            if (pa != null)
+            {
+                var so = new SerializedObject(pa);
+                SerializedProperty ctrl = so.FindProperty("m_Controller");
+                sb.AppendLine($"serialized m_Controller={(ctrl != null && ctrl.objectReferenceValue != null ? ctrl.objectReferenceValue.name : "null")}");
+            }
+            sb.AppendLine($"prefab={(prefab != null)} animator={(pa != null)} enabled={(pa != null && pa.enabled)}");
+            if (pa != null)
+            {
+                Avatar av = pa.avatar;
+                sb.AppendLine($"avatar={(av != null ? av.name : "null")} valid={(av != null && av.isValid)} human={(av != null && av.isHuman)}");
+                RuntimeAnimatorController rc = pa.runtimeAnimatorController;
+                sb.AppendLine($"controller={(rc != null ? rc.name : "null")} clips={(rc != null ? string.Join(",", rc.animationClips.Select(c => c != null ? c.name + ":" + c.length.ToString("0.00") : "null")) : "-")}");
+                if (rc is AnimatorController ac)
+                {
+                    sb.AppendLine($"params={string.Join(",", ac.parameters.Select(p => p.name))} layers={ac.layers.Length}");
+                    foreach (ChildAnimatorState s in ac.layers[0].stateMachine.states)
+                        sb.AppendLine($"  state {s.state.name} motion={(s.state.motion != null ? s.state.motion.name : "null")} transitions={s.state.transitions.Length}");
+                }
+            }
+
+            GameObject instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+            try
+            {
+                Animator a = instance.GetComponent<Animator>();
+                a.Rebind();
+                a.Update(0f);
+                sb.AppendLine($"instance initialized={a.isInitialized} hasController={(a.runtimeAnimatorController != null)} paramCount={a.parameterCount} hasRun={(a.isInitialized && a.HasState(0, Animator.StringToHash("Run")))}");
+                Transform hips = instance.GetComponentsInChildren<Transform>(true).FirstOrDefault(t => t.name == "mixamorig:Hips");
+                sb.AppendLine($"hips path={(hips != null ? AnimationUtility.CalculateTransformPath(hips, instance.transform) : "missing")}");
+            }
+            finally
+            {
+                Object.DestroyImmediate(instance);
+            }
+        }
+        catch (System.Exception e)
+        {
+            sb.AppendLine("DIAG FAILED: " + e);
+        }
+
+        try { File.WriteAllText(DiagPath, sb.ToString()); } catch { /* ignore */ }
+        Debug.Log("[BackHome] Snarlfang diag:\n" + sb);
     }
 
     [MenuItem("BackHome/Creatures/Setup Snarlfang Idle")]
@@ -194,6 +284,9 @@ public static class SnarlfangSetup
         var stats = AssetDatabase.LoadAssetAtPath<CreatureStats>(StatsPath);
         var so = new SerializedObject(stats);
         so.FindProperty("displayName").stringValue = "Snarlfang";
+        so.FindProperty("specialAbility").intValue = (int)CreatureSpecialAbility.Stealth;
+        so.FindProperty("abilityDuration").floatValue = 2f;
+        so.FindProperty("stealthOpacity").floatValue = 0.22f;
         so.ApplyModifiedPropertiesWithoutUndo();
         EditorUtility.SetDirty(stats);
         return stats;
@@ -347,7 +440,6 @@ public static class SnarlfangSetup
             chase = instance.AddComponent<CreatureChase>();
 
         var chaseSo = new SerializedObject(chase);
-        chaseSo.FindProperty("moveSpeed").floatValue = 4f;
         chaseSo.FindProperty("alignSpeed").floatValue = 10f;
         chaseSo.FindProperty("footOffset").floatValue = 0.05f;
         chaseSo.FindProperty("groundProbeDistance").floatValue = 12f;
@@ -457,23 +549,32 @@ public static class SnarlfangSetup
         {
             var controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+            bool hasRun = HasRunState(controller);
             bool wired = controller != null && prefab != null && prefab.GetComponent<Animator>() != null
-                && prefab.GetComponent<Animator>().runtimeAnimatorController == controller;
+                && prefab.GetComponent<Animator>().runtimeAnimatorController == controller
+                && hasRun;
             if (!force && wired)
             {
                 WriteResult("idle already set up");
                 return;
             }
 
-            AnimationClip idle1 = ExtractLoopingClip(ModelPath, "Idle1", Idle1ClipPath);
-            AnimationClip idle2 = ExtractLoopingClip(Idle2ModelPath, "Idle2", Idle2ClipPath);
-            controller = CreateIdleController(idle1, idle2);
+            AnimationClip idle1 = AssetDatabase.LoadAssetAtPath<AnimationClip>(Idle1ClipPath)
+                ?? ExtractLoopingClip(ModelPath, "Idle1", Idle1ClipPath);
+            AnimationClip idle2 = AssetDatabase.LoadAssetAtPath<AnimationClip>(Idle2ClipPath)
+                ?? ExtractLoopingClip(Idle2ModelPath, "Idle2", Idle2ClipPath);
+            AnimationClip running = ExtractLoopingClip(RunningModelPath, "Running", RunningClipPath);
+            controller = CreateIdleController(idle1, idle2, running);
             Avatar avatar = AssetDatabase.LoadAllAssetsAtPath(ModelPath).OfType<Avatar>().FirstOrDefault();
             WireAnimator(controller, avatar);
 
             AssetDatabase.SaveAssets();
-            string paths = string.Join(" | ", SamplePaths(idle1).Take(4));
-            WriteResult($"idle ok. layers={controller.layers.Length} states={controller.layers[0].stateMachine.states.Length} idle1={idle1.length:0.00}s idle2={idle2.length:0.00}s paths={paths}");
+            AssetDatabase.ImportAsset(RunningClipPath, ImportAssetOptions.ForceUpdate);
+            AssetDatabase.ImportAsset(ControllerPath, ImportAssetOptions.ForceUpdate);
+            AssetDatabase.ImportAsset(PrefabPath, ImportAssetOptions.ForceUpdate);
+            string paths = string.Join(" | ", SamplePaths(running).Take(4));
+            WriteResult($"idle ok. layers={controller.layers.Length} states={controller.layers[0].stateMachine.states.Length} idle1={idle1.length:0.00}s idle2={idle2.length:0.00}s run={running.length:0.00}s paths={paths}");
+            EnsureAttacks();
         }
         catch (System.Exception e)
         {
@@ -482,7 +583,238 @@ public static class SnarlfangSetup
         }
     }
 
-    static AnimationClip ExtractLoopingClip(string modelPath, string clipName, string outputPath)
+    static void EnsureAttacks()
+    {
+        try
+        {
+            AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
+            if (controller == null)
+                return;
+
+            AnimationClip light = AssetDatabase.LoadAssetAtPath<AnimationClip>(LightClipPath)
+                ?? ExtractLoopingClip(LightModelPath, "LightAttack", LightClipPath, loop: true);
+            AnimationClip heavy = AssetDatabase.LoadAssetAtPath<AnimationClip>(HeavyClipPath)
+                ?? ExtractLoopingClip(HeavyModelPath, "HeavyAttack", HeavyClipPath, loop: false);
+            AddAttackStates(controller, light, heavy);
+            AssetDatabase.SaveAssets();
+            WriteResult($"attacks ok light={light.length:0.00}s heavy={heavy.length:0.00}s");
+            EnsureDeath();
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            WriteResult("ATTACK FAILED: " + e);
+        }
+    }
+
+    static void EnsureDeath()
+    {
+        try
+        {
+            AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath);
+            if (controller == null || controller.layers == null || controller.layers.Length == 0)
+                return;
+
+            AnimationClip death = AssetDatabase.LoadAssetAtPath<AnimationClip>(DeathClipPath)
+                ?? ExtractLoopingClip(DeathModelPath, "Death", DeathClipPath, loop: false);
+            if (death == null)
+                return;
+
+            EnsureParameter(controller, "Die", AnimatorControllerParameterType.Trigger);
+
+            AnimatorStateMachine machine = controller.layers[0].stateMachine;
+            AnimatorState state = FindState(machine, "Death") ?? machine.AddState("Death", new Vector3(540, 420, 0));
+            state.motion = death;
+            state.speed = 1f;
+            state.speedParameterActive = false;
+
+            if (!HasAnyStateTransitionTo(machine, state))
+            {
+                AnimatorStateTransition transition = machine.AddAnyStateTransition(state);
+                transition.hasExitTime = false;
+                transition.exitTime = 0f;
+                transition.hasFixedDuration = true;
+                transition.duration = 0.05f;
+                transition.canTransitionToSelf = false;
+                transition.interruptionSource = TransitionInterruptionSource.None;
+                transition.AddCondition(AnimatorConditionMode.If, 0, "Die");
+            }
+
+            EditorUtility.SetDirty(controller);
+            AssetDatabase.SaveAssets();
+            WriteResult($"death ok length={death.length:0.00}s loop=false");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogException(e);
+            WriteResult("DEATH FAILED: " + e);
+        }
+    }
+
+    static bool HasAnyStateTransitionTo(AnimatorStateMachine machine, AnimatorState to)
+    {
+        if (machine == null || to == null)
+            return true;
+
+        foreach (AnimatorStateTransition transition in machine.anyStateTransitions)
+        {
+            if (transition.destinationState == to)
+                return true;
+        }
+
+        return false;
+    }
+
+    static AnimatorState FindState(AnimatorStateMachine machine, string stateName)
+    {
+        foreach (ChildAnimatorState child in machine.states)
+        {
+            if (child.state != null && child.state.name == stateName)
+                return child.state;
+        }
+
+        return null;
+    }
+
+    static void EnsureParameter(AnimatorController controller, string name, AnimatorControllerParameterType type)
+    {
+        foreach (AnimatorControllerParameter parameter in controller.parameters)
+        {
+            if (parameter.name == name && parameter.type == type)
+                return;
+        }
+
+        controller.AddParameter(name, type);
+    }
+
+    static bool HasTransitionTo(AnimatorState from, AnimatorState to)
+    {
+        if (from == null || to == null)
+            return true;
+
+        foreach (AnimatorStateTransition transition in from.transitions)
+        {
+            if (transition.destinationState == to)
+                return true;
+        }
+
+        return false;
+    }
+
+    static void Unlink(AnimatorState from, AnimatorState to)
+    {
+        if (from == null || to == null)
+            return;
+
+        AnimatorStateTransition[] transitions = from.transitions;
+        for (int i = transitions.Length - 1; i >= 0; i--)
+        {
+            if (transitions[i] != null && transitions[i].destinationState == to)
+                from.RemoveTransition(transitions[i]);
+        }
+    }
+
+    static void AddAttackStates(AnimatorController controller, AnimationClip lightClip, AnimationClip heavyClip)
+    {
+        EnsureParameter(controller, "IsAttacking", AnimatorControllerParameterType.Bool);
+        EnsureParameter(controller, "AttackKind", AnimatorControllerParameterType.Int);
+        EnsureParameter(controller, "AttackAnimSpeed", AnimatorControllerParameterType.Float);
+
+        AnimatorStateMachine machine = controller.layers[0].stateMachine;
+        AnimatorState light = FindState(machine, "LightAttack") ?? machine.AddState("LightAttack", new Vector3(540, 210, 0));
+        AnimatorState heavy = FindState(machine, "HeavyAttack") ?? machine.AddState("HeavyAttack", new Vector3(540, -70, 0));
+        light.motion = lightClip;
+        heavy.motion = heavyClip;
+        light.speedParameterActive = true;
+        heavy.speedParameterActive = true;
+        light.speedParameter = "AttackAnimSpeed";
+        heavy.speedParameter = "AttackAnimSpeed";
+
+        AnimatorState idle1 = FindState(machine, "Idle1");
+        AnimatorState idle2 = FindState(machine, "Idle2");
+        AnimatorState run = FindState(machine, "Run");
+
+        LinkAttack(idle1, light, CreatureAttackKind.Light);
+        LinkAttack(idle2, light, CreatureAttackKind.Light);
+        LinkAttack(run, light, CreatureAttackKind.Light);
+        LinkAttack(heavy, light, CreatureAttackKind.Light);
+
+        // Heavy Attack is only the Stealth exit. Nothing in the controller may enter it on its own.
+        Unlink(idle1, heavy);
+        Unlink(idle2, heavy);
+        Unlink(run, heavy);
+        Unlink(light, heavy);
+
+        LinkAttackExit(light, run, moving: true);
+        LinkAttackExit(heavy, run, moving: true);
+        LinkAttackExit(light, idle1, moving: false);
+        LinkAttackExit(heavy, idle1, moving: false);
+
+        EditorUtility.SetDirty(controller);
+    }
+
+    static void LinkAttack(AnimatorState from, AnimatorState to, CreatureAttackKind kind)
+    {
+        if (from == null || to == null || HasTransitionTo(from, to))
+            return;
+
+        AnimatorStateTransition transition = from.AddTransition(to);
+        transition.hasExitTime = false;
+        transition.exitTime = 0f;
+        transition.hasFixedDuration = true;
+        transition.duration = 0.08f;
+        transition.canTransitionToSelf = false;
+        transition.AddCondition(AnimatorConditionMode.If, 0, "IsAttacking");
+        transition.AddCondition(AnimatorConditionMode.Equals, (int)kind, "AttackKind");
+    }
+
+    static void LinkAttackExit(AnimatorState from, AnimatorState to, bool moving)
+    {
+        if (from == null || to == null || HasTransitionTo(from, to))
+            return;
+
+        AnimatorStateTransition transition = from.AddTransition(to);
+        transition.hasExitTime = false;
+        transition.exitTime = 0f;
+        transition.hasFixedDuration = true;
+        transition.duration = 0.1f;
+        transition.canTransitionToSelf = false;
+        transition.AddCondition(AnimatorConditionMode.IfNot, 0, "IsAttacking");
+        transition.AddCondition(moving ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, 0, "IsMoving");
+    }
+
+    static bool HasRunState(AnimatorController controller)
+    {
+        if (controller == null || controller.layers == null || controller.layers.Length == 0)
+            return false;
+
+        AnimatorStateMachine machine = controller.layers[0].stateMachine;
+        if (machine == null)
+            return false;
+
+        bool hasParam = false;
+        foreach (AnimatorControllerParameter parameter in controller.parameters)
+        {
+            if (parameter.name == "IsMoving" && parameter.type == AnimatorControllerParameterType.Bool)
+            {
+                hasParam = true;
+                break;
+            }
+        }
+
+        if (!hasParam)
+            return false;
+
+        foreach (ChildAnimatorState child in machine.states)
+        {
+            if (child.state != null && child.state.name == "Run" && child.state.motion != null)
+                return true;
+        }
+
+        return false;
+    }
+
+    static AnimationClip ExtractLoopingClip(string modelPath, string clipName, string outputPath, bool loop = true)
     {
         var importer = AssetImporter.GetAtPath(modelPath) as ModelImporter;
         if (importer == null)
@@ -496,21 +828,25 @@ public static class SnarlfangSetup
         importer.SaveAndReimport();
 
         importer = AssetImporter.GetAtPath(modelPath) as ModelImporter;
-        ModelImporterClipAnimation[] takes = importer.importedTakeInfos == null
-            ? null
-            : importer.importedTakeInfos.Select(take => new ModelImporterClipAnimation
+        if (importer.importedTakeInfos == null || importer.importedTakeInfos.Length == 0)
+            throw new System.InvalidOperationException(modelPath + " has no animation take.");
+
+        TakeInfo selected = SelectLongestTake(importer.importedTakeInfos);
+        ModelImporterClipAnimation[] takes = new[]
+        {
+            new ModelImporterClipAnimation
             {
                 name = clipName,
-                takeName = take.name,
-                firstFrame = take.startTime * take.sampleRate,
-                lastFrame = take.stopTime * take.sampleRate,
-                loopTime = true,
+                takeName = selected.name,
+                firstFrame = selected.startTime * selected.sampleRate,
+                lastFrame = selected.stopTime * selected.sampleRate,
+                loopTime = loop,
                 loopPose = false,
                 wrapMode = WrapMode.Loop
-            }).Take(1).ToArray();
+            }
+        };
 
-        if (takes == null || takes.Length == 0)
-            throw new System.InvalidOperationException(modelPath + " has no animation take.");
+        Debug.Log($"[BackHome] {clipName} take '{selected.name}' ({selected.stopTime - selected.startTime:0.00}s) from {modelPath}");
 
         importer.clipAnimations = takes;
         importer.SaveAndReimport();
@@ -521,14 +857,14 @@ public static class SnarlfangSetup
         if (source == null)
             throw new System.InvalidOperationException("Could not read clip " + clipName + " from " + modelPath);
 
-        return BakeInPlaceClip(source, outputPath);
+        return BakeInPlaceClip(source, outputPath, loop);
     }
 
-    static AnimationClip BakeInPlaceClip(AnimationClip source, string outputPath)
+    static AnimationClip BakeInPlaceClip(AnimationClip source, string outputPath, bool loop)
     {
         var clip = new AnimationClip { name = Path.GetFileNameWithoutExtension(outputPath) };
         AnimationClipSettings settings = AnimationUtility.GetAnimationClipSettings(source);
-        settings.loopTime = true;
+        settings.loopTime = loop;
         settings.loopBlend = false;
         AnimationUtility.SetAnimationClipSettings(clip, settings);
 
@@ -555,11 +891,43 @@ public static class SnarlfangSetup
             AnimationUtility.SetEditorCurve(clip, remapped, curve);
         }
 
+        return SaveClipInPlace(clip, outputPath);
+    }
+
+    static AnimationClip SaveClipInPlace(AnimationClip clip, string outputPath)
+    {
         EnsureFolder("Assets/Resources/Galaxy/Nyxara/Creatures/Snarlfang", "Animations");
-        if (AssetDatabase.LoadAssetAtPath<AnimationClip>(outputPath) != null)
-            AssetDatabase.DeleteAsset(outputPath);
-        AssetDatabase.CreateAsset(clip, outputPath);
-        return clip;
+        AnimationClip existing = AssetDatabase.LoadAssetAtPath<AnimationClip>(outputPath);
+        if (existing == null)
+        {
+            AssetDatabase.CreateAsset(clip, outputPath);
+            return clip;
+        }
+
+        string name = existing.name;
+        EditorUtility.CopySerialized(clip, existing);
+        existing.name = name;
+        EditorUtility.SetDirty(existing);
+        AssetDatabase.SaveAssetIfDirty(existing);
+        Object.DestroyImmediate(clip);
+        return existing;
+    }
+
+    static TakeInfo SelectLongestTake(TakeInfo[] takes)
+    {
+        TakeInfo best = takes[0];
+        float bestLength = best.stopTime - best.startTime;
+        foreach (TakeInfo take in takes)
+        {
+            float length = take.stopTime - take.startTime;
+            if (length > bestLength)
+            {
+                best = take;
+                bestLength = length;
+            }
+        }
+
+        return best;
     }
 
     static string RemapBonePath(string path)
@@ -584,35 +952,74 @@ public static class SnarlfangSetup
         return AnimationUtility.GetCurveBindings(clip).Select(b => b.path).Distinct();
     }
 
-    static AnimatorController CreateIdleController(AnimationClip idle1, AnimationClip idle2)
+    static AnimatorController CreateIdleController(AnimationClip idle1, AnimationClip idle2, AnimationClip running)
     {
-        if (AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath) != null)
-            AssetDatabase.DeleteAsset(ControllerPath);
+        // Rebuild in place: deleting and recreating at the same path leaves the prefab's
+        // Animator pointing at the destroyed controller until the editor restarts.
+        AnimatorController controller = AssetDatabase.LoadAssetAtPath<AnimatorController>(ControllerPath)
+            ?? AnimatorController.CreateAnimatorControllerAtPath(ControllerPath);
 
-        AnimatorController controller = AnimatorController.CreateAnimatorControllerAtPath(ControllerPath);
+        foreach (AnimatorControllerParameter param in controller.parameters.ToList())
+            controller.RemoveParameter(param);
+
         AnimatorStateMachine machine = controller.layers[0].stateMachine;
+        foreach (ChildAnimatorState child in machine.states.ToList())
+            machine.RemoveState(child.state);
+        foreach (AnimatorStateTransition any in machine.anyStateTransitions.ToList())
+            machine.RemoveAnyStateTransition(any);
+
+        controller.AddParameter("IsMoving", AnimatorControllerParameterType.Bool);
+        controller.AddParameter("IsAttacking", AnimatorControllerParameterType.Bool);
 
         AnimatorState state1 = machine.AddState("Idle1", new Vector3(280, 0, 0));
         state1.motion = idle1;
         AnimatorState state2 = machine.AddState("Idle2", new Vector3(280, 140, 0));
         state2.motion = idle2;
+        AnimatorState run = machine.AddState("Run", new Vector3(540, 70, 0));
+        run.motion = running;
         machine.defaultState = state1;
 
-        const float crossfade = 0.25f;
+        const float idleCrossfade = 0.25f;
+        const float moveCrossfade = 0.12f;
+        // Moving transitions are added first so they win over the idle swap at the loop point,
+        // and so they can interrupt an idle crossfade that already started.
+        AddMoveTransition(state1, run, moving: true, moveCrossfade);
+        AddMoveTransition(state2, run, moving: true, moveCrossfade);
+        AddMoveTransition(run, state1, moving: false, moveCrossfade);
+
         AnimatorStateTransition to2 = state1.AddTransition(state2);
         to2.hasExitTime = true;
         to2.exitTime = 1f;
         to2.hasFixedDuration = true;
-        to2.duration = crossfade;
+        to2.duration = idleCrossfade;
+        to2.interruptionSource = TransitionInterruptionSource.Source;
+        to2.orderedInterruption = true;
+        to2.AddCondition(AnimatorConditionMode.IfNot, 0, "IsMoving");
+
         AnimatorStateTransition to1 = state2.AddTransition(state1);
         to1.hasExitTime = true;
         to1.exitTime = 1f;
         to1.hasFixedDuration = true;
-        to1.duration = crossfade;
+        to1.duration = idleCrossfade;
+        to1.interruptionSource = TransitionInterruptionSource.Source;
+        to1.orderedInterruption = true;
+        to1.AddCondition(AnimatorConditionMode.IfNot, 0, "IsMoving");
 
         EditorUtility.SetDirty(controller);
         AssetDatabase.SaveAssets();
         return controller;
+    }
+
+    static void AddMoveTransition(AnimatorState from, AnimatorState to, bool moving, float duration)
+    {
+        AnimatorStateTransition transition = from.AddTransition(to);
+        transition.hasExitTime = false;
+        transition.exitTime = 0f;
+        transition.hasFixedDuration = true;
+        transition.duration = duration;
+        transition.canTransitionToSelf = false;
+        transition.AddCondition(AnimatorConditionMode.IfNot, 0, "IsAttacking");
+        transition.AddCondition(moving ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, 0, "IsMoving");
     }
 
     static void WireAnimator(AnimatorController controller, Avatar avatar)
@@ -658,5 +1065,26 @@ public static class SnarlfangSetup
         catch { /* ignore */ }
 
         Debug.Log("[BackHome] Snarlfang setup: " + message);
+    }
+}
+
+public class SnarlfangRunSetupHook : AssetPostprocessor
+{
+    static bool _busy;
+
+    static void OnPostprocessAllAssets(string[] importedAssets, string[] deletedAssets, string[] movedAssets, string[] movedFromAssetPaths)
+    {
+        if (_busy)
+            return;
+
+        _busy = true;
+        try
+        {
+            SnarlfangSetup.TryRunPendingSetup();
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 }

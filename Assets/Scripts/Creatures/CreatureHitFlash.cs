@@ -27,8 +27,15 @@ public class CreatureHitFlash : MonoBehaviour
     void Awake()
     {
         _creature = GetComponent<Creature>();
-        CollectRenderers();
         EnsureMaterial();
+    }
+
+    void Start()
+    {
+        // After CreatureAbility swaps in per-instance body materials, so a flash restores those
+        // and not the shared asset (which would pop a stealthed creature back to solid).
+        if (_renderers == null)
+            CollectRenderers();
     }
 
     void OnEnable()
@@ -72,6 +79,9 @@ public class CreatureHitFlash : MonoBehaviour
 
     void OnDamaged(float _)
     {
+        if (_renderers == null)
+            CollectRenderers();
+
         if (_runtime == null && !EnsureMaterial())
             return;
 
@@ -180,6 +190,10 @@ public class CreatureHitFlash : MonoBehaviour
     static bool IsBodyRenderer(Renderer renderer)
     {
         if (renderer == null || renderer is ParticleSystemRenderer)
+            return false;
+        if (renderer.GetComponentInParent<Canvas>(true) != null)
+            return false;
+        if (renderer.GetComponentInParent<VitalsBarsView>(true) != null)
             return false;
         return renderer is SkinnedMeshRenderer || renderer is MeshRenderer;
     }

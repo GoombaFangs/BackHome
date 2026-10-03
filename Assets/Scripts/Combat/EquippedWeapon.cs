@@ -40,7 +40,7 @@ public abstract class EquippedWeapon : MonoBehaviour
 
     protected void DealHit(Creature target, float damage, Vector3 knockFrom)
     {
-        if (target == null || !target.IsAlive || damage <= 0f)
+        if (target == null || !target.IsAlive || !target.IsTargetable || damage <= 0f)
             return;
 
         // Area blasts telegraph with a VFX before anyone actually takes damage — see AreaBlastEffect.

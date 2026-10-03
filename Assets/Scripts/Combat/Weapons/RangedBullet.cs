@@ -44,7 +44,7 @@ public class RangedBullet : MonoBehaviour
             return;
 
         _lifetime -= Time.deltaTime;
-        if (_lifetime <= 0f || _weapon == null || _target == null || !_target.IsAlive)
+        if (_lifetime <= 0f || _weapon == null || _target == null || !_target.IsAlive || !_target.IsTargetable)
         {
             Expire();
             return;

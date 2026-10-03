@@ -35,6 +35,11 @@ Shader "BackHome/CasualToon"
         _EmissionMap("Emission", 2D) = "white" {}
 
         [Enum(UnityEngine.Rendering.CullMode)] _Cull("Cull", Float) = 0
+
+        [HideInInspector] _Opacity("Opacity", Range(0, 1)) = 1
+        [HideInInspector] _SrcBlend("Src Blend", Float) = 1
+        [HideInInspector] _DstBlend("Dst Blend", Float) = 0
+        [HideInInspector] _ZWrite("ZWrite", Float) = 1
     }
 
     SubShader
@@ -52,7 +57,8 @@ Shader "BackHome/CasualToon"
             Tags { "LightMode" = "UniversalForwardOnly" }
 
             Cull [_Cull]
-            ZWrite On
+            Blend [_SrcBlend] [_DstBlend]
+            ZWrite [_ZWrite]
             ZTest LEqual
 
             HLSLPROGRAM
@@ -96,6 +102,10 @@ Shader "BackHome/CasualToon"
                 half _AmbientStrength;
                 half4 _AmbientTint;
                 half4 _EmissionColor;
+                half _Opacity;
+                half _SrcBlend;
+                half _DstBlend;
+                half _ZWrite;
             CBUFFER_END
 
             struct Attributes
@@ -249,7 +259,10 @@ Shader "BackHome/CasualToon"
                 color += emission;
 
                 color = MixFog(color, input.fogFactor);
-                return half4(color, 1);
+                // _SrcBlend/_DstBlend/_ZWrite drive the pass state. Touch them so the
+                // SRP Batcher keeps those properties in UnityPerMaterial.
+                half opacity = saturate(_Opacity + (_SrcBlend + _DstBlend + _ZWrite) * 0);
+                return half4(color, opacity);
             }
             ENDHLSL
         }
